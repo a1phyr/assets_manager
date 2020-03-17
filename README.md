@@ -73,6 +73,7 @@ Current features:
 - Convient load of external files
 - Cache loaded assets
 - Multi-threading support
+- Built-in support of RON, JSON, Bincode, YAML and CBOR
 
 Planned features:
 - Load from different sources (archives, embeded)

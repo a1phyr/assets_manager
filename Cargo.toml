@@ -7,6 +7,8 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 description= "Conveniently load, store and cache external resources"
 
+repository = "https://github.com/a1phyr/assets_manager"
+
 categories = ["data-structures", "filesystem", "game-development"]
 keywords = ["assets", "resources"]
 
