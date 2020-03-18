@@ -11,9 +11,11 @@ It has multiple goals
 - Light: Pay for what you take, no dependencies bloat
 - Fast: Share your resources between threads without using expensive `Arc::clone`
 
+This crate follow semver convention and supports rustc 1.40.0 and higher.
+Changing this is considered a breaking change.
+
 **Note**: this crate is still under developpement and should not be used in 
 production, but experimental use and feedback are welcome.
-
 
 ## Example
 
