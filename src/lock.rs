@@ -74,10 +74,10 @@ pub(crate) struct CacheEntry {
 }
 
 impl<'a, 'b> CacheEntry {
-    #[inline]
     /// Create a new `CacheEntry` containing an asset of type `T`.
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
+    #[inline]
     pub fn new<T: Send + Sync>(asset: T) -> Self {
         let concrete = ContreteCacheEntry {
             data: Box::new(RwLock::new(asset)),
@@ -126,6 +126,7 @@ impl<'a, 'b> CacheEntry {
     }
 }
 
+// Safety: T is Send + Sync
 unsafe impl Send for CacheEntry {}
 unsafe impl Sync for CacheEntry {}
 
@@ -194,7 +195,7 @@ impl<A> AssetRefLock<'_, A> {
         }
     }
 
-    /// Check if to assets a are the same
+    /// Check if the two assets refer to the same cache entry
     #[inline]
     pub fn ptr_eq(&self, other: &Self) -> bool {
         std::ptr::eq(self.data, other.data)

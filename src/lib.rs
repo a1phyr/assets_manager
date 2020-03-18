@@ -100,7 +100,7 @@ pub use error::AssetError;
 mod tests;
 
 use std::{
-    any::{Any, TypeId},
+    any::TypeId,
     borrow::Borrow,
     collections::HashMap,
     fmt,
@@ -118,7 +118,7 @@ struct Key {
 
 impl Key {
     #[inline]
-    fn new<T: Any>(id: Box<str>) -> Self {
+    fn new<T: 'static>(id: Box<str>) -> Self {
         Self {
             id,
             type_id: TypeId::of::<T>(),
@@ -154,6 +154,9 @@ impl<'a> Borrow<AccessKey<'a>> for Key {
 }
 
 /// Used to cache assets.
+///
+/// It uses interior mutability, so assets can be added in the cache without
+/// requiring a mutable reference, but one is required to remove an asset.
 pub struct AssetCache<'a> {
     assets: RwLock<HashMap<Key, CacheEntry>>,
     path: &'a str,
@@ -161,6 +164,8 @@ pub struct AssetCache<'a> {
 
 impl<'a> AssetCache<'a> {
     /// Creates a new cache.
+    ///
+    /// Assets will be searched in the directory `path`
     #[inline]
     pub fn new(path: &str) -> AssetCache {
         AssetCache {
@@ -171,23 +176,28 @@ impl<'a> AssetCache<'a> {
 
     pub(crate) fn add_asset<A: Asset>(&self, id: String, asset: A) -> AssetRefLock<A> {
         let cached = CacheEntry::new(asset);
-        // Safety: We just created the asset with the good type
+        // Safety:
+        // We just created the asset with the good type
+        // The cache entry is garantied to live long enough
         let asset = unsafe { cached.get_ref() };
 
+        // Insert the entry in the cache
         let mut map = rwlock::write(&self.assets);
         map.insert(Key::new::<A>(id.into()), cached);
 
         asset
     }
 
-    /// Loads an asset given an id, from the cache or the filesystem.
+    /// Loads an asset.
+    ///
+    /// If the asset is not found in the cache, it is loaded from the filesystem.
     ///
     /// # Errors
     ///
     /// Errors can occur in several cases :
-    /// - An asset with the same id and a different type has already been loaded
     /// - The asset could not be loaded from the filesystem
     /// - Loaded data could not not be converted properly
+
     pub fn load<A: Asset>(&self, id: &str) -> Result<AssetRefLock<A>, AssetError> {
         // First, we look in previously loaded assets
         let map = rwlock::read(&self.assets);
@@ -255,6 +265,8 @@ impl<'a> AssetCache<'a> {
     }
 
     /// Remove an asset from the cache
+    ///
+    /// The removed asset matches both the id and the type parameter
     #[inline]
     pub fn remove<A: Asset>(&mut self, id: &str) {
         let key = AccessKey::new::<A>(&*id);
@@ -280,7 +292,11 @@ impl fmt::Debug for AssetCache<'_> {
 
 
 /// An asset is a type loadable from a file.
-pub trait Asset: Any + Sized + Send + Sync {
+///
+/// It can loaded and retreived by an [`AssetCache`]
+///
+/// [`AssetCache`]: struct.AssetCache.html
+pub trait Asset: Sized + Send + Sync + 'static {
     /// The extension used by the asset files from the given asset type.
     ///
     /// Use `""` for no extension.
