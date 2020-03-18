@@ -1,5 +1,8 @@
 # Assets-manager
 
+[![Crates.io](https://img.shields.io/crates/v/assets_manager.svg)](https://crates.io/crates/assets_manager)
+[![Docs.rs](https://docs.rs/assets_manager/badge.svg)](https://docs.rs/assets_manager/)
+
 Conveniently load, store and cache external resources.
 
 
@@ -73,7 +76,7 @@ Current features:
 - Convient load of external files
 - Cache loaded assets
 - Multi-threading support
-- Built-in support of RON, JSON, Bincode, YAML and CBOR
+- Built-in support of RON, JSON, Bincode, YAML and CBOR with serde
 
 Planned features:
 - Load from different sources (archives, embeded)
