@@ -4,7 +4,10 @@
 //!
 //! [`Loader`]: trait.Loader.html
 
-use std::error::Error;
+use std::{
+    error::Error,
+    str::FromStr,
+};
 
 #[cfg(feature = "serde")]
 use serde::Deserialize;
@@ -61,6 +64,39 @@ pub struct CustomLoader;
 impl<T> Loader<T> for CustomLoader {
     fn load(_: Vec<u8>) -> Result<T, Box<dyn Error + Send + Sync>> {
         panic!("You forgot to override `Asset::load_from_raw` function")
+    }
+}
+
+/// Loads assets as a String.
+///
+/// The file content is assumed to be valid UTF-8.
+#[derive(Debug)]
+pub struct StringLoader;
+impl Loader<String> for StringLoader {
+    fn load(content: Vec<u8>) -> Result<String, Box<dyn Error + Send + Sync>> {
+        Ok(String::from_utf8(content)?)
+    }
+}
+
+/// Loads assets for types that can be parsed with `FromStr`.
+///
+/// Do not use this loader to load `String`s, prefer using [`StringLoader`],
+/// which is more efficient.
+///
+/// If you want your custom type to work with this loader, make sure that
+/// `FromStr::Err` meet the requirements
+///
+/// [`StringLoader`]: struct.StringLoader.html
+#[derive(Debug)]
+pub struct ParseLoader;
+impl<T> Loader<T> for ParseLoader
+where
+    T: FromStr,
+    <T as FromStr>::Err: Error + Send + Sync + 'static,
+{
+    fn load(content: Vec<u8>) -> Result<T, Box<dyn Error + Send + Sync>> {
+        let string = String::from_utf8(content)?;
+        Ok(string.parse()?)
     }
 }
 
