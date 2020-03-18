@@ -197,21 +197,24 @@ impl<'a> AssetCache<'a> {
     /// Errors can occur in several cases :
     /// - The asset could not be loaded from the filesystem
     /// - Loaded data could not not be converted properly
-
     pub fn load<A: Asset>(&self, id: &str) -> Result<AssetRefLock<A>, AssetError> {
-        // First, we look in previously loaded assets
-        let map = rwlock::read(&self.assets);
-        if let Some(asset) = map.get(&AccessKey::new::<A>(id)) {
-            return unsafe { Ok(asset.get_ref()) };
+        if let Some(asset) = self.load_cached(id) {
+            return Ok(asset);
         }
-        // Release the lock
-        drop(map);
 
-        // If not found, we load the asset from the filesystem
         let asset = self.load_from_path(id)?;
-
-        // And we add it to already loaded assets
         Ok(self.add_asset(id.to_string(), asset))
+    }
+
+    /// Loads an asset from the cache.
+    ///
+    /// This function does not attempt to load the asset from the filesystem if
+    /// it is not found in the cache.
+    pub fn load_cached<A: Asset>(&self, id: &str) -> Option<AssetRefLock<A>> {
+        let map = rwlock::read(&self.assets);
+        let key = AccessKey::new::<A>(id);
+
+        map.get(&key).map(|asset| unsafe { asset.get_ref() })
     }
 
     /// Loads an asset given an id, from the filesystem or the cache.
@@ -241,12 +244,10 @@ impl<'a> AssetCache<'a> {
     ///
     /// [`load`]: fn.load.html
     pub fn reload<A: Asset>(&self, id: &str) -> Result<AssetRefLock<A>, AssetError> {
-        // First, we check if we can reload the asset with a mere read lock
-        let map = rwlock::read(&self.assets);
         let asset = self.load_from_path(id)?;
 
+        let map = rwlock::read(&self.assets);
         if let Some(cached) = map.get(&AccessKey::new::<A>(id)) {
-            // Safety: We just checked whether we are pointing to the correct type
             return unsafe { Ok(cached.write(asset)) };
         }
         drop(map);
@@ -293,7 +294,7 @@ impl fmt::Debug for AssetCache<'_> {
 
 /// An asset is a type loadable from a file.
 ///
-/// It can loaded and retreived by an [`AssetCache`]
+/// `Asset`s can loaded and retreived by an [`AssetCache`].
 ///
 /// [`AssetCache`]: struct.AssetCache.html
 pub trait Asset: Sized + Send + Sync + 'static {
@@ -302,9 +303,11 @@ pub trait Asset: Sized + Send + Sync + 'static {
     /// Use `""` for no extension.
     const EXT: &'static str;
 
-    /// This type is meant to provide a way to load the asset. This enable
-    /// to re-use code and to give a default way to load an asset given a
-    /// file format.
+    /// Specifies a way to to convert raw bytes into the asset.
+    ///
+    /// See module [`loader`] for implementations of common conversions.
+    ///
+    /// [`loader`]: loader/index.html
     type Loader: Loader<Self>;
 
     /// Create an asset value from raw parts.
