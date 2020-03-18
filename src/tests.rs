@@ -1,3 +1,84 @@
+mod loaders {
+    use crate::loader::*;
+
+    fn raw(s: &str) -> Vec<u8> {
+        s.to_string().into_bytes()
+    }
+
+    #[test]
+    fn string_loader() {
+        let raw = raw("Hello World!");
+        let loaded = StringLoader::load(raw).unwrap();
+
+        assert_eq!(loaded, "Hello World!");
+    }
+
+    #[test]
+    fn parse_loader() {
+        let n = rand::random::<i32>();
+        let raw = raw(&format!("{}", n));
+
+        let loaded: i32 = ParseLoader::load(raw).unwrap();
+
+        assert_eq!(loaded, n);
+    }
+
+    #[cfg(feature = "serde")]
+    use serde::{Serialize, Deserialize};
+    #[cfg(feature = "serde")]
+    use rand::{
+        Rng,
+        distributions::{Distribution, Standard},
+    };
+
+    #[cfg(feature = "serde")]
+    #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+    struct Point {
+        x: i32,
+        y: i32,
+    }
+
+    #[cfg(feature = "serde")]
+    impl Distribution<Point> for Standard {
+        fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Point {
+            Point {
+                x: rng.gen(),
+                y: rng.gen(),
+            }
+        }
+    }
+
+    #[cfg(feature = "serde")]
+    macro_rules! test_loader {
+        ($name:ident, $loader:ty, $ser:expr) => {
+            #[test]
+            fn $name() {
+                let point = rand::random::<Point>();
+                let raw = ($ser)(&point);
+
+                let loaded: Point = <$loader>::load(raw).unwrap();
+
+                assert_eq!(loaded, point);
+            }
+        }
+    }
+
+    #[cfg(feature = "bincode")]
+    test_loader!(bincode_loader, BincodeLoader, |p| serde_bincode::serialize(p).unwrap());
+
+    #[cfg(feature = "cbor")]
+    test_loader!(cbor_loader, CborLoader, |p| serde_cbor::to_vec(p).unwrap());
+
+    #[cfg(feature = "json")]
+    test_loader!(json_loader, JsonLoader, |p| serde_json::to_vec(p).unwrap());
+
+    #[cfg(feature = "ron")]
+    test_loader!(ron_loader, RonLoader, |p| serde_ron::ser::to_string(p).unwrap().into_bytes());
+
+    #[cfg(feature = "yaml")]
+    test_loader!(yaml_loader, YamlLoader, |p| serde_yaml::to_vec(p).unwrap());
+}
+
 mod cache_entry {
     use std::sync::Mutex;
     use crate::lock::CacheEntry;
