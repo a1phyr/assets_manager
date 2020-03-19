@@ -8,7 +8,9 @@
 //!
 //! ## Cargo features
 //! 
-//! - `parking_lot`: Use `parking_lot`'s RwLocks instead of std's ones
+//! No features are enabled by default.
+//!
+//! ### Additionnal loaders
 //! - `bincode`: Bincode deserialization
 //! - `cbor`: CBOR deserialization
 //! - `json`: JSON deserialization
@@ -16,6 +18,13 @@
 //! - `toml`: TOML deserialization
 //! - `yaml`: YAML deserialization
 //! 
+//! ### Internal features
+//!
+//! These features change inner data structures implementations.
+//!
+//! - `hashbrown`: Use *hashbrown* crate's HashMap
+//! - `parking_lot`: Use *parking_lot* crate's synchronisation primitives
+//!
 //! ## Example
 //!
 //! If the file `assets/common/test.ron` contains this:
@@ -100,12 +109,15 @@ mod tests;
 use std::{
     any::TypeId,
     borrow::Borrow,
-    collections::HashMap,
     fmt,
     fs,
     path::PathBuf,
 };
 
+#[cfg(feature = "hashbrown")]
+use hashbrown::HashMap;
+#[cfg(not(feature = "hashbrown"))]
+use std::collections::HashMap;
 
 #[derive(Debug, Hash, PartialEq, Eq)]
 #[repr(C)]

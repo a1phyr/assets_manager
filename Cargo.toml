@@ -24,6 +24,7 @@ toml = ["serde_toml", "serde"]
 
 [dependencies]
 parking_lot = {version = "0.10", optional = true}
+hashbrown = {version = "0.7", optional = true}
 
 serde = {version = "1.0", optional = true}
 serde_bincode = {version = "1.2", package = "bincode", optional = true}
