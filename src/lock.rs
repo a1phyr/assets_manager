@@ -52,6 +52,17 @@ pub(crate) mod rwlock {
 
         guard
     }
+
+    #[inline]
+    pub fn into_inner<T>(this: RwLock<T>) -> T {
+        #[cfg(feature = "parking_lot")]
+        let inner = this.into_inner();
+
+        #[cfg(not(feature = "parking_lot"))]
+        let inner = this.into_inner().unwrap();
+
+        inner
+    }
 }
 
 /// This struct is used to store [`ContreteCacheEntry`] of different types in
@@ -116,13 +127,18 @@ impl<'a, 'b> CacheEntry {
     /// underlying data (ie this `CacheEntry` was created using `CacheEntry::new::<T>(...)`.
     /// - The lifetime of the return `AssetRefLock` is unbound, so you have to
     /// ensure that it won't outlive the given `CacheEntry`.
-    #[inline]
     pub unsafe fn write<T: Send + Sync>(&'a self, asset: T) -> AssetRefLock<'b, T> {
         let lock = self.get_ref();
         let mut cached_guard = rwlock::write(&lock.data);
         *cached_guard = asset;
         drop(cached_guard);
         lock
+    }
+
+    #[inline]
+    pub unsafe fn into_inner<T: Send + Sync>(self) -> T {
+        let concrete: ContreteCacheEntry<T> = mem::transmute(self);
+        concrete.into_inner()
     }
 }
 
@@ -160,6 +176,11 @@ impl<T: Send + Sync> ContreteCacheEntry<T> {
     #[inline]
     fn get_ref(&self) -> AssetRefLock<T> {
         AssetRefLock { data: &*self.data }
+    }
+
+    #[inline]
+    fn into_inner(self) -> T {
+        rwlock::into_inner(*self.data)
     }
 }
 

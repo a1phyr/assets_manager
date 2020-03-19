@@ -173,15 +173,15 @@ impl<'a> AssetCache<'a> {
     }
 
     pub(crate) fn add_asset<A: Asset>(&self, id: String, asset: A) -> AssetRefLock<A> {
-        let cached = CacheEntry::new(asset);
+        let entry = CacheEntry::new(asset);
         // Safety:
         // We just created the asset with the good type
         // The cache entry is garantied to live long enough
-        let asset = unsafe { cached.get_ref() };
+        let asset = unsafe { entry.get_ref() };
 
-        // Insert the entry in the cache
-        let mut map = rwlock::write(&self.assets);
-        map.insert(Key::new::<A>(id.into()), cached);
+        let key = Key::new::<A>(id.into());
+        let mut cache = rwlock::write(&self.assets);
+        cache.insert(key, entry);
 
         asset
     }
@@ -209,10 +209,9 @@ impl<'a> AssetCache<'a> {
     /// This function does not attempt to load the asset from the filesystem if
     /// it is not found in the cache.
     pub fn load_cached<A: Asset>(&self, id: &str) -> Option<AssetRefLock<A>> {
-        let map = rwlock::read(&self.assets);
         let key = AccessKey::new::<A>(id);
-
-        map.get(&key).map(|asset| unsafe { asset.get_ref() })
+        let cache = rwlock::read(&self.assets);
+        cache.get(&key).map(|asset| unsafe { asset.get_ref() })
     }
 
     /// Loads an asset given an id, from the filesystem or the cache.
@@ -244,11 +243,11 @@ impl<'a> AssetCache<'a> {
     pub fn reload<A: Asset>(&self, id: &str) -> Result<AssetRefLock<A>, AssetError> {
         let asset = self.load_from_path(id)?;
 
-        let map = rwlock::read(&self.assets);
-        if let Some(cached) = map.get(&AccessKey::new::<A>(id)) {
+        let cache = rwlock::read(&self.assets);
+        if let Some(cached) = cache.get(&AccessKey::new::<A>(id)) {
             return unsafe { Ok(cached.write(asset)) };
         }
-        drop(map);
+        drop(cache);
 
         Ok(self.add_asset(id.to_string(), asset))
     }
@@ -263,17 +262,26 @@ impl<'a> AssetCache<'a> {
         A::load_from_raw(content)
     }
 
-    /// Remove an asset from the cache
+    /// Remove an asset from the cache.
     ///
-    /// The removed asset matches both the id and the type parameter
+    /// The removed asset matches both the id and the type parameter.
     #[inline]
     pub fn remove<A: Asset>(&mut self, id: &str) {
-        let key = AccessKey::new::<A>(&*id);
-        let map = rwlock::get_mut(&mut self.assets);
-        map.remove(&key);
+        let key = AccessKey::new::<A>(id);
+        let cache = rwlock::get_mut(&mut self.assets);
+        cache.remove(&key);
     }
 
-    /// Clears the cache
+    /// Take ownership on an asset.
+    ///
+    /// The corresponding asset is removed from the cache.
+    pub fn take<A: Asset>(&mut self, id: &str) -> Option<A> {
+        let key = AccessKey::new::<A>(id);
+        let cache = rwlock::get_mut(&mut self.assets);
+        cache.remove(&key).map(|entry| unsafe { entry.into_inner() })
+    }
+
+    /// Clears the cache.
     #[inline]
     pub fn clear(&mut self) {
         rwlock::get_mut(&mut self.assets).clear();
