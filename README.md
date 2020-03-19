@@ -78,7 +78,7 @@ Current features:
 - Convient load of external files
 - Cache loaded assets
 - Multi-threading support
-- Built-in support of RON, JSON, Bincode, YAML and CBOR with serde
+- Built-in support of RON, JSON, Bincode, YAML, TOML and CBOR with serde
 
 Planned features:
 - Load from different sources (archives, embeded)

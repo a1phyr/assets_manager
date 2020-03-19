@@ -128,4 +128,5 @@ serde_loader!("bincode", serde_bincode, "Loads assets from Bincode encoded files
 serde_loader!("cbor", serde_cbor, "Loads assets from CBOR encoded files", CborLoader, serde_cbor::from_slice);
 serde_loader!("json", serde_json, "Loads assets from JSON files", JsonLoader, serde_json::from_slice);
 serde_loader!("ron", serde_ron, "Loads assets from RON files", RonLoader, serde_ron::de::from_bytes);
+serde_loader!("toml", serde_toml, "Loads assets from TOML files", TomlLoader, serde_toml::de::from_slice);
 serde_loader!("yaml", serde_yaml, "Loads assets from YAML files", YamlLoader, serde_yaml::from_slice);

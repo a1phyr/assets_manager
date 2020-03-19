@@ -75,6 +75,9 @@ mod loaders {
     #[cfg(feature = "ron")]
     test_loader!(ron_loader, RonLoader, |p| serde_ron::ser::to_string(p).unwrap().into_bytes());
 
+    #[cfg(feature = "toml")]
+    test_loader!(toml_loader, TomlLoader, |p| serde_toml::ser::to_vec(p).unwrap());
+
     #[cfg(feature = "yaml")]
     test_loader!(yaml_loader, YamlLoader, |p| serde_yaml::to_vec(p).unwrap());
 }

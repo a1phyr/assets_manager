@@ -8,15 +8,13 @@
 //!
 //! ## Cargo features
 //! 
-//! Default features:
 //! - `parking_lot`: Use `parking_lot`'s RwLocks instead of std's ones
-//! 
-//! Additional features:
-//! - `ron`: RON deserialization
-//! - `json`: JSON deserialization
 //! - `bincode`: Bincode deserialization
-//! - `yaml`: YAML deserialization
 //! - `cbor`: CBOR deserialization
+//! - `json`: JSON deserialization
+//! - `ron`: RON deserialization
+//! - `toml`: TOML deserialization
+//! - `yaml`: YAML deserialization
 //! 
 //! ## Example
 //!
