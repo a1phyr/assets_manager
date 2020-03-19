@@ -1,6 +1,6 @@
 [package]
 name = "assets_manager"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Benoît du Garreau"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -10,7 +10,7 @@ description= "Conveniently load, store and cache external resources"
 repository = "https://github.com/a1phyr/assets_manager"
 
 categories = ["data-structures", "filesystem", "game-development"]
-keywords = ["assets", "resources"]
+keywords = ["asset", "assets", "cache", "resources"]
 
 
 [features]
