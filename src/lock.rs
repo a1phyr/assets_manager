@@ -200,7 +200,6 @@ where
 /// can exist while reloading an asset.
 ///
 /// The type parameter `A` represents type of the locked asset.
-#[derive(Clone)]
 pub struct AssetRefLock<'a, A> {
     data: &'a RwLock<A>,
 }
@@ -222,6 +221,16 @@ impl<A> AssetRefLock<'_, A> {
         std::ptr::eq(self.data, other.data)
     }
 }
+
+impl<A> Clone for AssetRefLock<'_, A> {
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data,
+        }
+    }
+}
+
+impl<A> Copy for AssetRefLock<'_, A> {}
 
 impl<A> hash::Hash for AssetRefLock<'_, A>
 where
