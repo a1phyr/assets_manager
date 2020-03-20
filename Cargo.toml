@@ -8,8 +8,9 @@ readme = "README.md"
 description= "Conveniently load, store and cache external resources"
 
 repository = "https://github.com/a1phyr/assets_manager"
+documentation = "https://docs.rs/assets_manager"
 
-categories = ["data-structures", "filesystem", "game-development"]
+categories = ["caching", "filesystem", "game-development"]
 keywords = ["asset", "assets", "cache", "resources"]
 
 
@@ -17,6 +18,7 @@ keywords = ["asset", "assets", "cache", "resources"]
 bincode = ["serde_bincode", "serde"]
 cbor = ["serde_cbor", "serde"]
 json = ["serde_json", "serde"]
+msgpack = ["serde_msgpack", "serde"]
 ron = ["serde_ron", "serde"]
 yaml = ["serde_yaml", "serde"]
 toml = ["serde_toml", "serde"]
@@ -30,6 +32,7 @@ serde = {version = "1.0", optional = true}
 serde_bincode = {version = "1.2", package = "bincode", optional = true}
 serde_cbor = {version = "0.11", optional = true}
 serde_json = {version = "1.0", optional = true}
+serde_msgpack = {version = "0.14", package = "rmp-serde", optional = true}
 serde_ron = {version = "0.5", package = "ron", optional = true}
 serde_toml = {version = "0.5", package = "toml", optional = true}
 serde_yaml = {version = "0.8", optional = true}

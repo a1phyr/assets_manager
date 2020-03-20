@@ -14,6 +14,7 @@
 //! - `bincode`: Bincode deserialization
 //! - `cbor`: CBOR deserialization
 //! - `json`: JSON deserialization
+//! - `msgpack`: MessagePack deserialization
 //! - `ron`: RON deserialization
 //! - `toml`: TOML deserialization
 //! - `yaml`: YAML deserialization

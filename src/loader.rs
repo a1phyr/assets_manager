@@ -9,9 +9,6 @@ use std::{
     str::FromStr,
 };
 
-#[cfg(feature = "serde")]
-use serde::Deserialize;
-
 /// Specifies how an asset is loaded.
 ///
 /// With this trait, you can specify easily specify how you want your data to be loaded.
@@ -101,10 +98,7 @@ where
 }
 
 macro_rules! serde_loader {
-    ($feature:literal, $lib:ident, $doc:literal, $name: ident, $fun:path) => {
-        #[cfg(feature = $feature)]
-        use $lib;
-
+    ($feature:literal, $doc:literal, $name:ident, $fun:path) => {
         #[cfg(feature = $feature)]
         #[doc = $doc]
         #[derive(Debug)]
@@ -113,20 +107,21 @@ macro_rules! serde_loader {
         #[cfg(feature = $feature)]
         impl<T> Loader<T> for $name
         where
-            T: for<'de> Deserialize<'de>,
+            T: for<'de> serde::Deserialize<'de>,
         {
             #[inline]
             fn load(content: Vec<u8>) -> Result<T, Box<dyn Error + Send + Sync>> {
-                Ok($fun(&content)?)
+                Ok($fun(&*content)?)
             }
         }
 
     }
 }
 
-serde_loader!("bincode", serde_bincode, "Loads assets from Bincode encoded files", BincodeLoader, serde_bincode::deserialize);
-serde_loader!("cbor", serde_cbor, "Loads assets from CBOR encoded files", CborLoader, serde_cbor::from_slice);
-serde_loader!("json", serde_json, "Loads assets from JSON files", JsonLoader, serde_json::from_slice);
-serde_loader!("ron", serde_ron, "Loads assets from RON files", RonLoader, serde_ron::de::from_bytes);
-serde_loader!("toml", serde_toml, "Loads assets from TOML files", TomlLoader, serde_toml::de::from_slice);
-serde_loader!("yaml", serde_yaml, "Loads assets from YAML files", YamlLoader, serde_yaml::from_slice);
+serde_loader!("bincode", "Loads assets from Bincode encoded files", BincodeLoader, serde_bincode::deserialize);
+serde_loader!("cbor", "Loads assets from CBOR encoded files", CborLoader, serde_cbor::from_slice);
+serde_loader!("json", "Loads assets from JSON files", JsonLoader, serde_json::from_slice);
+serde_loader!("msgpack", "Loads assets from MessagePack files", MessagePackLoader, serde_msgpack::decode::from_read);
+serde_loader!("ron", "Loads assets from RON files", RonLoader, serde_ron::de::from_bytes);
+serde_loader!("toml", "Loads assets from TOML files", TomlLoader, serde_toml::de::from_slice);
+serde_loader!("yaml", "Loads assets from YAML files", YamlLoader, serde_yaml::from_slice);

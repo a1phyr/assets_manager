@@ -75,10 +75,10 @@ assert!(asset_lock.ptr_eq(&other_lock));
 ## Features
 
 Current features:
-- Convient load of external files
+- Convenient load of external files
 - Cache loaded assets
 - Multi-threading support
-- Built-in support of RON, JSON, Bincode, YAML, TOML and CBOR with serde
+- Built-in support of most common data formats with serde
 
 Planned features:
 - Load from different sources (archives, embeded)

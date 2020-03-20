@@ -1,5 +1,6 @@
 mod loaders {
     use crate::loader::*;
+    use cfg_if::cfg_if;
 
     fn raw(s: &str) -> Vec<u8> {
         s.to_string().into_bytes()
@@ -23,45 +24,42 @@ mod loaders {
         assert_eq!(loaded, n);
     }
 
-    #[cfg(feature = "serde")]
-    use serde::{Serialize, Deserialize};
-    #[cfg(feature = "serde")]
-    use rand::{
-        Rng,
-        distributions::{Distribution, Standard},
-    };
+    cfg_if! { if #[cfg(feature = "serde")] {
+        use serde::{Serialize, Deserialize};
+        use rand::{
+            Rng,
+            distributions::{Distribution, Standard},
+        };
 
-    #[cfg(feature = "serde")]
-    #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
-    struct Point {
-        x: i32,
-        y: i32,
-    }
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct Point {
+            x: i32,
+            y: i32,
+        }
 
-    #[cfg(feature = "serde")]
-    impl Distribution<Point> for Standard {
-        fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Point {
-            Point {
-                x: rng.gen(),
-                y: rng.gen(),
+        impl Distribution<Point> for Standard {
+            fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Point {
+                Point {
+                    x: rng.gen(),
+                    y: rng.gen(),
+                }
             }
         }
-    }
 
-    #[cfg(feature = "serde")]
-    macro_rules! test_loader {
-        ($name:ident, $loader:ty, $ser:expr) => {
-            #[test]
-            fn $name() {
-                let point = rand::random::<Point>();
-                let raw = ($ser)(&point);
+        macro_rules! test_loader {
+            ($name:ident, $loader:ty, $ser:expr) => {
+                #[test]
+                fn $name() {
+                    let point = rand::random::<Point>();
+                    let raw = ($ser)(&point);
 
-                let loaded: Point = <$loader>::load(raw).unwrap();
+                    let loaded: Point = <$loader>::load(raw).unwrap();
 
-                assert_eq!(loaded, point);
+                    assert_eq!(loaded, point);
+                }
             }
         }
-    }
+    }}
 
     #[cfg(feature = "bincode")]
     test_loader!(bincode_loader, BincodeLoader, |p| serde_bincode::serialize(p).unwrap());
@@ -71,6 +69,9 @@ mod loaders {
 
     #[cfg(feature = "json")]
     test_loader!(json_loader, JsonLoader, |p| serde_json::to_vec(p).unwrap());
+
+    #[cfg(feature = "msgpack")]
+    test_loader!(msgpack_loader, MessagePackLoader, |p| serde_msgpack::encode::to_vec(p).unwrap());
 
     #[cfg(feature = "ron")]
     test_loader!(ron_loader, RonLoader, |p| serde_ron::ser::to_string(p).unwrap().into_bytes());
