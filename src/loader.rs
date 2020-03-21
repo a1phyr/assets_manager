@@ -1,6 +1,6 @@
 //! Generic asset loading definition
 //!
-//! See the trait [`Loader`] for more informations
+//! See trait [`Loader`] for more informations
 //!
 //! [`Loader`]: trait.Loader.html
 
@@ -11,7 +11,7 @@ use std::{
 
 /// Specifies how an asset is loaded.
 ///
-/// With this trait, you can specify easily specify how you want your data to be loaded.
+/// With this trait, you can easily specify how you want your data to be loaded.
 ///
 /// # Basic usage
 ///
@@ -50,7 +50,7 @@ pub trait Loader<T> {
 /// Use it when you want to implement [`Asset`] but do not want/need to use a
 /// loader, and only to override [`Asset::load_from_raw`].
 ///
-/// **Warning** : this loader is not meant to be called and will panic if so
+/// **Warning**: this loader is not meant to be called and will panic if so
 ///
 /// [`Loader`]: trait.Loader.html
 /// [`Asset`]: ../trait.Asset.html
@@ -75,7 +75,7 @@ impl Loader<String> for StringLoader {
     }
 }
 
-/// Loads assets for types that can be parsed with `FromStr`.
+/// Loads assets that can be parsed with `FromStr`.
 ///
 /// Do not use this loader to load `String`s, prefer using [`StringLoader`],
 /// which is more efficient.
@@ -83,7 +83,10 @@ impl Loader<String> for StringLoader {
 /// If you want your custom type to work with this loader, make sure that
 /// `FromStr::Err` meet the requirements
 ///
+/// See trait [`Loader`] for more informations.
+///
 /// [`StringLoader`]: struct.StringLoader.html
+/// [`Loader`]: trait.Loader.html
 #[derive(Debug)]
 pub struct ParseLoader;
 impl<T> Loader<T> for ParseLoader
@@ -99,8 +102,13 @@ where
 
 macro_rules! serde_loader {
     ($feature:literal, $doc:literal, $name:ident, $fun:path) => {
-        #[cfg(feature = $feature)]
         #[doc = $doc]
+        ///
+        /// See trait [`Loader`] for more informations.
+        ///
+        /// [`Loader`]: trait.Loader.html
+        #[cfg(feature = $feature)]
+        #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
         #[derive(Debug)]
         pub struct $name;
 
@@ -118,10 +126,10 @@ macro_rules! serde_loader {
     }
 }
 
-serde_loader!("bincode", "Loads assets from Bincode encoded files", BincodeLoader, serde_bincode::deserialize);
-serde_loader!("cbor", "Loads assets from CBOR encoded files", CborLoader, serde_cbor::from_slice);
-serde_loader!("json", "Loads assets from JSON files", JsonLoader, serde_json::from_slice);
-serde_loader!("msgpack", "Loads assets from MessagePack files", MessagePackLoader, serde_msgpack::decode::from_read);
-serde_loader!("ron", "Loads assets from RON files", RonLoader, serde_ron::de::from_bytes);
-serde_loader!("toml", "Loads assets from TOML files", TomlLoader, serde_toml::de::from_slice);
-serde_loader!("yaml", "Loads assets from YAML files", YamlLoader, serde_yaml::from_slice);
+serde_loader!("bincode", "Loads assets from Bincode encoded files.", BincodeLoader, serde_bincode::deserialize);
+serde_loader!("cbor", "Loads assets from CBOR encoded files.", CborLoader, serde_cbor::from_slice);
+serde_loader!("json", "Loads assets from JSON files.", JsonLoader, serde_json::from_slice);
+serde_loader!("msgpack", "Loads assets from MessagePack files.", MessagePackLoader, serde_msgpack::decode::from_read);
+serde_loader!("ron", "Loads assets from RON files.", RonLoader, serde_ron::de::from_bytes);
+serde_loader!("toml", "Loads assets from TOML files.", TomlLoader, serde_toml::de::from_slice);
+serde_loader!("yaml", "Loads assets from YAML files.", YamlLoader, serde_yaml::from_slice);

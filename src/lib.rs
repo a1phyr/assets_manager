@@ -1,13 +1,13 @@
 //! Conveniently load, store and cache external resources.
-//! 
-//! 
+//!
+//!
 //! It has multiple goals
 //! - Easy to use: Rusty API
 //! - Light: Pay for what you take, no dependencies bloat
 //! - Fast: Share your resources between threads without using expensive `Arc::clone`
 //!
 //! ## Cargo features
-//! 
+//!
 //! No features are enabled by default.
 //!
 //! ### Additionnal loaders
@@ -18,7 +18,7 @@
 //! - `ron`: RON deserialization
 //! - `toml`: TOML deserialization
 //! - `yaml`: YAML deserialization
-//! 
+//!
 //! ### Internal features
 //!
 //! These features change inner data structures implementations.
@@ -28,7 +28,7 @@
 //!
 //! ## Example
 //!
-//! If the file `assets/common/test.ron` contains this:
+//! If the file `assets/common/position.ron` contains this:
 //!
 //! ```text
 //! Point(
@@ -65,7 +65,7 @@
 //! let cache = AssetCache::new("assets");
 //!
 //! // Get a lock on the asset
-//! let asset_lock = cache.load::<Point>("common.test")?;
+//! let asset_lock = cache.load::<Point>("common.position")?;
 //!
 //! // Lock the asset for reading
 //! // Any number of read locks can exist at the same time,
@@ -77,7 +77,7 @@
 //! assert_eq!(point.y, -6);
 //!
 //! // Loading the same asset retreives it from the cache
-//! let other_lock = cache.load("common.test")?;
+//! let other_lock = cache.load("common.position")?;
 //! assert!(asset_lock.ptr_eq(&other_lock));
 //!
 //! # }}
@@ -168,6 +168,51 @@ impl<'a> Borrow<AccessKey<'a>> for Key {
 ///
 /// It uses interior mutability, so assets can be added in the cache without
 /// requiring a mutable reference, but one is required to remove an asset.
+///
+/// Within the cache, assets are identified with their type and a string. This
+/// string is constructed from the asset path, remplacing `/` by `.` and removing
+/// the extension.
+///
+/// # Example
+///
+/// ```
+/// # cfg_if::cfg_if! { if #[cfg(feature = "ron")] {
+/// use assets_manager::{Asset, AssetCache, loader};
+/// use serde::Deserialize;
+///
+/// #[derive(Debug, Deserialize)]
+/// struct Point {
+///     x: i32,
+///     y: i32,
+/// }
+///
+/// impl Asset for Point {
+///     const EXT: &'static str = "ron";
+///     type Loader = loader::RonLoader;
+/// }
+///
+/// // Create a cache
+/// let cache = AssetCache::new("assets");
+///
+/// // Get an asset from the file `assets/common/position.ron`
+/// let point_lock = cache.load::<Point>("common.position")?;
+///
+/// // Read it
+/// let point = point_lock.read();
+/// println!("Loaded position: {:?}", point);
+/// # assert_eq!(point.x, 5);
+/// # assert_eq!(point.y, -6);
+///
+/// // Drop the guard to avoid a deadlock
+/// drop(point);
+///
+/// // Reload the asset from the filesystem
+/// cache.reload::<Point>("common.position")?;
+/// println!("New position: {:?}", point_lock.read());
+///
+/// # }}
+/// # Ok::<(), assets_manager::AssetError>(())
+/// ```
 pub struct AssetCache<'a> {
     assets: RwLock<HashMap<Key, CacheEntry>>,
     path: &'a str,
@@ -243,8 +288,10 @@ impl<'a> AssetCache<'a> {
     ///
     /// It does not matter whether the asset has been loaded yet.
     ///
-    /// Note: this function requires a write lock on the asset, and will block
-    /// until one is aquired, ie no read lock can exist at the same time.
+    /// **Note**: this function requires a write lock on the asset, and will block
+    /// until one is aquired, ie no read lock can exist at the same time. This
+    /// means that you MUST NOT call this method if you have an `AssetRef` on
+    /// the same asset, or it may cause a deadlock.
     ///
     /// # Errors
     ///
@@ -315,6 +362,35 @@ impl fmt::Debug for AssetCache<'_> {
 ///
 /// `Asset`s can loaded and retreived by an [`AssetCache`].
 ///
+/// ## Example
+///
+/// Suppose you make a physics simulutation, and you positions and speeds in
+/// a Bincode-encoded files, with extension ".data"
+///
+/// ```no_run
+/// # cfg_if::cfg_if! { if #[cfg(feature = "bincode")] {
+/// use assets_manager::{Asset, loader};
+/// use serde::Deserialize;
+///
+/// #[derive(Deserialize)]
+/// struct Vector {
+///     x: f32,
+///     y: f32,
+///     z: f32,
+/// }
+///
+/// #[derive(Deserialize)]
+/// struct World {
+///     pos: Vec<Vector>,
+///     speed: Vec<Vector>,
+/// }
+///
+/// impl Asset for World {
+///     const EXT: &'static str = "data";
+///     type Loader = loader::BincodeLoader;
+/// }
+/// # }}
+/// ```
 /// [`AssetCache`]: struct.AssetCache.html
 pub trait Asset: Sized + Send + Sync + 'static {
     /// The extension used by the asset files from the given asset type.

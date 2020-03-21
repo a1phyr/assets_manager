@@ -1,6 +1,5 @@
 mod loaders {
     use crate::loader::*;
-    use cfg_if::cfg_if;
 
     fn raw(s: &str) -> Vec<u8> {
         s.to_string().into_bytes()
@@ -24,7 +23,7 @@ mod loaders {
         assert_eq!(loaded, n);
     }
 
-    cfg_if! { if #[cfg(feature = "serde")] {
+    cfg_if::cfg_if! { if #[cfg(feature = "serde")] {
         use serde::{Serialize, Deserialize};
         use rand::{
             Rng,
@@ -51,7 +50,7 @@ mod loaders {
                 #[test]
                 fn $name() {
                     let point = rand::random::<Point>();
-                    let raw = ($ser)(&point);
+                    let raw = ($ser)(&point).unwrap();
 
                     let loaded: Point = <$loader>::load(raw).unwrap();
 
@@ -62,25 +61,72 @@ mod loaders {
     }}
 
     #[cfg(feature = "bincode")]
-    test_loader!(bincode_loader, BincodeLoader, |p| serde_bincode::serialize(p).unwrap());
+    test_loader!(bincode_loader, BincodeLoader, serde_bincode::serialize);
 
     #[cfg(feature = "cbor")]
-    test_loader!(cbor_loader, CborLoader, |p| serde_cbor::to_vec(p).unwrap());
+    test_loader!(cbor_loader, CborLoader, serde_cbor::to_vec);
 
     #[cfg(feature = "json")]
-    test_loader!(json_loader, JsonLoader, |p| serde_json::to_vec(p).unwrap());
+    test_loader!(json_loader, JsonLoader, serde_json::to_vec);
 
     #[cfg(feature = "msgpack")]
-    test_loader!(msgpack_loader, MessagePackLoader, |p| serde_msgpack::encode::to_vec(p).unwrap());
+    test_loader!(msgpack_loader, MessagePackLoader, serde_msgpack::encode::to_vec);
 
     #[cfg(feature = "ron")]
-    test_loader!(ron_loader, RonLoader, |p| serde_ron::ser::to_string(p).unwrap().into_bytes());
+    test_loader!(ron_loader, RonLoader, |p| serde_ron::ser::to_string(p).map(String::into_bytes));
 
     #[cfg(feature = "toml")]
-    test_loader!(toml_loader, TomlLoader, |p| serde_toml::ser::to_vec(p).unwrap());
+    test_loader!(toml_loader, TomlLoader, serde_toml::ser::to_vec);
 
     #[cfg(feature = "yaml")]
-    test_loader!(yaml_loader, YamlLoader, |p| serde_yaml::to_vec(p).unwrap());
+    test_loader!(yaml_loader, YamlLoader, serde_yaml::to_vec);
+}
+
+mod asset_cache {
+    use crate::{Asset, AssetCache, loader};
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    struct X(i32);
+
+    impl Asset for X {
+        type Loader = loader::CustomLoader;
+        const EXT: &'static str = "";
+    }
+
+    #[test]
+    fn load_cached() {
+        let x = X(rand::random());
+
+        let cache = AssetCache::new("");
+
+        assert!(cache.load_cached::<X>("").is_none());
+        cache.add_asset(String::new(), x);
+        assert_eq!(*cache.load_cached::<X>("").unwrap().read(), x);
+    }
+
+    #[test]
+    fn take() {
+        let x = X(rand::random());
+
+        let mut cache = AssetCache::new("");
+
+        cache.add_asset(String::new(), x);
+        assert!(cache.load_cached::<X>("").is_some());
+        assert_eq!(cache.take(""), Some(x));
+        assert!(cache.load_cached::<X>("").is_none());
+    }
+
+    #[test]
+    fn remove() {
+        let x = X(rand::random());
+
+        let mut cache = AssetCache::new("");
+
+        cache.add_asset(String::new(), x);
+        assert!(cache.load_cached::<X>("").is_some());
+        cache.remove::<X>("");
+        assert!(cache.load_cached::<X>("").is_none());
+    }
 }
 
 mod cache_entry {
