@@ -15,6 +15,7 @@ pub enum AssetError {
     LoadError(Box<dyn Error + Send + Sync>),
 
     /// The asset was loaded with a different type than before.
+    #[deprecated = "This error kind is not emitted by assets_manager and will be removed in a future release"]
     InvalidType,
 }
 
@@ -24,6 +25,7 @@ impl From<io::Error> for AssetError {
     }
 }
 
+#[allow(deprecated)]
 impl fmt::Display for AssetError {
      fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {

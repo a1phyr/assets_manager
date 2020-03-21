@@ -6,6 +6,7 @@ mod loaders {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn string_loader() {
         let raw = raw("Hello World!");
         let loaded = StringLoader::load(raw).unwrap();

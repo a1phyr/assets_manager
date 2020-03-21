@@ -68,7 +68,9 @@ impl<T> Loader<T> for CustomLoader {
 ///
 /// The file content is assumed to be valid UTF-8.
 #[derive(Debug)]
+#[deprecated = "This Loader cannot be used to implement the Asset trait and will be removed in a future release"]
 pub struct StringLoader;
+#[allow(deprecated)]
 impl Loader<String> for StringLoader {
     fn load(content: Vec<u8>) -> Result<String, Box<dyn Error + Send + Sync>> {
         Ok(String::from_utf8(content)?)
