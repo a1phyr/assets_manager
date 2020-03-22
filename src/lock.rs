@@ -217,11 +217,13 @@ where
 
 /// A lock on an asset.
 ///
+/// The type parameter `A` represents type of the locked asset.
+///
 /// This structure wraps a RwLock, so assets can be written to be reloaded.
 /// As such, any number of read guard can exist at the same time, but none
 /// can exist while reloading an asset.
 ///
-/// The type parameter `A` represents type of the locked asset.
+/// This is the structure you want to use to store a reference to an asset.
 pub struct AssetRefLock<'a, A> {
     data: &'a RwLock<A>,
 }

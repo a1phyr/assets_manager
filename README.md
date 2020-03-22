@@ -6,16 +6,16 @@
 Conveniently load, store and cache external resources.
 
 
-It has multiple goals
+It has multiple goals:
 - Easy to use
-- Light: Pay for what you take, no dependencies bloat
+- Light: Pay for what you take, no dependency bloat
 - Fast: Share your resources between threads without using expensive `Arc::clone`
 
 This crate follow semver convention and supports rustc 1.40.0 and higher.
 Changing this is considered a breaking change.
 
-**Note**: this crate is still under developpement and should not be used in 
-production, but experimental use and feedback are welcome.
+**Note**: this crate is still under developpement and should be considered
+experimental, but use and feedback and requests are welcome and encouraged.
 
 ## Example
 
@@ -77,13 +77,12 @@ assert!(asset_lock.ptr_eq(&other_lock));
 Current features:
 - Convenient load of external files
 - Cache loaded assets
-- Multi-threading support
+- Thought for multi-threading
 - Built-in support of most common data formats with serde
 
 Planned features:
-- Load from different sources (archives, embeded)
 - Hot-reloading
-- Ease use in single-threaded uses (e.g. WASM)
+- Load from different sources (archives, embeded)
 
 ## License
 
