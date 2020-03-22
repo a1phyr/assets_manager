@@ -44,5 +44,9 @@ rand = "0.7"
 serde = {version = "1.0", features = ["derive"]}
 
 
+[[example]]
+name = "basic"
+required-features = ["bincode"]
+
 [package.metadata.docs.rs]
 all-features = true
