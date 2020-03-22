@@ -1,3 +1,5 @@
+//! Definitions of error types
+
 use std::{
     error::Error,
     fmt,

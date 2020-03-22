@@ -1,3 +1,4 @@
+//! Definition of the cache
 use crate::{
     Asset,
     AssetError,
@@ -17,6 +18,11 @@ use hashbrown::HashMap;
 #[cfg(not(feature = "hashbrown"))]
 use std::collections::HashMap;
 
+/// The key used to identify assets
+///
+/// **Note**: This definition has to kept in sync with [`AccessKey`]'s one.
+///
+/// [`AccessKey`]: struct.AccessKey.html
 #[derive(Debug, Hash, PartialEq, Eq)]
 #[repr(C)]
 struct Key {
@@ -25,6 +31,7 @@ struct Key {
 }
 
 impl Key {
+    /// Creates a Key with the given type and id.
     #[inline]
     fn new<T: 'static>(id: Box<str>) -> Self {
         Self {
@@ -35,6 +42,7 @@ impl Key {
 }
 
 impl<'a> AccessKey<'a> {
+    /// Creates an AccessKey for the given type and id.
     #[inline]
     fn new<T: 'static>(id: &'a str) -> Self {
         Self {
@@ -44,6 +52,9 @@ impl<'a> AccessKey<'a> {
     }
 }
 
+/// A borrowed version of [`Key`]
+///
+/// [`Key`]: struct.Key.html
 #[derive(Debug, Hash, PartialEq, Eq)]
 #[repr(C)]
 struct AccessKey<'a> {
@@ -127,6 +138,7 @@ impl<'a> AssetCache<'a> {
         }
     }
 
+    /// Adds an asset to the cache
     pub(crate) fn add_asset<A: Asset>(&self, id: String, asset: A) -> AssetRefLock<A> {
         let entry = CacheEntry::new(asset);
         // Safety:
