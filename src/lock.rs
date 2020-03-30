@@ -219,11 +219,15 @@ where
 ///
 /// The type parameter `A` represents type of the locked asset.
 ///
-/// This structure wraps a RwLock, so assets can be written to be reloaded.
-/// As such, any number of read guard can exist at the same time, but none
-/// can exist while reloading an asset.
+/// This structure wraps a RwLock, so assets can be written to be reloaded. As
+/// such, any number of read guard can exist at the same time, but none can
+/// exist while reloading an asset.
 ///
 /// This is the structure you want to use to store a reference to an asset.
+/// However, shared data threads is usually required to be `'static`. The first
+/// solution is to create static `AssetCache`s and references (for example with
+/// `lazy_static` crate). You can also use crates allow threads with non-static
+/// data (such as `crossbeam-utils::scope` or `scoped_threads`).
 pub struct AssetRefLock<'a, A> {
     data: &'a RwLock<A>,
 }
