@@ -4,9 +4,9 @@
 //! (the current directory is supposed to be the root of the crate).
 
 
-use assets_manager::{Asset, AssetCache, AssetError, loader};
+use assets_manager::{Asset, AssetCache, loader};
 use serde::Deserialize;
-use std::{thread::sleep, time::Duration};
+use std::{error::Error, thread::sleep, time::Duration};
 
 /// A tile of the image
 #[derive(Debug, Deserialize)]
@@ -49,10 +49,10 @@ impl Asset for Image {
     type Loader = loader::BincodeLoader;
 }
 
-fn main() -> Result<(), AssetError> {
+fn main() -> Result<(), Box<dyn Error>> {
     // The cache used to load assets
     // Its root is directory `assets`
-    let cache = AssetCache::new("assets");
+    let cache = AssetCache::new("assets")?;
 
     // Load an asset with type `Image`
     // The result is a lock on the image

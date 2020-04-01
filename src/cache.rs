@@ -10,7 +10,8 @@ use std::{
     borrow::Borrow,
     fmt,
     fs,
-    path::PathBuf,
+    io,
+    path::{Path, PathBuf},
 };
 
 #[cfg(feature = "hashbrown")]
@@ -100,7 +101,7 @@ impl<'a> Borrow<AccessKey<'a>> for Key {
 /// }
 ///
 /// // Create a cache
-/// let cache = AssetCache::new("assets");
+/// let cache = AssetCache::new("assets")?;
 ///
 /// // Get an asset from the file `assets/common/position.ron`
 /// let point_lock = cache.load::<Point>("common.position")?;
@@ -119,23 +120,38 @@ impl<'a> Borrow<AccessKey<'a>> for Key {
 /// println!("New position: {:?}", point_lock.read());
 ///
 /// # }}
-/// # Ok::<(), assets_manager::AssetError>(())
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub struct AssetCache<'a> {
+pub struct AssetCache {
     assets: RwLock<HashMap<Key, CacheEntry>>,
-    path: &'a str,
+    path: PathBuf,
 }
 
-impl<'a> AssetCache<'a> {
+impl AssetCache {
     /// Creates a new cache.
     ///
-    /// Assets will be searched in the directory `path`
+    /// Assets will be searched in the directory given by `path`. Symbolic links
+    /// will be followed.
+    ///
+    /// # Errors
+    ///
+    /// An error will be returned if `path` is not valid readable directory.
     #[inline]
-    pub fn new(path: &str) -> AssetCache {
-        AssetCache {
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<AssetCache, io::Error> {
+        let path = path.as_ref().canonicalize()?;
+        let _ = path.read_dir()?;
+
+        Ok(AssetCache {
             assets: RwLock::new(HashMap::new()),
             path,
-        }
+        })
+    }
+
+    /// Gets the path of the cache's root.
+    ///
+    /// The path is currently given as absolute, but this may change in the future.
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
     /// Adds an asset to the cache
@@ -167,7 +183,7 @@ impl<'a> AssetCache<'a> {
             return Ok(asset);
         }
 
-        let asset = self.load_from_path(id)?;
+        let asset = self.load_from_fs(id)?;
         Ok(self.add_asset(id.to_string(), asset))
     }
 
@@ -210,7 +226,7 @@ impl<'a> AssetCache<'a> {
     ///
     /// [`load`]: fn.load.html
     pub fn reload<A: Asset>(&self, id: &str) -> Result<AssetRefLock<A>, AssetError> {
-        let asset = self.load_from_path(id)?;
+        let asset = self.load_from_fs(id)?;
 
         let cache = rwlock::read(&self.assets);
         if let Some(cached) = cache.get(&AccessKey::new::<A>(id)) {
@@ -222,9 +238,9 @@ impl<'a> AssetCache<'a> {
     }
 
 
-    fn load_from_path<A: Asset>(&self, id: &str) -> Result<A, AssetError> {
-        let mut path = PathBuf::from(self.path);
-        path.push(id.replace(".", "/"));
+    fn load_from_fs<A: Asset>(&self, id: &str) -> Result<A, AssetError> {
+        let mut path = self.path.clone();
+        path.extend(id.split('.'));
         path.set_extension(A::EXT);
 
         let content = fs::read(&path)?;
@@ -257,7 +273,7 @@ impl<'a> AssetCache<'a> {
     }
 }
 
-impl fmt::Debug for AssetCache<'_> {
+impl fmt::Debug for AssetCache {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AssetCache")
             .field("path", &self.path)

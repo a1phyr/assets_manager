@@ -62,7 +62,7 @@
 //!
 //!
 //! // Create a new cache to load assets under the "./assets" folder
-//! let cache = AssetCache::new("assets");
+//! let cache = AssetCache::new("assets")?;
 //!
 //! // Get a lock on the asset
 //! let asset_lock = cache.load::<Point>("common.position")?;
@@ -81,7 +81,7 @@
 //! assert!(asset_lock.ptr_eq(&other_lock));
 //!
 //! # }}
-//! # Ok::<(), assets_manager::AssetError>(())
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
 #![doc(html_root_url = "https://docs.rs/assets_manager/0.1")]
@@ -147,6 +147,8 @@ mod tests;
 /// [`AssetCache`]: struct.AssetCache.html
 pub trait Asset: Sized + Send + Sync + 'static {
     /// The extension used by the asset files from the given asset type.
+    ///
+    /// It must not contain the `.` caracter.
     ///
     /// Use `""` for no extension.
     const EXT: &'static str;

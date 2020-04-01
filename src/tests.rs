@@ -95,10 +95,28 @@ mod asset_cache {
     }
 
     #[test]
+    fn new_with_valid_path() {
+        let cache = AssetCache::new("assets");
+        assert!(cache.is_ok());
+    }
+
+    #[test]
+    fn new_with_invalid_path() {
+        let cache = AssetCache::new("asset");
+        assert!(cache.is_err());
+    }
+
+    #[test]
+    fn new_with_valid_file() {
+        let cache = AssetCache::new("src/lib.rs");
+        assert!(cache.is_err());
+    }
+
+    #[test]
     fn load_cached() {
         let x = X(rand::random());
 
-        let cache = AssetCache::new("");
+        let cache = AssetCache::new(".").unwrap();
 
         assert!(cache.load_cached::<X>("").is_none());
         cache.add_asset(String::new(), x);
@@ -109,7 +127,7 @@ mod asset_cache {
     fn take() {
         let x = X(rand::random());
 
-        let mut cache = AssetCache::new("");
+        let mut cache = AssetCache::new(".").unwrap();
 
         cache.add_asset(String::new(), x);
         assert!(cache.load_cached::<X>("").is_some());
@@ -121,7 +139,7 @@ mod asset_cache {
     fn remove() {
         let x = X(rand::random());
 
-        let mut cache = AssetCache::new("");
+        let mut cache = AssetCache::new(".").unwrap();
 
         cache.add_asset(String::new(), x);
         assert!(cache.load_cached::<X>("").is_some());
