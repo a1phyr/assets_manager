@@ -10,6 +10,8 @@
 //!
 //! No features are enabled by default.
 //!
+//! - `hot-reloading`: Add hot-reloading
+//!
 //! ### Additionnal loaders
 //! - `bincode`: Bincode deserialization
 //! - `cbor`: CBOR deserialization
@@ -23,7 +25,6 @@
 //!
 //! These features change inner data structures implementations.
 //!
-//! - `hashbrown`: Use *hashbrown* crate's HashMap
 //! - `parking_lot`: Use *parking_lot* crate's synchronisation primitives
 //!
 //! ## Example
@@ -106,6 +107,9 @@ pub use lock::{AssetRefLock, AssetRef};
 mod error;
 #[doc(inline)]
 pub use error::AssetError;
+
+#[cfg(feature = "hot-reloading")]
+mod hot_reloading;
 
 #[cfg(test)]
 mod tests;

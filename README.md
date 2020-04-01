@@ -2,6 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/assets_manager.svg)](https://crates.io/crates/assets_manager)
 [![Docs.rs](https://docs.rs/assets_manager/badge.svg)](https://docs.rs/assets_manager/)
+![Minimum rustc version](https://img.shields.io/badge/rustc-1.42+-lightgray.svg)
 
 Conveniently load, store and cache external resources.
 
@@ -11,7 +12,7 @@ It has multiple goals:
 - Light: Pay for what you take, no dependency bloat
 - Fast: Share your resources between threads without using expensive `Arc::clone`
 
-This crate follow semver convention and supports rustc 1.40.0 and higher.
+This crate follow semver convention and supports rustc 1.42.0 and higher.
 Changing this is considered a breaking change.
 
 **Note**: this crate is still under developpement and should be considered
@@ -72,16 +73,27 @@ let other_lock = cache.load("common.test")?;
 assert!(asset_lock.ptr_eq(&other_lock));
 ```
 
+Hot-reloading is also very easy to use:
+
+```
+let cache = AssetCache::new("assets");
+let asset_lock = cache.load::<Point>("common.test")?;
+
+loop {
+    println!("Current value: {:?}", asset_lock.read());
+    cache.hot_reload();
+}
+```
+
 ## Features
 
 Current features:
 - Convenient load of external files
 - Cache loaded assets
-- Thought for multi-threading
+- Hot-reloading
 - Built-in support of most common data formats with serde
 
 Planned features:
-- Hot-reloading
 - Load from different sources (archives, embeded)
 
 ## License

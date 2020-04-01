@@ -10,9 +10,9 @@ use std::{
 
 
 #[cfg(feature = "parking_lot")]
-pub use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+pub use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 #[cfg(not(feature = "parking_lot"))]
-pub use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+pub use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 
 /// `RwLock` from `parking_lot` and `std` have different APIs, so we use this
@@ -66,6 +66,21 @@ pub(crate) mod rwlock {
         let inner = this.into_inner().unwrap();
 
         inner
+    }
+}
+
+#[cfg(feature = "hot-reloading")]
+pub(crate) mod mutex {
+    use super::{Mutex, MutexGuard};
+
+    pub fn lock<T>(this: &Mutex<T>) -> MutexGuard<T> {
+        #[cfg(feature = "parking_lot")]
+        let guard = this.lock();
+
+        #[cfg(not(feature = "parking_lot"))]
+        let guard = this.lock().unwrap();
+
+        guard
     }
 }
 

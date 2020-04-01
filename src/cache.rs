@@ -5,50 +5,103 @@ use crate::{
     lock::{RwLock, rwlock, CacheEntry, AssetRefLock},
 };
 
+#[cfg(feature = "hot-reloading")]
+use crate::{
+    lock::{Mutex, mutex},
+    hot_reloading::HotReloader,
+};
+
 use std::{
     any::TypeId,
     borrow::Borrow,
+    cmp::Ordering,
+    collections::BTreeMap,
     fmt,
     fs,
     io,
     path::{Path, PathBuf},
 };
 
-#[cfg(feature = "hashbrown")]
-use hashbrown::HashMap;
-#[cfg(not(feature = "hashbrown"))]
-use std::collections::HashMap;
+#[cfg(feature = "hot-reloading")]
+use std::ops::Range;
+
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum TypeIdExt {
+    #[cfg(feature = "hot-reloading")]
+    Min,
+    Id(TypeInfo),
+    #[cfg(feature = "hot-reloading")]
+    Max,
+}
+
+impl TypeIdExt {
+    fn of<A: Asset>() -> Self {
+        Self::Id(TypeInfo {
+            id: TypeId::of::<A>(),
+            #[cfg(feature = "hot-reloading")]
+            ext: A::EXT,
+            #[cfg(feature = "hot-reloading")]
+            reload: reload_one::<A>,
+        })
+    }
+
+    fn unwrap(&self) -> &TypeInfo {
+        match self {
+            Self::Id(id) => id,
+            #[cfg(feature = "hot-reloading")]
+            _ => panic!(),
+        }
+    }
+}
+
+struct TypeInfo {
+    id: TypeId,
+    #[cfg(feature = "hot-reloading")]
+    ext: &'static str,
+    #[cfg(feature = "hot-reloading")]
+    reload: unsafe fn(&CacheEntry, Vec<u8>) -> Result<(), AssetError>,
+}
+
+impl PartialEq for TypeInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for TypeInfo {}
+
+impl PartialOrd for TypeInfo {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.id.partial_cmp(&other.id)
+    }
+}
+
+impl Ord for TypeInfo {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.id.cmp(&other.id)
+    }
+}
 
 /// The key used to identify assets
 ///
 /// **Note**: This definition has to kept in sync with [`AccessKey`]'s one.
 ///
 /// [`AccessKey`]: struct.AccessKey.html
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 #[repr(C)]
 struct Key {
     id: Box<str>,
-    type_id: TypeId,
+    type_id: TypeIdExt,
 }
 
 impl Key {
     /// Creates a Key with the given type and id.
     #[inline]
-    fn new<T: 'static>(id: Box<str>) -> Self {
+    fn new<T: Asset>(id: Box<str>) -> Self {
         Self {
             id,
-            type_id: TypeId::of::<T>(),
-        }
-    }
-}
-
-impl<'a> AccessKey<'a> {
-    /// Creates an AccessKey for the given type and id.
-    #[inline]
-    fn new<T: 'static>(id: &'a str) -> Self {
-        Self {
-            id,
-            type_id: TypeId::of::<T>(),
+            type_id: TypeIdExt::of::<T>(),
         }
     }
 }
@@ -56,11 +109,30 @@ impl<'a> AccessKey<'a> {
 /// A borrowed version of [`Key`]
 ///
 /// [`Key`]: struct.Key.html
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 #[repr(C)]
 struct AccessKey<'a> {
     id: &'a str,
-    type_id: TypeId,
+    type_id: TypeIdExt,
+}
+
+impl<'a> AccessKey<'a> {
+    /// Creates an AccessKey for the given type and id.
+    #[inline]
+    fn new<T: Asset>(id: &'a str) -> Self {
+        Self {
+            id,
+            type_id: TypeIdExt::of::<T>(),
+        }
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    fn range_of(id: &'a str) -> Range<Self> {
+        Range {
+            start: Self { id, type_id: TypeIdExt::Min },
+            end: Self { id, type_id: TypeIdExt::Max },
+        }
+    }
 }
 
 impl<'a> Borrow<AccessKey<'a>> for Key {
@@ -70,6 +142,22 @@ impl<'a> Borrow<AccessKey<'a>> for Key {
             let ptr = self as *const Key as *const AccessKey;
             &*ptr
         }
+    }
+}
+
+impl fmt::Debug for Key {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let key: &AccessKey = self.borrow();
+        key.fmt(f)
+    }
+}
+
+impl fmt::Debug for AccessKey<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Key")
+            .field("id", &self.id)
+            .field("type_id", &self.type_id.unwrap().id)
+            .finish()
     }
 }
 
@@ -112,19 +200,26 @@ impl<'a> Borrow<AccessKey<'a>> for Key {
 /// # assert_eq!(point.x, 5);
 /// # assert_eq!(point.y, -6);
 ///
-/// // Drop the guard to avoid a deadlock
+/// // Release the lock
 /// drop(point);
 ///
-/// // Reload the asset from the filesystem
-/// cache.force_reload::<Point>("common.position")?;
-/// println!("New position: {:?}", point_lock.read());
+/// // Use hot-reloading
+/// loop {
+///     println!("Position: {:?}", point_lock.read());
+/// #   #[cfg(feature = "hot-reloading")]
+///     cache.hot_reload();
+/// #   break;
+/// }
 ///
 /// # }}
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct AssetCache {
-    assets: RwLock<HashMap<Key, CacheEntry>>,
+    assets: RwLock<BTreeMap<Key, CacheEntry>>,
     path: PathBuf,
+
+    #[cfg(feature = "hot-reloading")]
+    reloader: Mutex<Option<HotReloader>>,
 }
 
 impl AssetCache {
@@ -142,8 +237,11 @@ impl AssetCache {
         let _ = path.read_dir()?;
 
         Ok(AssetCache {
-            assets: RwLock::new(HashMap::new()),
+            assets: RwLock::new(BTreeMap::new()),
             path,
+
+            #[cfg(feature = "hot-reloading")]
+            reloader: Mutex::new(None),
         })
     }
 
@@ -215,8 +313,8 @@ impl AssetCache {
     ///
     /// **Note**: this function requires a write lock on the asset, and will block
     /// until one is aquired, ie no read lock can exist at the same time. This
-    /// means that you MUST NOT call this method if you have an `AssetRef` on
-    /// the same asset, or it may cause a deadlock.
+    /// means that you **must not** call this method if you have an `AssetRef`
+    /// on the same asset, or it may cause a deadlock.
     ///
     /// # Errors
     ///
@@ -271,6 +369,81 @@ impl AssetCache {
     pub fn clear(&mut self) {
         rwlock::get_mut(&mut self.assets).clear();
     }
+
+    /// Reloads changed assets.
+    ///
+    /// The first time this function is called, the hot-reloading is started.
+    /// Next calls to this function update assets if the cache if their related
+    /// file have changed since the last call to this function.
+    ///
+    /// This function is typically called within a loop.
+    ///
+    /// If an error occurs while reloading an asset, a warning will be logged
+    /// and the asset will be left unchanged.
+    ///
+    /// This function will block the current thread until all changed assets are
+    /// reloaded, but it does not perform any I/O. However, it will need to lock
+    /// some assets for writing, so you **must not** have any [`AssetRef`] from
+    /// the given `AssetCache`, or you might experience deadlocks. You are free
+    /// to keep [`AssetRefLock`]s, though.
+    ///
+    /// [`AssetRef`]: struct.AssetRef.html
+    /// [`AssetRefLock`]: struct.AssetRefLock.html
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error it it failed to start hot-reloading.
+    #[cfg(feature = "hot-reloading")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
+    pub fn hot_reload(&self) -> Result<(), notify::Error> {
+        let mut reloader = mutex::lock(&self.reloader);
+        match &*reloader {
+            Some(reloader) => reloader.reload(self),
+            None => {
+                *reloader = Some(HotReloader::start(self)?);
+            }
+        }
+        Ok(())
+    }
+
+    /// Stops the hot-reloading.
+    ///
+    /// If [`hot_reload`] has not been called on this `AssetCache`, this method
+    /// has no effect. Hot-reloading will restart when [`hot_reload`] is called
+    /// again.
+    ///
+    /// [`hot_reload`]: #method.hot_reload
+    #[cfg(feature = "hot-reloading")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
+    pub fn stop_hot_reloading(&self) {
+        let mut reloader = mutex::lock(&self.reloader);
+        reloader.take();
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    pub(crate) fn reload(&self, id: &str, ext: &str, content: Vec<u8>) {
+        let range = AccessKey::range_of(id);
+        let cache = rwlock::read(&self.assets);
+
+        for (k, v) in cache.range(range) {
+            let type_id = k.type_id.unwrap();
+
+            if type_id.ext == ext {
+                unsafe {
+                    if let Err(err) = (type_id.reload)(v, content.clone()) {
+                        log::warn!("Cannot reload {:?}: {}", id, err);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "hot-reloading")]
+unsafe fn reload_one<A: Asset>(entry: &CacheEntry, content: Vec<u8>) -> Result<(), AssetError> {
+    let asset = A::load_from_raw(content)?;
+    entry.write(asset);
+    Ok(())
 }
 
 impl fmt::Debug for AssetCache {
