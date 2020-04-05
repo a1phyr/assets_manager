@@ -116,7 +116,7 @@ impl<'a> Borrow<AccessKey<'a>> for Key {
 /// drop(point);
 ///
 /// // Reload the asset from the filesystem
-/// cache.reload::<Point>("common.position")?;
+/// cache.force_reload::<Point>("common.position")?;
 /// println!("New position: {:?}", point_lock.read());
 ///
 /// # }}
@@ -225,7 +225,7 @@ impl AssetCache {
     /// If an error occurs, the asset is left unmodified.
     ///
     /// [`load`]: fn.load.html
-    pub fn reload<A: Asset>(&self, id: &str) -> Result<AssetRefLock<A>, AssetError> {
+    pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRefLock<A>, AssetError> {
         let asset = self.load_from_fs(id)?;
 
         let cache = rwlock::read(&self.assets);
