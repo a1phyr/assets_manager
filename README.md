@@ -15,8 +15,8 @@ It has multiple goals:
 This crate follow semver convention and supports rustc 1.42.0 and higher.
 Changing this is considered a breaking change.
 
-**Note**: this crate is still under developpement and should be considered
-experimental, but use and feedback and requests are welcome and encouraged.
+**Note**: this crate is still under developpement and breaking changes will
+happen in the future, but use, feedbacks and requests are welcome and encouraged.
 
 ## Example
 
@@ -75,7 +75,7 @@ assert!(asset_lock.ptr_eq(&other_lock));
 
 Hot-reloading is also very easy to use:
 
-```
+```rust
 let cache = AssetCache::new("assets");
 let asset_lock = cache.load::<Point>("common.test")?;
 
