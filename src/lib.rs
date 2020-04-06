@@ -92,6 +92,8 @@
     missing_debug_implementations,
 )]
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 mod cache;
 #[doc(inline)]
 pub use cache::AssetCache;

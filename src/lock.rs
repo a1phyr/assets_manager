@@ -242,7 +242,7 @@ where
 /// However, shared data threads is usually required to be `'static`. The first
 /// solution is to create static `AssetCache`s and references (for example with
 /// `lazy_static` crate). You can also use crates allow threads with non-static
-/// data (such as `crossbeam-utils::scope` or `scoped_threads`).
+/// data (such as `crossbeam-utils::scope`).
 pub struct AssetRefLock<'a, A> {
     data: &'a RwLock<A>,
 }
