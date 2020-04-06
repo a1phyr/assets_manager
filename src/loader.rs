@@ -45,6 +45,42 @@ pub trait Loader<T> {
     fn load(content: Vec<u8>) -> Result<T, Box<dyn Error + Send + Sync>>;
 }
 
+/// Returns the default value in case of failure.
+///
+/// If the inner loader returns an error, the default value of `T` will be
+/// provided instead.
+///
+/// # Example
+///
+/// ```
+/// # cfg_if::cfg_if! { if #[cfg(feature = "ron")] {
+/// use serde::Deserialize;
+/// use assets_manager::{Asset, loader::{RonLoader, LoadOrDefault}};
+///
+/// #[derive(Default, Deserialize)]
+/// struct Point {
+///     x: i32,
+///     y: i32,
+/// }
+///
+/// impl Asset for Point {
+///     const EXT: &'static str = "ron";
+///     type Loader = LoadOrDefault<RonLoader>;
+/// }
+/// # }}
+/// ```
+#[derive(Debug)]
+pub struct LoadOrDefault<L>(PhantomData<L>);
+impl<T, L> Loader<T> for LoadOrDefault<L>
+where
+    T: Default,
+    L: Loader<T>,
+{
+    fn load(content: Vec<u8>) -> Result<T, Box<dyn Error + Send + Sync>> {
+        L::load(content).or_else(|_| Ok(T::default()))
+    }
+}
+
 /// Load assets from another type.
 ///
 /// An example case for this is to easily load wrapper types, which is needed

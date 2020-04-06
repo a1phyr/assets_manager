@@ -31,6 +31,15 @@ mod loaders {
     }
 
     #[test]
+    fn load_or_default() {
+        let raw = raw("a");
+
+        let loaded: i32 = LoadOrDefault::<ParseLoader>::load(raw).unwrap();
+
+        assert_eq!(loaded, 0);
+    }
+
+    #[test]
     fn parse_loader() {
         let n = rand::random::<i32>();
         let raw = raw(&format!("{}", n));
