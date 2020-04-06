@@ -6,6 +6,7 @@
 
 use std::{
     error::Error,
+    marker::PhantomData,
     str::FromStr,
 };
 
@@ -64,13 +65,52 @@ impl<T> Loader<T> for CustomLoader {
     }
 }
 
+/// Load assets from another type.
+///
+/// An example case for this is to easily load wrapper types, which is needed
+/// if the wrapped type is defined in another crate.
+///
+/// # Example
+///
+/// ```
+/// use assets_manager::{Asset, loader::{FromOther, ParseLoader}};
+/// use std::net::IpAddr;
+///
+/// struct Ip(IpAddr);
+///
+/// impl From<IpAddr> for Ip {
+///     fn from(ip: IpAddr) -> Ip {
+///         Ip(ip)
+///     }
+/// }
+///
+/// impl Asset for Ip {
+///     const EXT: &'static str = "ip";
+///     type Loader = FromOther<IpAddr, ParseLoader>;
+/// }
+/// ```
+#[derive(Debug)]
+pub struct FromOther<U, L>(PhantomData<(U, L)>);
+impl<T, U, L> Loader<T> for FromOther<U, L>
+where
+    U: Into<T>,
+    L: Loader<U>,
+{
+    fn load(content: Vec<u8>) -> Result<T, Box<dyn Error + Send + Sync>> {
+        Ok(L::load(content)?.into())
+    }
+}
+
 /// Loads assets as a String.
 ///
 /// The file content is assumed to be valid UTF-8.
+///
+/// This Loader cannot be used to implement the Asset trait, but can be used by
+/// [`FromOther`].
+///
+/// [`FromOther`]: struct.FromOther.html
 #[derive(Debug)]
-#[deprecated = "This Loader cannot be used to implement the Asset trait and will be removed in a future release"]
 pub struct StringLoader;
-#[allow(deprecated)]
 impl Loader<String> for StringLoader {
     fn load(content: Vec<u8>) -> Result<String, Box<dyn Error + Send + Sync>> {
         Ok(String::from_utf8(content)?)

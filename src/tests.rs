@@ -1,12 +1,18 @@
 mod loaders {
     use crate::loader::*;
 
+    #[derive(Debug, PartialEq, Eq)]
+    struct X(i32);
+
+    impl From<i32> for X {
+        fn from(n: i32) -> X { X(n) }
+    }
+
     fn raw(s: &str) -> Vec<u8> {
         s.to_string().into_bytes()
     }
 
     #[test]
-    #[allow(deprecated)]
     fn string_loader() {
         let raw = raw("Hello World!");
         let loaded = StringLoader::load(raw).unwrap();
@@ -22,6 +28,16 @@ mod loaders {
         let loaded: i32 = ParseLoader::load(raw).unwrap();
 
         assert_eq!(loaded, n);
+    }
+
+    #[test]
+    fn from_other() {
+        let n = rand::random::<i32>();
+        let raw = raw(&format!("{}", n));
+
+        let loaded: X = FromOther::<i32, ParseLoader>::load(raw).unwrap();
+
+        assert_eq!(loaded, X(n));
     }
 
     cfg_if::cfg_if! { if #[cfg(feature = "serde")] {
