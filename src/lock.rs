@@ -10,79 +10,79 @@ use std::{
 
 
 #[cfg(feature = "parking_lot")]
-pub use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use parking_lot as sync;
 #[cfg(not(feature = "parking_lot"))]
-pub use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync;
+
+use sync::{RwLockReadGuard, RwLockWriteGuard};
+
+
+#[cfg(feature = "parking_lot")]
+#[inline]
+fn wrap<T>(param: T) -> T {
+    param
+}
+
+#[cfg(not(feature = "parking_lot"))]
+#[inline]
+fn wrap<T>(param: sync::LockResult<T>) -> T {
+    param.unwrap_or_else(sync::PoisonError::into_inner)
+}
 
 
 /// `RwLock` from `parking_lot` and `std` have different APIs, so we use this
 /// simple wrapper to easily permit both.
-pub(crate) mod rwlock {
-    use super::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+pub(crate) struct RwLock<T: ?Sized>(sync::RwLock<T>);
 
-    /// Simple wrapper around `RwLock::read`.
+impl<T> RwLock<T> {
     #[inline]
-    pub fn read<T: ?Sized>(this: &RwLock<T>) -> RwLockReadGuard<T> {
-        #[cfg(feature = "parking_lot")]
-        let guard = this.read();
-
-        #[cfg(not(feature = "parking_lot"))]
-        let guard = this.read().unwrap();
-
-        guard
+    pub fn new(inner: T) -> Self {
+        Self(sync::RwLock::new(inner))
     }
 
-    /// Simple wrapper around `RwLock::write`.
     #[inline]
-    pub fn write<T: ?Sized>(this: &RwLock<T>) -> RwLockWriteGuard<T> {
-        #[cfg(feature = "parking_lot")]
-        let guard = this.write();
+    pub fn into_inner(self) -> T {
+        wrap(self.0.into_inner())
+    }
+}
 
-        #[cfg(not(feature = "parking_lot"))]
-        let guard = this.write().unwrap();
-
-        guard
+impl<T: ?Sized> RwLock<T> {
+    #[inline]
+    pub fn read(&self) -> RwLockReadGuard<T> {
+        wrap(self.0.read())
     }
 
-    /// Simple wrapper around `RwLock::get_mut`.
     #[inline]
-    pub fn get_mut<T: ?Sized>(this: &mut RwLock<T>) -> &mut T {
-        #[cfg(feature = "parking_lot")]
-        let guard = this.get_mut();
-
-        #[cfg(not(feature = "parking_lot"))]
-        let guard = this.get_mut().unwrap();
-
-        guard
+    pub fn write(&self) -> RwLockWriteGuard<T> {
+        wrap(self.0.write())
     }
 
-    /// Simple wrapper around `RwLock::into_inner`.
     #[inline]
-    pub fn into_inner<T>(this: RwLock<T>) -> T {
-        #[cfg(feature = "parking_lot")]
-        let inner = this.into_inner();
+    pub fn get_mut(&mut self) -> &mut T {
+        wrap(self.0.get_mut())
+    }
+}
 
-        #[cfg(not(feature = "parking_lot"))]
-        let inner = this.into_inner().unwrap();
 
-        inner
+#[cfg(feature = "hot-reloading")]
+pub(crate) struct Mutex<T: ?Sized>(sync::Mutex<T>);
+
+#[cfg(feature = "hot-reloading")]
+impl<T> Mutex<T> {
+    #[inline]
+    pub fn new(inner: T) -> Self {
+        Self(sync::Mutex::new(inner))
     }
 }
 
 #[cfg(feature = "hot-reloading")]
-pub(crate) mod mutex {
-    use super::{Mutex, MutexGuard};
-
-    pub fn lock<T>(this: &Mutex<T>) -> MutexGuard<T> {
-        #[cfg(feature = "parking_lot")]
-        let guard = this.lock();
-
-        #[cfg(not(feature = "parking_lot"))]
-        let guard = this.lock().unwrap();
-
-        guard
+impl<T: ?Sized> Mutex<T> {
+    #[inline]
+    pub fn lock(&self) -> sync::MutexGuard<T> {
+        wrap(self.0.lock())
     }
 }
+
 
 /// This struct is used to store [`ContreteCacheEntry`] of different types in
 /// the same container.
@@ -159,7 +159,7 @@ impl<'a> CacheEntry {
     /// See type-level documentation.
     pub unsafe fn write<T: Send + Sync>(&self, asset: T) -> AssetRefLock<'a, T> {
         let lock = self.get_ref();
-        let mut cached_guard = rwlock::write(&lock.data);
+        let mut cached_guard = lock.data.write();
         *cached_guard = asset;
         drop(cached_guard);
         lock
@@ -217,7 +217,7 @@ impl<T: Send + Sync> ContreteCacheEntry<T> {
     /// Consumes the `ContreteCacheEntry` to get the inner value.
     #[inline]
     fn into_inner(self) -> T {
-        rwlock::into_inner(*self.data)
+        self.data.into_inner()
     }
 }
 
@@ -254,7 +254,7 @@ impl<A> AssetRefLock<'_, A> {
     #[inline]
     pub fn read(&self) -> AssetRef<'_, A> {
         AssetRef {
-            guard: rwlock::read(self.data),
+            guard: self.data.read(),
         }
     }
 
@@ -280,7 +280,7 @@ where
     A: hash::Hash,
 {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        rwlock::read(self.data).hash(state);
+        self.data.read().hash(state);
     }
 }
 
@@ -289,7 +289,7 @@ where
     A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AssetRefLock").field("data", &*rwlock::read(&self.data)).finish()
+        f.debug_struct("AssetRefLock").field("data", &*self.data.read()).finish()
     }
 }
 

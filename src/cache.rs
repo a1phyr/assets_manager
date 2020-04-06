@@ -2,12 +2,12 @@
 use crate::{
     Asset,
     AssetError,
-    lock::{RwLock, rwlock, CacheEntry, AssetRefLock},
+    lock::{RwLock, CacheEntry, AssetRefLock},
 };
 
 #[cfg(feature = "hot-reloading")]
 use crate::{
-    lock::{Mutex, mutex},
+    lock::Mutex,
     hot_reloading::HotReloader,
 };
 
@@ -261,7 +261,7 @@ impl AssetCache {
         let asset = unsafe { entry.get_ref() };
 
         let key = Key::new::<A>(id.into());
-        let mut cache = rwlock::write(&self.assets);
+        let mut cache = self.assets.write();
         cache.insert(key, entry);
 
         asset
@@ -291,7 +291,7 @@ impl AssetCache {
     /// it is not found in the cache.
     pub fn load_cached<A: Asset>(&self, id: &str) -> Option<AssetRefLock<A>> {
         let key = AccessKey::new::<A>(id);
-        let cache = rwlock::read(&self.assets);
+        let cache = self.assets.read();
         cache.get(&key).map(|asset| unsafe { asset.get_ref() })
     }
 
@@ -326,7 +326,7 @@ impl AssetCache {
     pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRefLock<A>, AssetError> {
         let asset = self.load_from_fs(id)?;
 
-        let cache = rwlock::read(&self.assets);
+        let cache = self.assets.read();
         if let Some(cached) = cache.get(&AccessKey::new::<A>(id)) {
             return unsafe { Ok(cached.write(asset)) };
         }
@@ -351,7 +351,7 @@ impl AssetCache {
     #[inline]
     pub fn remove<A: Asset>(&mut self, id: &str) {
         let key = AccessKey::new::<A>(id);
-        let cache = rwlock::get_mut(&mut self.assets);
+        let cache = self.assets.get_mut();
         cache.remove(&key);
     }
 
@@ -360,14 +360,14 @@ impl AssetCache {
     /// The corresponding asset is removed from the cache.
     pub fn take<A: Asset>(&mut self, id: &str) -> Option<A> {
         let key = AccessKey::new::<A>(id);
-        let cache = rwlock::get_mut(&mut self.assets);
+        let cache = self.assets.get_mut();
         cache.remove(&key).map(|entry| unsafe { entry.into_inner() })
     }
 
     /// Clears the cache.
     #[inline]
     pub fn clear(&mut self) {
-        rwlock::get_mut(&mut self.assets).clear();
+        self.assets.get_mut().clear();
     }
 
     /// Reloads changed assets.
@@ -396,7 +396,7 @@ impl AssetCache {
     #[cfg(feature = "hot-reloading")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
     pub fn hot_reload(&self) -> Result<(), notify::Error> {
-        let mut reloader = mutex::lock(&self.reloader);
+        let mut reloader = self.reloader.lock();
         match &*reloader {
             Some(reloader) => reloader.reload(self),
             None => {
@@ -416,14 +416,14 @@ impl AssetCache {
     #[cfg(feature = "hot-reloading")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
     pub fn stop_hot_reloading(&self) {
-        let mut reloader = mutex::lock(&self.reloader);
+        let mut reloader = self.reloader.lock();
         reloader.take();
     }
 
     #[cfg(feature = "hot-reloading")]
     pub(crate) fn reload(&self, id: &str, ext: &str, content: Vec<u8>) {
         let range = AccessKey::range_of(id);
-        let cache = rwlock::read(&self.assets);
+        let cache = self.assets.read();
 
         for (k, v) in cache.range(range) {
             let type_id = k.type_id.unwrap();
