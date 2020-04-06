@@ -2,6 +2,7 @@
 use crate::{
     Asset,
     AssetError,
+    loader::Loader,
     lock::{RwLock, CacheEntry, AssetRefLock},
 };
 
@@ -342,7 +343,7 @@ impl AssetCache {
         path.set_extension(A::EXT);
 
         let content = fs::read(&path)?;
-        A::load_from_raw(content)
+        A::Loader::load(content).map_err(|e| AssetError::LoadError(e))
     }
 
     /// Remove an asset from the cache.
@@ -441,7 +442,7 @@ impl AssetCache {
 
 #[cfg(feature = "hot-reloading")]
 unsafe fn reload_one<A: Asset>(entry: &CacheEntry, content: Vec<u8>) -> Result<(), AssetError> {
-    let asset = A::load_from_raw(content)?;
+    let asset = A::Loader::load(content).map_err(|e| AssetError::LoadError(e))?;
     entry.write(asset);
     Ok(())
 }

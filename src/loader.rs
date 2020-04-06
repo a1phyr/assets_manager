@@ -18,7 +18,7 @@ use std::{
 ///
 /// Most of the time, you don't need to implement this trait yourself, as there
 /// are implementations for the most formats (using `serde`). Don't forget to
-/// enable the corresponding feature !
+/// enable the corresponding feature if needed !
 ///
 /// ```no_run
 /// # cfg_if::cfg_if! { if #[cfg(feature = "ron")] {
@@ -43,26 +43,6 @@ use std::{
 pub trait Loader<T> {
     /// Loads an asset from its raw bytes representation.
     fn load(content: Vec<u8>) -> Result<T, Box<dyn Error + Send + Sync>>;
-}
-
-/// A [`Loader`] to override [`Asset::load_from_raw`] function without caring
-/// about the required `Loader` type.
-///
-/// Use it when you want to implement [`Asset`] but do not want/need to use a
-/// loader, and only to override [`Asset::load_from_raw`].
-///
-/// **Warning**: this loader is not meant to be called and will panic if so
-///
-/// [`Loader`]: trait.Loader.html
-/// [`Asset`]: ../trait.Asset.html
-/// [`Asset::load`]: ../trait.Asset.html#method.load
-/// [`Asset::load_from_raw`]: ../trait.Asset.html#method.load_from_raw
-#[derive(Debug)]
-pub struct CustomLoader;
-impl<T> Loader<T> for CustomLoader {
-    fn load(_: Vec<u8>) -> Result<T, Box<dyn Error + Send + Sync>> {
-        panic!("You forgot to override `Asset::load_from_raw` function")
-    }
 }
 
 /// Load assets from another type.

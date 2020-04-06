@@ -1,12 +1,22 @@
+use crate::{Asset, loader};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct X(i32);
+
+impl From<i32> for X {
+    fn from(n: i32) -> X {
+        X(n)
+    }
+}
+
+impl Asset for X {
+    type Loader = loader::FromOther<i32, loader::ParseLoader>;
+    const EXT: &'static str = "";
+}
+
+
 mod loaders {
     use crate::loader::*;
-
-    #[derive(Debug, PartialEq, Eq)]
-    struct X(i32);
-
-    impl From<i32> for X {
-        fn from(n: i32) -> X { X(n) }
-    }
 
     fn raw(s: &str) -> Vec<u8> {
         s.to_string().into_bytes()
@@ -32,6 +42,8 @@ mod loaders {
 
     #[test]
     fn from_other() {
+        use super::X;
+
         let n = rand::random::<i32>();
         let raw = raw(&format!("{}", n));
 
@@ -100,15 +112,8 @@ mod loaders {
 }
 
 mod asset_cache {
-    use crate::{Asset, AssetCache, loader};
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    struct X(i32);
-
-    impl Asset for X {
-        type Loader = loader::CustomLoader;
-        const EXT: &'static str = "";
-    }
+    use crate::AssetCache;
+    use super::X;
 
     #[test]
     fn new_with_valid_path() {

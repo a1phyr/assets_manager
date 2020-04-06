@@ -97,8 +97,6 @@ mod cache;
 pub use cache::AssetCache;
 
 pub mod loader;
-#[doc(inline)]
-pub use loader::Loader;
 
 mod lock;
 #[doc(inline)]
@@ -162,18 +160,5 @@ pub trait Asset: Sized + Send + Sync + 'static {
     /// See module [`loader`] for implementations of common conversions.
     ///
     /// [`loader`]: loader/index.html
-    type Loader: Loader<Self>;
-
-    /// Create an asset value from raw parts.
-    ///
-    /// This function is not meant to be used directly, but rather to
-    /// be overriden if you don't want or need to implement [`Loader`].
-    /// In that case, you should use [`CustomLoader`] as [`Loader`]
-    ///
-    /// [`Loader`]: loader/trait.Loader.html
-    /// [`CustomLoader`]: loader/struct.CustomLoader.html
-    #[inline]
-    fn load_from_raw(content: Vec<u8>) -> Result<Self, AssetError> {
-        Self::Loader::load(content).map_err(|e| AssetError::LoadError(e))
-    }
+    type Loader: loader::Loader<Self>;
 }
