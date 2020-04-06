@@ -15,10 +15,6 @@ pub enum AssetError {
 
     /// An error occurred when changing raw bytes into the asset type.
     LoadError(Box<dyn Error + Send + Sync>),
-
-    /// The asset was loaded with a different type than before.
-    #[deprecated = "This error kind is not emitted by assets_manager and will be removed in a future release"]
-    InvalidType,
 }
 
 impl From<io::Error> for AssetError {
@@ -33,7 +29,6 @@ impl fmt::Display for AssetError {
             match self {
                 AssetError::IoError(err) => write!(f, "An I/O error occurred while trying to load an asset : {}", err),
                 AssetError::LoadError(err) => write!(f, "An conversion error occurred while trying to load an asset : {}", err),
-                AssetError::InvalidType => write!(f, "An asset was loaded with a wrong type"),
             }
      }
 }
@@ -43,7 +38,6 @@ impl Error for AssetError {
         match self {
             AssetError::IoError(err) => Some(err),
             AssetError::LoadError(err) => Some(err.as_ref()),
-            _ => None,
         }
     }
 }
