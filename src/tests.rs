@@ -11,7 +11,7 @@ impl From<i32> for X {
 
 impl Asset for X {
     type Loader = loader::FromOther<i32, loader::ParseLoader>;
-    const EXT: &'static str = "";
+    const EXT: &'static str = "x";
 }
 
 
@@ -143,38 +143,39 @@ mod asset_cache {
     }
 
     #[test]
+    fn load() {
+        let cache = AssetCache::new("assets").unwrap();
+
+        assert_eq!(*cache.load::<X>("test.cache").unwrap().read(), X(42));
+    }
+
+    #[test]
     fn load_cached() {
-        let x = X(rand::random());
+        let cache = AssetCache::new("assets").unwrap();
 
-        let cache = AssetCache::new(".").unwrap();
-
-        assert!(cache.load_cached::<X>("").is_none());
-        cache.add_asset(String::new(), x);
-        assert_eq!(*cache.load_cached::<X>("").unwrap().read(), x);
+        assert!(cache.load_cached::<X>("test.cache").is_none());
+        cache.load::<X>("test.cache").unwrap();
+        assert_eq!(*cache.load_cached::<X>("test.cache").unwrap().read(), X(42));
     }
 
     #[test]
     fn take() {
-        let x = X(rand::random());
+        let mut cache = AssetCache::new("assets").unwrap();
 
-        let mut cache = AssetCache::new(".").unwrap();
-
-        cache.add_asset(String::new(), x);
-        assert!(cache.load_cached::<X>("").is_some());
-        assert_eq!(cache.take(""), Some(x));
-        assert!(cache.load_cached::<X>("").is_none());
+        cache.load::<X>("test.cache").unwrap();
+        assert!(cache.load_cached::<X>("test.cache").is_some());
+        assert_eq!(cache.take("test.cache"), Some(X(42)));
+        assert!(cache.load_cached::<X>("test.cache").is_none());
     }
 
     #[test]
     fn remove() {
-        let x = X(rand::random());
+        let mut cache = AssetCache::new("assets").unwrap();
 
-        let mut cache = AssetCache::new(".").unwrap();
-
-        cache.add_asset(String::new(), x);
-        assert!(cache.load_cached::<X>("").is_some());
-        cache.remove::<X>("");
-        assert!(cache.load_cached::<X>("").is_none());
+        cache.load::<X>("test.cache").unwrap();
+        assert!(cache.load_cached::<X>("test.cache").is_some());
+        cache.remove::<X>("test.cache");
+        assert!(cache.load_cached::<X>("test.cache").is_none());
     }
 }
 

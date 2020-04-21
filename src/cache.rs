@@ -9,91 +9,29 @@ use crate::{
 #[cfg(feature = "hot-reloading")]
 use crate::{
     lock::Mutex,
-    hot_reloading::HotReloader,
+    hot_reloading::{HotReloader, WatchedPaths}
 };
 
 use std::{
     any::TypeId,
     borrow::Borrow,
-    cmp::Ordering,
-    collections::BTreeMap,
+    collections::HashMap,
     fmt,
     fs,
     io,
     path::{Path, PathBuf},
 };
 
-#[cfg(feature = "hot-reloading")]
-use std::ops::Range;
-
-
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-enum TypeIdExt {
-    #[cfg(feature = "hot-reloading")]
-    Min,
-    Id(TypeInfo),
-    #[cfg(feature = "hot-reloading")]
-    Max,
-}
-
-impl TypeIdExt {
-    fn of<A: Asset>() -> Self {
-        Self::Id(TypeInfo {
-            id: TypeId::of::<A>(),
-            #[cfg(feature = "hot-reloading")]
-            ext: A::EXT,
-            #[cfg(feature = "hot-reloading")]
-            reload: reload_one::<A>,
-        })
-    }
-
-    fn unwrap(&self) -> &TypeInfo {
-        match self {
-            Self::Id(id) => id,
-            #[cfg(feature = "hot-reloading")]
-            _ => panic!(),
-        }
-    }
-}
-
-struct TypeInfo {
-    id: TypeId,
-    #[cfg(feature = "hot-reloading")]
-    ext: &'static str,
-    #[cfg(feature = "hot-reloading")]
-    reload: unsafe fn(&CacheEntry, Vec<u8>) -> Result<(), AssetError>,
-}
-
-impl PartialEq for TypeInfo {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl Eq for TypeInfo {}
-
-impl PartialOrd for TypeInfo {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.id.partial_cmp(&other.id)
-    }
-}
-
-impl Ord for TypeInfo {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.id.cmp(&other.id)
-    }
-}
-
 /// The key used to identify assets
 ///
 /// **Note**: This definition has to kept in sync with [`AccessKey`]'s one.
 ///
 /// [`AccessKey`]: struct.AccessKey.html
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Hash)]
 #[repr(C)]
-struct Key {
+pub(crate) struct Key {
     id: Box<str>,
-    type_id: TypeIdExt,
+    type_id: TypeId,
 }
 
 impl Key {
@@ -102,7 +40,7 @@ impl Key {
     fn new<T: Asset>(id: Box<str>) -> Self {
         Self {
             id,
-            type_id: TypeIdExt::of::<T>(),
+            type_id: TypeId::of::<T>(),
         }
     }
 }
@@ -110,11 +48,11 @@ impl Key {
 /// A borrowed version of [`Key`]
 ///
 /// [`Key`]: struct.Key.html
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Hash)]
 #[repr(C)]
-struct AccessKey<'a> {
+pub(crate) struct AccessKey<'a> {
     id: &'a str,
-    type_id: TypeIdExt,
+    type_id: TypeId,
 }
 
 impl<'a> AccessKey<'a> {
@@ -123,16 +61,14 @@ impl<'a> AccessKey<'a> {
     fn new<T: Asset>(id: &'a str) -> Self {
         Self {
             id,
-            type_id: TypeIdExt::of::<T>(),
+            type_id: TypeId::of::<T>(),
         }
     }
 
     #[cfg(feature = "hot-reloading")]
-    fn range_of(id: &'a str) -> Range<Self> {
-        Range {
-            start: Self { id, type_id: TypeIdExt::Min },
-            end: Self { id, type_id: TypeIdExt::Max },
-        }
+    #[inline]
+    pub fn new_with(id: &'a str, type_id: TypeId) -> Self {
+        Self { id, type_id }
     }
 }
 
@@ -157,7 +93,7 @@ impl fmt::Debug for AccessKey<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Key")
             .field("id", &self.id)
-            .field("type_id", &self.type_id.unwrap().id)
+            .field("type_id", &self.type_id)
             .finish()
     }
 }
@@ -216,11 +152,13 @@ impl fmt::Debug for AccessKey<'_> {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct AssetCache {
-    assets: RwLock<BTreeMap<Key, CacheEntry>>,
+    pub(crate) assets: RwLock<HashMap<Key, CacheEntry>>,
     path: PathBuf,
 
     #[cfg(feature = "hot-reloading")]
     reloader: Mutex<Option<HotReloader>>,
+    #[cfg(feature = "hot-reloading")]
+    pub(crate) watched: Mutex<WatchedPaths>,
 }
 
 impl AssetCache {
@@ -238,11 +176,13 @@ impl AssetCache {
         let _ = path.read_dir()?;
 
         Ok(AssetCache {
-            assets: RwLock::new(BTreeMap::new()),
+            assets: RwLock::new(HashMap::new()),
             path,
 
             #[cfg(feature = "hot-reloading")]
             reloader: Mutex::new(None),
+            #[cfg(feature = "hot-reloading")]
+            watched: Mutex::new(WatchedPaths::new()),
         })
     }
 
@@ -253,19 +193,35 @@ impl AssetCache {
         &self.path
     }
 
+    fn path_of<A: Asset>(&self, id: &str) -> PathBuf {
+        let mut path = self.path.clone();
+        path.extend(id.split('.'));
+        path.set_extension(A::EXT);
+        path
+    }
+
     /// Adds an asset to the cache
-    pub(crate) fn add_asset<A: Asset>(&self, id: String, asset: A) -> AssetRefLock<A> {
+    pub(crate) fn add_asset<A: Asset>(&self, id: String) -> Result<AssetRefLock<A>, AssetError> {
+        let path = self.path_of::<A>(&id);
+        let asset: A = self.load_from_fs(&path)?;
+
         let entry = CacheEntry::new(asset);
         // Safety:
         // We just created the asset with the good type
         // The cache entry is garantied to live long enough
         let asset = unsafe { entry.get_ref() };
 
+        #[cfg(feature = "hot-reloading")]
+        {
+            let mut watched = self.watched.lock();
+            watched.add::<A>(path, id.clone());
+        }
+
         let key = Key::new::<A>(id.into());
         let mut cache = self.assets.write();
         cache.insert(key, entry);
 
-        asset
+        Ok(asset)
     }
 
     /// Loads an asset.
@@ -282,8 +238,7 @@ impl AssetCache {
             return Ok(asset);
         }
 
-        let asset = self.load_from_fs(id)?;
-        Ok(self.add_asset(id.to_string(), asset))
+        self.add_asset(id.to_string())
     }
 
     /// Loads an asset from the cache.
@@ -325,23 +280,19 @@ impl AssetCache {
     ///
     /// [`load`]: fn.load.html
     pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRefLock<A>, AssetError> {
-        let asset = self.load_from_fs(id)?;
-
         let cache = self.assets.read();
         if let Some(cached) = cache.get(&AccessKey::new::<A>(id)) {
+            let path = self.path_of::<A>(id);
+            let asset = self.load_from_fs(&path)?;
             return unsafe { Ok(cached.write(asset)) };
         }
         drop(cache);
 
-        Ok(self.add_asset(id.to_string(), asset))
+        self.add_asset(id.to_string())
     }
 
 
-    fn load_from_fs<A: Asset>(&self, id: &str) -> Result<A, AssetError> {
-        let mut path = self.path.clone();
-        path.extend(id.split('.'));
-        path.set_extension(A::EXT);
-
+    fn load_from_fs<A: Asset>(&self, path: &Path) -> Result<A, AssetError> {
         let content = fs::read(&path)?;
         A::Loader::load(content).map_err(|e| AssetError::LoadError(e))
     }
@@ -369,6 +320,9 @@ impl AssetCache {
     #[inline]
     pub fn clear(&mut self) {
         self.assets.get_mut().clear();
+
+        #[cfg(feature = "hot-reloading")]
+        self.watched.get_mut().clear();
     }
 
     /// Reloads changed assets.
@@ -420,31 +374,6 @@ impl AssetCache {
         let mut reloader = self.reloader.lock();
         reloader.take();
     }
-
-    #[cfg(feature = "hot-reloading")]
-    pub(crate) fn reload(&self, id: &str, ext: &str, content: Vec<u8>) {
-        let range = AccessKey::range_of(id);
-        let cache = self.assets.read();
-
-        for (k, v) in cache.range(range) {
-            let type_id = k.type_id.unwrap();
-
-            if type_id.ext == ext {
-                unsafe {
-                    if let Err(err) = (type_id.reload)(v, content.clone()) {
-                        log::warn!("Cannot reload {:?}: {}", id, err);
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[cfg(feature = "hot-reloading")]
-unsafe fn reload_one<A: Asset>(entry: &CacheEntry, content: Vec<u8>) -> Result<(), AssetError> {
-    let asset = A::Loader::load(content).map_err(|e| AssetError::LoadError(e))?;
-    entry.write(asset);
-    Ok(())
 }
 
 impl fmt::Debug for AssetCache {
