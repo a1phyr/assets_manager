@@ -53,6 +53,11 @@ serde = {version = "1.0", features = ["derive"]}
 name = "basic"
 required-features = ["bincode"]
 
+[[example]]
+name = "hot_reloading"
+required-features = ["hot-reloading"]
+
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
