@@ -252,12 +252,12 @@ pub struct AssetRefLock<'a, A> {
     data: &'a RwLock<A>,
 }
 
-impl<A> AssetRefLock<'_, A> {
+impl<'a, A> AssetRefLock<'a, A> {
     /// Locks the pointed asset for reading.
     ///
     /// Returns a RAII guard which will release the lock once dropped.
     #[inline]
-    pub fn read(&self) -> AssetRef<'_, A> {
+    pub fn read(&self) -> AssetRef<'a, A> {
         AssetRef {
             guard: self.data.read(),
         }
