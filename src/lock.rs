@@ -270,6 +270,17 @@ impl<A> AssetRefLock<'_, A> {
     }
 }
 
+impl<A> AssetRefLock<'_, A>
+where
+    A: Clone
+{
+    /// Returns a cloned version of the inner asset.
+    #[inline]
+    pub fn cloned(self) -> A {
+        self.data.read().clone()
+    }
+}
+
 impl<A> Clone for AssetRefLock<'_, A> {
     fn clone(&self) -> Self {
         Self {
