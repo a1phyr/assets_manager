@@ -22,6 +22,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::RandomState;
+
+
 /// The key used to identify assets
 ///
 /// **Note**: This definition has to kept in sync with [`AccessKey`]'s one.
@@ -152,7 +155,7 @@ impl fmt::Debug for AccessKey<'_> {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct AssetCache {
-    pub(crate) assets: RwLock<HashMap<Key, CacheEntry>>,
+    pub(crate) assets: RwLock<HashMap<Key, CacheEntry, RandomState>>,
     path: PathBuf,
 
     #[cfg(feature = "hot-reloading")]
@@ -176,7 +179,7 @@ impl AssetCache {
         let _ = path.read_dir()?;
 
         Ok(AssetCache {
-            assets: RwLock::new(HashMap::new()),
+            assets: RwLock::new(HashMap::with_hasher(RandomState::new())),
             path,
 
             #[cfg(feature = "hot-reloading")]
@@ -290,7 +293,6 @@ impl AssetCache {
 
         self.add_asset(id.to_string())
     }
-
 
     fn load_from_fs<A: Asset>(&self, path: &Path) -> Result<A, AssetError> {
         let content = fs::read(&path)?;

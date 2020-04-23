@@ -15,6 +15,8 @@ use crate::{
     lock::CacheEntry,
 };
 
+use crate::RandomState;
+
 
 const fn unbounded<T>() -> (Bound<T>, Bound<T>) {
     (Bound::Unbounded, Bound::Unbounded)
@@ -51,20 +53,20 @@ impl TypeInfo {
 
 struct WatchedPath {
     id: String,
-    types: HashMap<TypeId, TypeInfo>,
+    types: HashMap<TypeId, TypeInfo, RandomState>,
 }
 
 pub struct WatchedPaths {
-    paths: HashMap<PathBuf, WatchedPath>,
-    added: HashSet<PathBuf>,
+    paths: HashMap<PathBuf, WatchedPath, RandomState>,
+    added: HashSet<PathBuf, RandomState>,
     cleared: bool,
 }
 
 impl WatchedPaths {
     pub fn new() -> Self {
         Self {
-            paths: HashMap::new(),
-            added: HashSet::new(),
+            paths: HashMap::with_hasher(RandomState::new()),
+            added: HashSet::with_hasher(RandomState::new()),
             cleared: false,
         }
     }
@@ -72,7 +74,7 @@ impl WatchedPaths {
     pub fn add<A: Asset>(&mut self, path: PathBuf, id: String) {
         match self.paths.get_mut(&path) {
             None => {
-                let mut types = HashMap::new();
+                let mut types = HashMap::with_hasher(RandomState::new());
                 types.insert(TypeId::of::<A>(), TypeInfo::of::<A>());
 
                 let info = WatchedPath { id, types };
@@ -113,18 +115,18 @@ impl From<&TypeInfo> for Value {
 
 struct PathValues {
     id: String,
-    values: HashMap<TypeId, Value>,
+    values: HashMap<TypeId, Value, RandomState>,
 }
 
 pub struct FileCache {
-    cache: HashMap<PathBuf, PathValues>,
+    cache: HashMap<PathBuf, PathValues, RandomState>,
     changed: Vec<PathBuf>,
 }
 
 impl FileCache {
     pub fn new() -> Self {
         Self {
-            cache: HashMap::new(),
+            cache: HashMap::with_hasher(RandomState::new()),
             changed: Vec::new(),
         }
     }

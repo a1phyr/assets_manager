@@ -8,8 +8,6 @@
 //!
 //! ## Cargo features
 //!
-//! No features are enabled by default.
-//!
 //! - `hot-reloading`: Add hot-reloading
 //!
 //! ### Additionnal loaders
@@ -26,6 +24,8 @@
 //! These features change inner data structures implementations.
 //!
 //! - `parking_lot`: Use *parking_lot* crate's synchronisation primitives
+//! - `ahash`: Use ahash algorithm instead Sip1-3 used in `std`. This feature
+//!   is enabled by default.
 //!
 //! ## Example
 //!
@@ -113,6 +113,13 @@ mod hot_reloading;
 
 #[cfg(test)]
 mod tests;
+
+
+#[cfg(feature = "ahash")]
+use ahash::RandomState;
+
+#[cfg(not(feature = "ahash"))]
+use std::collections::hash_map::RandomState;
 
 
 /// An asset is a type loadable from a file.
