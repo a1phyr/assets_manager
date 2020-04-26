@@ -159,6 +159,39 @@ mod asset_cache {
     }
 
     #[test]
+    fn load_dir_ok() {
+        let cache = AssetCache::new("assets").unwrap();
+
+        let mut loaded: Vec<_> = cache.load_dir::<X>("test").unwrap()
+            .iter().map(|x| x.read().0).collect();
+        loaded.sort();
+        assert_eq!(loaded, [-7, 42]);
+    }
+
+    #[test]
+    fn load_dir_all() {
+        let cache = AssetCache::new("assets").unwrap();
+
+        let mut loaded: Vec<_> = cache.load_dir::<X>("test").unwrap().iter_all().collect();
+        loaded.sort_by_key(|i| i.0);
+        let mut loaded = loaded.into_iter();
+
+        let (id, x) = loaded.next().unwrap();
+        assert_eq!(id, "test.a");
+        assert!(x.is_err());
+
+        let (id, x) = loaded.next().unwrap();
+        assert_eq!(id, "test.b");
+        assert_eq!(*x.unwrap().read(), X(-7));
+
+        let (id, x) = loaded.next().unwrap();
+        assert_eq!(id, "test.cache");
+        assert_eq!(*x.unwrap().read(), X(42));
+
+        assert!(loaded.next().is_none());
+    }
+
+    #[test]
     fn take() {
         let mut cache = AssetCache::new("assets").unwrap();
 
