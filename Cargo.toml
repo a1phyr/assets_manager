@@ -27,12 +27,14 @@ ron = ["serde_ron", "serde"]
 yaml = ["serde_yaml", "serde"]
 toml = ["serde_toml", "serde"]
 
+# This feature is neither used internally nor documented but it would be a
+# breaking change to remove it
+hashbrown = []
 
 [dependencies]
 ahash = {version = "0.3", default-features = false, optional = true}
 
 parking_lot = {version = "0.10", optional = true}
-hashbrown = {version = "0.7", optional = true}
 
 log = {version = "0.4", optional = true}
 notify = {version = "4.0", optional = true}
