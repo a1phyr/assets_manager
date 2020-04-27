@@ -4,13 +4,13 @@
 [![Docs.rs](https://docs.rs/assets_manager/badge.svg)](https://docs.rs/assets_manager/)
 ![Minimum rustc version](https://img.shields.io/badge/rustc-1.42+-lightgray.svg)
 
-Conveniently load, store and cache external resources.
+Conveniently load, cache, and reload external resources.
 
 
-It has multiple goals:
-- Easy to use
+This crate's main focuses are:
+- Pleasant to use: Simple and well-documented high-level API
 - Light: Pay for what you take, no dependency bloat
-- Fast: Share your resources between threads without using expensive `Arc::clone`
+- Concurrency: Essential for computing-heavy uses such as games
 
 This crate follow semver convention and supports rustc 1.42.0 and higher.
 Changing this is considered a breaking change.
@@ -20,7 +20,7 @@ happen in the future, but use, feedbacks and requests are welcome and encouraged
 
 ## Example
 
-Suppose that you have a file `assets/common/test.ron` containing this:
+Suppose that you have a file `assets/common/position.ron` containing this:
 
 ```text
 Point(
@@ -56,8 +56,8 @@ impl Asset for Point {
 let cache = AssetCache::new("assets");
 
 // Get a lock on the asset
-// This will load the file `./assets/common/test.ron`
-let asset_lock = cache.load::<Point>("common.test")?;
+// This will load the file `./assets/common/position.ron`
+let asset_lock = cache.load::<Point>("common.position")?;
 
 // Lock the asset for reading
 // Any number of read locks can exist at the same time,
@@ -69,7 +69,7 @@ assert_eq!(point.x, 5);
 assert_eq!(point.y, -6);
 
 // Loading the same asset retreives it from the cache
-let other_lock = cache.load("common.test")?;
+let other_lock = cache.load("common.position")?;
 assert!(asset_lock.ptr_eq(&other_lock));
 ```
 
@@ -77,11 +77,14 @@ Hot-reloading is also very easy to use:
 
 ```rust
 let cache = AssetCache::new("assets");
-let asset_lock = cache.load::<Point>("common.test")?;
+let asset_lock = cache.load::<Point>("common.position")?;
 
 loop {
-    println!("Current value: {:?}", asset_lock.read());
+    // Reload all cached files that changed
     cache.hot_reload();
+
+    // Assets are updated without any further work
+    println!("Current value: {:?}", asset_lock.read());
 }
 ```
 
@@ -92,9 +95,6 @@ Current features:
 - Cache loaded assets
 - Hot-reloading
 - Built-in support of most common data formats with serde
-
-Planned features:
-- Load from different sources (archives, embeded)
 
 ## License
 

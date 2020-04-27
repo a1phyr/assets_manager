@@ -108,7 +108,12 @@ impl fmt::Debug for AccessKey<'_> {
 ///
 /// Within the cache, assets are identified with their type and a string. This
 /// string is constructed from the asset path, remplacing `/` by `.` and removing
+/// the extension. Given that, you cannot use `.` in your file names except for
 /// the extension.
+///
+/// **Note**: This cache uses paths of files to refer to them, so using symbolic or
+/// hard links can lead to suprising behaviour (especially with hot-reloading), and
+/// thus should be avoided
 ///
 /// # Example
 ///
