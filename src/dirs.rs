@@ -14,14 +14,12 @@ use std::{
 };
 
 
-pub(crate) struct StringList {
+struct StringList {
     list: RwLock<Vec<String>>,
 }
 
-impl StringList {
-}
-
 impl From<Vec<String>> for StringList {
+    #[inline]
     fn from(vec: Vec<String>) -> Self {
         Self {
             list: RwLock::new(vec),
@@ -48,7 +46,7 @@ impl<'a> IntoIterator for &'a StringList {
     }
 }
 
-pub(crate) struct StringIter<'a> {
+struct StringIter<'a> {
     current: *const String,
     end: *const String,
 
@@ -58,6 +56,7 @@ pub(crate) struct StringIter<'a> {
 impl<'a> Iterator for StringIter<'a> {
     type Item = &'a str;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.current == self.end {
             None
@@ -73,8 +72,7 @@ impl<'a> Iterator for StringIter<'a> {
 }
 
 pub(crate) struct CachedDir {
-    ok: Box<StringList>,
-    err: Box<StringList>,
+    assets: Box<StringList>,
 }
 
 impl CachedDir {
@@ -83,7 +81,6 @@ impl CachedDir {
         let entries = fs::read_dir(path)?;
 
         let mut loaded = Vec::new();
-        let mut err = Vec::new();
 
         for entry in entries {
             if let Ok(entry) = entry {
@@ -103,31 +100,22 @@ impl CachedDir {
                     this_id.push('.');
                     this_id.push_str(name);
 
-                    match cache.load::<A>(&this_id) {
-                        Ok(_) => loaded.push(this_id),
-                        Err(_) => err.push(this_id),
-                    }
+                    let _ = cache.load::<A>(&this_id);
+                    loaded.push(this_id);
                 }
             }
         }
 
         Ok(Self {
-            ok: Box::new(StringList::from(loaded)),
-            err: Box::new(StringList::from(err)),
+            assets: Box::new(loaded.into()),
         })
     }
 
     #[inline]
-    pub(crate) unsafe fn read<'a, A>(&self, cache: &'a AssetCache) -> DirReader<'a, A> {
-        let this = {
-            let ptr = self as *const Self;
-            &*ptr
-        };
-
+    pub unsafe fn read<'a, A>(&self, cache: &'a AssetCache) -> DirReader<'a, A> {
         DirReader {
             cache,
-            ok: &this.ok,
-            err: &this.err,
+            assets: &*(&*self.assets as *const StringList),
             _marker: PhantomData,
         }
     }
@@ -142,8 +130,7 @@ impl CachedDir {
 /// [`AssetCache::load_dir`]: struct.AssetCache.html#method.load_dir
 pub struct DirReader<'a, A> {
     cache: &'a AssetCache,
-    ok: &'a StringList,
-    err: &'a StringList,
+    assets: &'a StringList,
     _marker: PhantomData<&'a A>,
 }
 
@@ -152,8 +139,7 @@ impl<A> Clone for DirReader<'_, A> {
     fn clone(&self) -> Self {
         Self {
             cache: self.cache,
-            ok: self.ok,
-            err: self.err,
+            assets: self.assets,
             _marker: PhantomData,
         }
     }
@@ -169,10 +155,11 @@ impl<'a, A: Asset> DirReader<'a, A> {
     ///
     /// Note that if an asset is removed from the cache, it won't be returned
     /// by this iterator until it is cached again.
+    #[inline]
     pub fn iter(&self) -> ReadDir<'a, A> {
         ReadDir {
             cache: self.cache,
-            iter: self.ok.into_iter(),
+            iter: self.assets.into_iter(),
             _marker: PhantomData,
         }
     }
@@ -183,11 +170,11 @@ impl<'a, A: Asset> DirReader<'a, A> {
     /// result of its last loading from the cache. It will happily try to reload
     /// any asset that is not in the cache (e.g. that previously failed to load
     /// or was removed).
+    #[inline]
     pub fn iter_all(&self) -> ReadAllDir<'a, A> {
         ReadAllDir {
             cache: self.cache,
-            ok: self.ok.into_iter(),
-            err: self.err.into_iter(),
+            iter: self.assets.into_iter(),
             _marker: PhantomData,
         }
     }
@@ -225,11 +212,12 @@ where
 {
     type Item = AssetRefLock<'a, A>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let id = self.iter.next()?;
-            let asset = self.cache.load_cached(id);
-            if asset.is_some() {
+
+            if let asset @ Some(_) = self.cache.load_cached(id) {
                 break asset;
             }
         }
@@ -246,8 +234,7 @@ where
 /// [`DirReader::iter_all`]: struct.DirReader.html#method.iter_all
 pub struct ReadAllDir<'a, A> {
     cache: &'a AssetCache,
-    ok: StringIter<'a>,
-    err: StringIter<'a>,
+    iter: StringIter<'a>,
     _marker: PhantomData<&'a A>,
 }
 
@@ -257,8 +244,9 @@ where
 {
     type Item = (&'a str, Result<AssetRefLock<'a, A>, AssetError>);
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let id = self.ok.next().or_else(|| self.err.next())?;
+        let id = self.iter.next()?;
         Some((id, self.cache.load(id)))
     }
 }
