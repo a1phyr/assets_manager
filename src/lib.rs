@@ -104,6 +104,10 @@ mod lock;
 #[doc(inline)]
 pub use lock::{AssetRefLock, AssetRef};
 
+mod dirs;
+#[doc(inline)]
+pub use dirs::{DirReader, ReadAllDir, ReadDir};
+
 mod error;
 #[doc(inline)]
 pub use error::AssetError;

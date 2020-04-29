@@ -14,7 +14,7 @@ use parking_lot as sync;
 #[cfg(not(feature = "parking_lot"))]
 use std::sync;
 
-use sync::{RwLockReadGuard, RwLockWriteGuard};
+pub(crate) use sync::{RwLockReadGuard, RwLockWriteGuard};
 
 
 #[cfg(feature = "parking_lot")]

@@ -2,6 +2,7 @@
 use crate::{
     Asset,
     AssetError,
+    dirs::{CachedDir, DirReader},
     loader::Loader,
     lock::{RwLock, CacheEntry, AssetRefLock},
 };
@@ -160,8 +161,10 @@ impl fmt::Debug for AccessKey<'_> {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct AssetCache {
-    pub(crate) assets: RwLock<HashMap<Key, CacheEntry, RandomState>>,
     path: PathBuf,
+
+    pub(crate) assets: RwLock<HashMap<Key, CacheEntry, RandomState>>,
+    dirs: RwLock<HashMap<Key, CachedDir, RandomState>>,
 
     #[cfg(feature = "hot-reloading")]
     reloader: Mutex<Option<HotReloader>>,
@@ -185,6 +188,7 @@ impl AssetCache {
 
         Ok(AssetCache {
             assets: RwLock::new(HashMap::with_hasher(RandomState::new())),
+            dirs: RwLock::new(HashMap::with_hasher(RandomState::new())),
             path,
 
             #[cfg(feature = "hot-reloading")]
@@ -201,16 +205,16 @@ impl AssetCache {
         &self.path
     }
 
-    fn path_of<A: Asset>(&self, id: &str) -> PathBuf {
+    pub(crate) fn path_of(&self, id: &str, ext: &str) -> PathBuf {
         let mut path = self.path.clone();
         path.extend(id.split('.'));
-        path.set_extension(A::EXT);
+        path.set_extension(ext);
         path
     }
 
     /// Adds an asset to the cache
     pub(crate) fn add_asset<A: Asset>(&self, id: String) -> Result<AssetRefLock<A>, AssetError> {
-        let path = self.path_of::<A>(&id);
+        let path = self.path_of(&id, A::EXT);
         let asset: A = self.load_from_fs(&path)?;
 
         let entry = CacheEntry::new(asset);
@@ -230,6 +234,17 @@ impl AssetCache {
         cache.insert(key, entry);
 
         Ok(asset)
+    }
+
+    fn add_dir<A: Asset>(&self, id: String) -> Result<DirReader<A>, io::Error> {
+        let dir = CachedDir::load::<A>(self, &id)?;
+        let reader = unsafe { dir.read(self) };
+
+        let key = Key::new::<A>(id.into());
+        let mut dirs = self.dirs.write();
+        dirs.insert(key, dir);
+
+        Ok(reader)
     }
 
     /// Loads an asset.
@@ -290,7 +305,7 @@ impl AssetCache {
     pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRefLock<A>, AssetError> {
         let cache = self.assets.read();
         if let Some(cached) = cache.get(&AccessKey::new::<A>(id)) {
-            let path = self.path_of::<A>(id);
+            let path = self.path_of(id, A::EXT);
             let asset = self.load_from_fs(&path)?;
             return unsafe { Ok(cached.write(asset)) };
         }
@@ -302,6 +317,27 @@ impl AssetCache {
     fn load_from_fs<A: Asset>(&self, path: &Path) -> Result<A, AssetError> {
         let content = fs::read(&path)?;
         A::Loader::load(content).map_err(|e| AssetError::LoadError(e))
+    }
+
+    /// Load all assets of a given type in a directory.
+    ///
+    /// The directory's id is constructed the same way as assets. To specify
+    /// the cache's root, give the empty string (`""`) as id.
+    ///
+    /// The returned structure can be iterated on to get the loaded assets.
+    ///
+    /// # Error
+    ///
+    /// An error is returned if the given id does not match a valid readable
+    /// directory.
+    pub fn load_dir<A: Asset>(&self, id: &str) -> io::Result<DirReader<A>> {
+        let dirs = self.dirs.read();
+        if let Some(dir) = dirs.get(&AccessKey::new::<A>(id)) {
+            return unsafe { Ok(dir.read(self)) };
+        }
+        drop(dirs);
+
+        self.add_dir(id.to_string())
     }
 
     /// Remove an asset from the cache.
@@ -327,6 +363,7 @@ impl AssetCache {
     #[inline]
     pub fn clear(&mut self) {
         self.assets.get_mut().clear();
+        self.dirs.get_mut().clear();
 
         #[cfg(feature = "hot-reloading")]
         self.watched.get_mut().clear();
