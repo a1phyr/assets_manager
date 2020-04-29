@@ -316,7 +316,8 @@ impl AssetCache {
 
     /// Load all assets of a given type in a directory.
     ///
-    /// The directory's id is constructed the same way as assets.
+    /// The directory's id is constructed the same way as assets. To specify
+    /// the cache's root, give the empty string (`""`) as id.
     ///
     /// The returned structure can be iterated on to get the loaded assets.
     ///

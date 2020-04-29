@@ -97,7 +97,9 @@ impl CachedDir {
 
                 if path.is_file() {
                     let mut this_id = id.to_owned();
-                    this_id.push('.');
+                    if this_id.len() > 0 {
+                        this_id.push('.');
+                    }
                     this_id.push_str(name);
 
                     let _ = cache.load::<A>(&this_id);
