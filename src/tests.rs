@@ -10,7 +10,7 @@ impl From<i32> for X {
 }
 
 impl Asset for X {
-    type Loader = loader::FromOther<i32, loader::ParseLoader>;
+    type Loader = loader::LoadFrom<i32, loader::ParseLoader>;
     const EXT: &'static str = "x";
 }
 
@@ -56,7 +56,7 @@ mod loaders {
         let n = rand::random::<i32>();
         let raw = raw(&format!("{}", n));
 
-        let loaded: X = FromOther::<i32, ParseLoader>::load(raw).unwrap();
+        let loaded: X = LoadFrom::<i32, ParseLoader>::load(raw).unwrap();
 
         assert_eq!(loaded, X(n));
     }

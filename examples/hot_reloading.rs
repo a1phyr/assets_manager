@@ -11,7 +11,7 @@
 use assets_manager::{
     Asset,
     AssetCache,
-    loader::{FromOther, ParseLoader},
+    loader::{LoadFrom, ParseLoader},
 };
 
 use std::{
@@ -33,7 +33,7 @@ impl Asset for X {
 
     // An asset of type X is loaded by parsing the file as an i32
     // X: From<i32> is needed for this
-    type Loader = FromOther<i32, ParseLoader>;
+    type Loader = LoadFrom<i32, ParseLoader>;
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

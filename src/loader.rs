@@ -89,7 +89,7 @@ where
 /// # Example
 ///
 /// ```
-/// use assets_manager::{Asset, loader::{FromOther, ParseLoader}};
+/// use assets_manager::{Asset, loader::{LoadFrom, ParseLoader}};
 /// use std::net::IpAddr;
 ///
 /// struct Ip(IpAddr);
@@ -102,12 +102,12 @@ where
 ///
 /// impl Asset for Ip {
 ///     const EXT: &'static str = "ip";
-///     type Loader = FromOther<IpAddr, ParseLoader>;
+///     type Loader = LoadFrom<IpAddr, ParseLoader>;
 /// }
 /// ```
 #[derive(Debug)]
-pub struct FromOther<U, L>(PhantomData<(U, L)>);
-impl<T, U, L> Loader<T> for FromOther<U, L>
+pub struct LoadFrom<U, L>(PhantomData<(U, L)>);
+impl<T, U, L> Loader<T> for LoadFrom<U, L>
 where
     U: Into<T>,
     L: Loader<U>,
@@ -122,9 +122,9 @@ where
 /// The file content is assumed to be valid UTF-8.
 ///
 /// This Loader cannot be used to implement the Asset trait, but can be used by
-/// [`FromOther`].
+/// [`LoadFrom`].
 ///
-/// [`FromOther`]: struct.FromOther.html
+/// [`LoadFrom`]: struct.LoadFrom.html
 #[derive(Debug)]
 pub struct StringLoader;
 impl Loader<String> for StringLoader {
