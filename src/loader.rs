@@ -117,6 +117,20 @@ where
     }
 }
 
+/// Loads assets as a `Vec<u8>`.
+///
+/// This Loader cannot be used to implement the Asset trait, but can be used by
+/// [`LoadFrom`].
+///
+/// [`LoadFrom`]: struct.LoadFrom.html
+#[derive(Debug)]
+pub struct BytesLoader;
+impl Loader<Vec<u8>> for BytesLoader {
+    fn load(content: Vec<u8>) -> Result<Vec<u8>, Box<dyn Error + Send + Sync>> {
+        Ok(content)
+    }
+}
+
 /// Loads assets as a String.
 ///
 /// The file content is assumed to be valid UTF-8.
