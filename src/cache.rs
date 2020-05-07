@@ -316,7 +316,7 @@ impl AssetCache {
 
     fn load_from_fs<A: Asset>(&self, path: &Path) -> Result<A, AssetError> {
         let content = fs::read(&path)?;
-        A::Loader::load(content).map_err(|e| AssetError::LoadError(e))
+        A::Loader::load(content.into()).map_err(|e| AssetError::LoadError(e))
     }
 
     /// Load all assets of a given type in a directory.

@@ -25,8 +25,8 @@ const fn unbounded<T>() -> (Bound<T>, Bound<T>) {
 
 type AnyBox = Box<dyn Any + Send + Sync>;
 
-fn load<A: Asset>(content: Vec<u8>) -> Result<AnyBox, AssetError> {
-    match A::Loader::load(content) {
+fn load<A: Asset>(content: &[u8]) -> Result<AnyBox, AssetError> {
+    match A::Loader::load(content.into()) {
         Ok(asset) => Ok(Box::new(asset)),
         Err(e) => Err(AssetError::LoadError(e)),
     }
@@ -38,7 +38,7 @@ unsafe fn reload<A: Asset>(entry: &CacheEntry, asset: AnyBox) {
 }
 
 struct TypeInfo {
-    load: fn(Vec<u8>) -> Result<AnyBox, AssetError>,
+    load: fn(&[u8]) -> Result<AnyBox, AssetError>,
     reload: unsafe fn(&CacheEntry, AnyBox),
 }
 
@@ -98,7 +98,7 @@ impl WatchedPaths {
 }
 
 struct Value {
-    load: fn(Vec<u8>) -> Result<AnyBox, AssetError>,
+    load: fn(&[u8]) -> Result<AnyBox, AssetError>,
     reload: unsafe fn(&CacheEntry, AnyBox),
     value: Option<AnyBox>,
 }
@@ -148,7 +148,7 @@ impl FileCache {
         let mut changed = false;
 
         for info in infos.values.values_mut() {
-            match (info.load)(content.clone()) {
+            match (info.load)(&content) {
                 Ok(asset) => {
                     info.value = Some(asset);
                     changed = true;

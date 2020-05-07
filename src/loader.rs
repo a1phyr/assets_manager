@@ -5,9 +5,10 @@
 //! [`Loader`]: trait.Loader.html
 
 use std::{
+    borrow::Cow,
     error::Error,
     marker::PhantomData,
-    str::FromStr,
+    str::{self, FromStr},
 };
 
 /// Specifies how an asset is loaded.
@@ -42,7 +43,7 @@ use std::{
 /// ```
 pub trait Loader<T> {
     /// Loads an asset from its raw bytes representation.
-    fn load(content: Vec<u8>) -> Result<T, Box<dyn Error + Send + Sync>>;
+    fn load(content: Cow<[u8]>) -> Result<T, Box<dyn Error + Send + Sync>>;
 }
 
 /// Returns the default value in case of failure.
@@ -76,7 +77,7 @@ where
     T: Default,
     L: Loader<T>,
 {
-    fn load(content: Vec<u8>) -> Result<T, Box<dyn Error + Send + Sync>> {
+    fn load(content: Cow<[u8]>) -> Result<T, Box<dyn Error + Send + Sync>> {
         L::load(content).or_else(|_| Ok(T::default()))
     }
 }
@@ -112,7 +113,7 @@ where
     U: Into<T>,
     L: Loader<U>,
 {
-    fn load(content: Vec<u8>) -> Result<T, Box<dyn Error + Send + Sync>> {
+    fn load(content: Cow<[u8]>) -> Result<T, Box<dyn Error + Send + Sync>> {
         Ok(L::load(content)?.into())
     }
 }
@@ -126,8 +127,8 @@ where
 #[derive(Debug)]
 pub struct BytesLoader;
 impl Loader<Vec<u8>> for BytesLoader {
-    fn load(content: Vec<u8>) -> Result<Vec<u8>, Box<dyn Error + Send + Sync>> {
-        Ok(content)
+    fn load(content: Cow<[u8]>) -> Result<Vec<u8>, Box<dyn Error + Send + Sync>> {
+        Ok(content.into_owned())
     }
 }
 
@@ -142,8 +143,8 @@ impl Loader<Vec<u8>> for BytesLoader {
 #[derive(Debug)]
 pub struct StringLoader;
 impl Loader<String> for StringLoader {
-    fn load(content: Vec<u8>) -> Result<String, Box<dyn Error + Send + Sync>> {
-        Ok(String::from_utf8(content)?)
+    fn load(content: Cow<[u8]>) -> Result<String, Box<dyn Error + Send + Sync>> {
+        Ok(String::from_utf8(content.into_owned())?)
     }
 }
 
@@ -166,8 +167,8 @@ where
     T: FromStr,
     <T as FromStr>::Err: Error + Send + Sync + 'static,
 {
-    fn load(content: Vec<u8>) -> Result<T, Box<dyn Error + Send + Sync>> {
-        let string = String::from_utf8(content)?;
+    fn load(content: Cow<[u8]>) -> Result<T, Box<dyn Error + Send + Sync>> {
+        let string = str::from_utf8(&content)?;
         Ok(string.parse()?)
     }
 }
@@ -190,7 +191,7 @@ macro_rules! serde_loader {
             T: for<'de> serde::Deserialize<'de>,
         {
             #[inline]
-            fn load(content: Vec<u8>) -> Result<T, Box<dyn Error + Send + Sync>> {
+            fn load(content: Cow<[u8]>) -> Result<T, Box<dyn Error + Send + Sync>> {
                 Ok($fun(&*content)?)
             }
         }
