@@ -27,9 +27,6 @@ ron = ["serde_ron", "serde"]
 yaml = ["serde_yaml", "serde"]
 toml = ["serde_toml", "serde"]
 
-# This feature is neither used internally nor documented but it would be a
-# breaking change to remove it
-hashbrown = []
 
 [dependencies]
 ahash = {version = "0.3", default-features = false, optional = true}
