@@ -61,12 +61,11 @@ impl<'a> Iterator for StringIter<'a> {
         if self.current == self.end {
             None
         } else {
-            let string;
             unsafe {
-                string = &*self.current;
+                let string = &*self.current;
                 self.current = self.current.offset(1);
+                Some(string)
             }
-            Some(string)
         }
     }
 }
@@ -97,7 +96,7 @@ impl CachedDir {
 
                 if path.is_file() {
                     let mut this_id = id.to_owned();
-                    if this_id.len() > 0 {
+                    if !this_id.is_empty() {
                         this_id.push('.');
                     }
                     this_id.push_str(name);

@@ -23,7 +23,6 @@ impl From<io::Error> for AssetError {
     }
 }
 
-#[allow(deprecated)]
 impl fmt::Display for AssetError {
      fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {

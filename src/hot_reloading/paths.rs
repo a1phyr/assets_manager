@@ -2,7 +2,6 @@ use std::{
     any::{Any, TypeId},
     collections::{HashMap, HashSet},
     fs,
-    ops::Bound,
     path::PathBuf,
 };
 
@@ -16,11 +15,6 @@ use crate::{
 };
 
 use crate::RandomState;
-
-
-const fn unbounded<T>() -> (Bound<T>, Bound<T>) {
-    (Bound::Unbounded, Bound::Unbounded)
-}
 
 
 type AnyBox = Box<dyn Any + Send + Sync>;
@@ -166,7 +160,7 @@ impl FileCache {
     pub fn update(&mut self, cache: &AssetCache) {
         let assets = cache.assets.read();
 
-        for path in self.changed.drain(unbounded::<usize>()) {
+        for path in self.changed.drain(..) {
             let path = match self.cache.get_mut(&path) {
                 Some(values) => values,
                 None => continue,

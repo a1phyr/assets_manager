@@ -257,11 +257,10 @@ impl AssetCache {
     /// - The asset could not be loaded from the filesystem
     /// - Loaded data could not not be converted properly
     pub fn load<A: Asset>(&self, id: &str) -> Result<AssetRefLock<A>, AssetError> {
-        if let Some(asset) = self.load_cached(id) {
-            return Ok(asset);
+        match self.load_cached(id) {
+            Some(asset) => Ok(asset),
+            None => self.add_asset(id.to_string()),
         }
-
-        self.add_asset(id.to_string())
     }
 
     /// Loads an asset from the cache.
