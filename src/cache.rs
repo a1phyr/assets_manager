@@ -4,7 +4,7 @@ use crate::{
     AssetError,
     dirs::{CachedDir, DirReader},
     loader::Loader,
-    lock::{RwLock, CacheEntry, AssetRefLock},
+    lock::{RwLock, CacheEntry, AssetRef},
 };
 
 #[cfg(feature = "hot-reloading")]
@@ -213,7 +213,7 @@ impl AssetCache {
     }
 
     /// Adds an asset to the cache
-    pub(crate) fn add_asset<A: Asset>(&self, id: String) -> Result<AssetRefLock<A>, AssetError> {
+    pub(crate) fn add_asset<A: Asset>(&self, id: String) -> Result<AssetRef<A>, AssetError> {
         let path = self.path_of(&id, A::EXT);
         let asset: A = self.load_from_fs(&path)?;
 
@@ -256,7 +256,7 @@ impl AssetCache {
     /// Errors can occur in several cases :
     /// - The asset could not be loaded from the filesystem
     /// - Loaded data could not not be converted properly
-    pub fn load<A: Asset>(&self, id: &str) -> Result<AssetRefLock<A>, AssetError> {
+    pub fn load<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetError> {
         match self.load_cached(id) {
             Some(asset) => Ok(asset),
             None => self.add_asset(id.to_string()),
@@ -267,7 +267,7 @@ impl AssetCache {
     ///
     /// This function does not attempt to load the asset from the filesystem if
     /// it is not found in the cache.
-    pub fn load_cached<A: Asset>(&self, id: &str) -> Option<AssetRefLock<A>> {
+    pub fn load_cached<A: Asset>(&self, id: &str) -> Option<AssetRef<A>> {
         let key = AccessKey::new::<A>(id);
         let cache = self.assets.read();
         cache.get(&key).map(|asset| unsafe { asset.get_ref() })
@@ -281,7 +281,7 @@ impl AssetCache {
     ///
     /// [`load`]: fn.load.html
     #[inline]
-    pub fn load_expect<A: Asset>(&self, id: &str) -> AssetRefLock<A> {
+    pub fn load_expect<A: Asset>(&self, id: &str) -> AssetRef<A> {
         self.load(id).expect("Could not load essential asset")
     }
 
@@ -291,7 +291,7 @@ impl AssetCache {
     ///
     /// **Note**: this function requires a write lock on the asset, and will block
     /// until one is aquired, ie no read lock can exist at the same time. This
-    /// means that you **must not** call this method if you have an `AssetRef`
+    /// means that you **must not** call this method if you have an `AssetGuard`
     /// on the same asset, or it may cause a deadlock.
     ///
     /// # Errors
@@ -301,7 +301,7 @@ impl AssetCache {
     /// If an error occurs, the asset is left unmodified.
     ///
     /// [`load`]: fn.load.html
-    pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRefLock<A>, AssetError> {
+    pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetError> {
         let cache = self.assets.read();
         if let Some(cached) = cache.get(&AccessKey::new::<A>(id)) {
             let path = self.path_of(id, A::EXT);
@@ -381,12 +381,12 @@ impl AssetCache {
     ///
     /// This function will block the current thread until all changed assets are
     /// reloaded, but it does not perform any I/O. However, it will need to lock
-    /// some assets for writing, so you **must not** have any [`AssetRef`] from
+    /// some assets for writing, so you **must not** have any [`AssetGuard`] from
     /// the given `AssetCache`, or you might experience deadlocks. You are free
-    /// to keep [`AssetRefLock`]s, though.
+    /// to keep [`AssetRef`]s, though.
     ///
+    /// [`AssetGuard`]: struct.AssetGuard.html
     /// [`AssetRef`]: struct.AssetRef.html
-    /// [`AssetRefLock`]: struct.AssetRefLock.html
     ///
     /// # Errors
     ///

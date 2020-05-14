@@ -104,7 +104,7 @@ impl<T: ?Sized> Mutex<T> {
 ///
 /// - Methods that are generic over `T` can only be called with the same `T` used
 /// to create them.
-/// - When an `AssetRefLock<'a, T>` is returned, you have to ensure that `self`
+/// - When an `AssetRef<'a, T>` is returned, you have to ensure that `self`
 /// outlives it. The `CacheEntry` can be moved be cannot be dropped.
 ///
 /// [`ContreteCacheEntry`]: struct.ContreteCacheEntry.html
@@ -149,7 +149,7 @@ impl<'a> CacheEntry {
     ///
     /// See type-level documentation.
     #[inline]
-    pub unsafe fn get_ref<T: Send + Sync>(&self) -> AssetRefLock<'a, T> {
+    pub unsafe fn get_ref<T: Send + Sync>(&self) -> AssetRef<'a, T> {
         let concrete = {
             let ptr = self as *const CacheEntry as *const ContreteCacheEntry<T>;
             &*ptr
@@ -162,7 +162,7 @@ impl<'a> CacheEntry {
     /// # Safety
     ///
     /// See type-level documentation.
-    pub unsafe fn write<T: Send + Sync>(&self, asset: T) -> AssetRefLock<'a, T> {
+    pub unsafe fn write<T: Send + Sync>(&self, asset: T) -> AssetRef<'a, T> {
         let lock = self.get_ref();
         let mut cached_guard = lock.data.write();
         *cached_guard = asset;
@@ -215,8 +215,8 @@ struct ContreteCacheEntry<T> {
 impl<T: Send + Sync> ContreteCacheEntry<T> {
     /// Gets a reference to the inner `RwLock`
     #[inline]
-    fn get_ref(&self) -> AssetRefLock<T> {
-        AssetRefLock { data: &*self.data }
+    fn get_ref(&self) -> AssetRef<T> {
+        AssetRef { data: &*self.data }
     }
 
     /// Consumes the `ContreteCacheEntry` to get the inner value.
@@ -248,17 +248,17 @@ where
 /// solution is to create static `AssetCache`s and references (for example with
 /// `lazy_static` crate). You can also use crates allow threads with non-static
 /// data (such as `crossbeam-utils::scope`).
-pub struct AssetRefLock<'a, A> {
+pub struct AssetRef<'a, A> {
     data: &'a RwLock<A>,
 }
 
-impl<'a, A> AssetRefLock<'a, A> {
+impl<'a, A> AssetRef<'a, A> {
     /// Locks the pointed asset for reading.
     ///
     /// Returns a RAII guard which will release the lock once dropped.
     #[inline]
-    pub fn read(&self) -> AssetRef<'a, A> {
-        AssetRef {
+    pub fn read(&self) -> AssetGuard<'a, A> {
+        AssetGuard {
             guard: self.data.read(),
         }
     }
@@ -270,7 +270,7 @@ impl<'a, A> AssetRefLock<'a, A> {
     }
 }
 
-impl<A> AssetRefLock<'_, A>
+impl<A> AssetRef<'_, A>
 where
     A: Clone
 {
@@ -281,7 +281,7 @@ where
     }
 }
 
-impl<A> Clone for AssetRefLock<'_, A> {
+impl<A> Clone for AssetRef<'_, A> {
     fn clone(&self) -> Self {
         Self {
             data: self.data,
@@ -289,9 +289,9 @@ impl<A> Clone for AssetRefLock<'_, A> {
     }
 }
 
-impl<A> Copy for AssetRefLock<'_, A> {}
+impl<A> Copy for AssetRef<'_, A> {}
 
-impl<A> hash::Hash for AssetRefLock<'_, A>
+impl<A> hash::Hash for AssetRef<'_, A>
 where
     A: hash::Hash,
 {
@@ -300,25 +300,25 @@ where
     }
 }
 
-impl<A> fmt::Debug for AssetRefLock<'_, A>
+impl<A> fmt::Debug for AssetRef<'_, A>
 where
     A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AssetRefLock").field("data", &*self.data.read()).finish()
+        f.debug_struct("AssetRef").field("data", &*self.data.read()).finish()
     }
 }
 
 /// RAII guard used to keep a read lock on an asset and release it when dropped.
 ///
-/// It can be obtained by calling [`AssetRefLock::read`].
+/// It can be obtained by calling [`AssetRef::read`].
 ///
-/// [`AssetRefLock::read`]: struct.AssetRefLock.html#method.read
-pub struct AssetRef<'a, A> {
+/// [`AssetRef::read`]: struct.AssetRef.html#method.read
+pub struct AssetGuard<'a, A> {
     guard: RwLockReadGuard<'a, A>,
 }
 
-impl<A> Deref for AssetRef<'_, A> {
+impl<A> Deref for AssetGuard<'_, A> {
     type Target = A;
 
     #[inline]
@@ -327,7 +327,7 @@ impl<A> Deref for AssetRef<'_, A> {
     }
 }
 
-impl<A> fmt::Display for AssetRef<'_, A>
+impl<A> fmt::Display for AssetGuard<'_, A>
 where
     A: fmt::Display,
 {
@@ -337,7 +337,7 @@ where
     }
 }
 
-impl<A> fmt::Debug for AssetRef<'_, A>
+impl<A> fmt::Debug for AssetGuard<'_, A>
 where
     A: fmt::Debug,
 {

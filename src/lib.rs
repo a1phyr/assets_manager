@@ -102,7 +102,7 @@ pub mod loader;
 
 mod lock;
 #[doc(inline)]
-pub use lock::{AssetRefLock, AssetRef};
+pub use lock::{AssetRef, AssetGuard};
 
 mod dirs;
 #[doc(inline)]
