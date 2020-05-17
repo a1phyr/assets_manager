@@ -10,15 +10,13 @@ use std::{
 use crate::{
     Asset,
     AssetCache,
-    cache::AccessKey,
+    cache::Key,
     loader::Loader,
     lock::CacheEntry,
 };
 
 use crate::RandomState;
 
-
-type AnyBox = Box<dyn Any>;
 
 fn borrowed(content: &io::Result<Vec<u8>>) -> io::Result<Cow<[u8]>> {
     match content {
@@ -30,7 +28,22 @@ fn borrowed(content: &io::Result<Vec<u8>>) -> io::Result<Cow<[u8]>> {
     }
 }
 
-fn load<A: Asset>(content: io::Result<Cow<[u8]>>, id: &str, path: &Path) -> Option<AnyBox> {
+
+trait AnyAsset: Any + Send + Sync {
+    unsafe fn reload(self: Box<Self>, entry: &CacheEntry);
+}
+
+impl<A: Asset> AnyAsset for A {
+    unsafe fn reload(self: Box<Self>, entry: &CacheEntry) {
+        let asset: A = *self;
+        entry.write(asset);
+    }
+}
+
+
+type LoadFn = fn(content: io::Result<Cow<[u8]>>, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>>;
+
+fn load<A: Asset>(content: io::Result<Cow<[u8]>>, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>> {
     match A::Loader::load(content) {
         Ok(asset) => Some(Box::new(asset)),
         Err(e) => {
@@ -40,35 +53,24 @@ fn load<A: Asset>(content: io::Result<Cow<[u8]>>, id: &str, path: &Path) -> Opti
     }
 }
 
-unsafe fn reload<A: Asset>(entry: &CacheEntry, asset: AnyBox) {
-    debug_assert!(asset.is::<A>());
-    let asset = Box::from_raw(Box::into_raw(asset) as *mut A);
-    entry.write(*asset);
+
+struct WatchedPath {
+    id: String,
+    types: HashMap<TypeId, LoadFn, RandomState>,
 }
 
-#[derive(Clone, Copy)]
-struct TypeInfo {
-    load: fn(io::Result<Cow<[u8]>>, id: &str, path: &Path) -> Option<AnyBox>,
-    reload: unsafe fn(&CacheEntry, AnyBox),
-}
-
-impl TypeInfo {
-    fn of<A: Asset>() -> Self {
+impl WatchedPath {
+    fn new(id: String) -> Self {
         Self {
-            load: load::<A>,
-            reload: reload::<A>,
+            id,
+            types: HashMap::with_hasher(RandomState::new()),
         }
     }
 }
 
-struct WatchedPath {
-    id: String,
-    types: HashMap<TypeId, TypeInfo, RandomState>,
-}
-
 pub struct WatchedPaths {
     paths: HashMap<PathBuf, WatchedPath, RandomState>,
-    added: HashSet<PathBuf, RandomState>,
+    added: HashSet<(PathBuf, TypeId), RandomState>,
     cleared: bool,
 }
 
@@ -85,7 +87,7 @@ impl WatchedPaths {
         match self.paths.get_mut(&path) {
             None => {
                 let mut types = HashMap::with_hasher(RandomState::new());
-                types.insert(TypeId::of::<A>(), TypeInfo::of::<A>());
+                types.insert(TypeId::of::<A>(), load::<A> as LoadFn);
 
                 let info = WatchedPath { id, types };
                 self.paths.insert(path.clone(), info);
@@ -93,11 +95,11 @@ impl WatchedPaths {
             Some(infos) => {
                 debug_assert_eq!(infos.id, id);
 
-                infos.types.insert(TypeId::of::<A>(), TypeInfo::of::<A>());
+                infos.types.insert(TypeId::of::<A>(), load::<A>);
             },
         }
 
-        self.added.insert(path);
+        self.added.insert((path, TypeId::of::<A>()));
     }
 
     pub fn clear(&mut self) {
@@ -107,78 +109,50 @@ impl WatchedPaths {
     }
 }
 
-struct Value {
-    infos: TypeInfo,
-    value: Option<AnyBox>,
-}
-
-impl From<TypeInfo> for Value {
-    fn from(infos: TypeInfo) -> Self {
-        Self {
-            infos,
-            value: None,
-        }
-    }
-}
-
-struct PathValues {
-    id: String,
-    values: HashMap<TypeId, Value, RandomState>,
-}
 
 pub struct FileCache {
-    cache: HashMap<PathBuf, PathValues, RandomState>,
-    changed: Vec<PathBuf>,
+    paths: HashMap<PathBuf, WatchedPath, RandomState>,
+    changed: HashMap<Key, Box<dyn AnyAsset>, RandomState>,
 }
 
 impl FileCache {
     pub fn new() -> Self {
         Self {
-            cache: HashMap::with_hasher(RandomState::new()),
-            changed: Vec::new(),
+            paths: HashMap::with_hasher(RandomState::new()),
+            changed: HashMap::with_hasher(RandomState::new()),
         }
     }
 
     pub fn load(&mut self, path: PathBuf) {
-        let infos = match self.cache.get_mut(&path) {
+        let path_infos = match self.paths.get_mut(&path) {
             Some(i) => i,
             None => return,
         };
 
         let content = fs::read(&path);
-        let mut changed = false;
 
-        for info in infos.values.values_mut() {
-            if let Some(asset) = (info.infos.load)(borrowed(&content), &infos.id, &path) {
-                info.value = Some(asset);
-                changed = true;
-                log::info!("Reloading {:?} from {:?}", infos.id, path);
+        for (&type_id, load) in &mut path_infos.types {
+            if let Some(asset) = load(borrowed(&content), &path_infos.id, &path) {
+                let key = Key::new_with(path_infos.id.clone().into(), type_id);
+                self.changed.insert(key, asset);
+
             }
-        }
-
-        if changed {
-            self.changed.push(path);
         }
     }
 
     pub fn update(&mut self, cache: &AssetCache) {
         let assets = cache.assets.read();
 
-        for path in self.changed.drain(..) {
-            let path = match self.cache.get_mut(&path) {
-                Some(values) => values,
-                None => continue,
-            };
+        for (key, value) in self.changed.drain() {
+            let mut changed = false;
 
-            for (id, info) in &mut path.values {
-                if let Some(val) = info.value.take() {
-                    let key = AccessKey::new_with(&path.id, *id);
-                    if let Some(entry) = assets.get(&key) {
-                        unsafe {
-                            (info.infos.reload)(entry, val);
-                        }
-                    }
-                }
+            if let Some(entry) = assets.get(&key) {
+                unsafe { value.reload(entry) };
+                changed = true;
+            }
+
+            if changed {
+                log::info!("Reloading {:?}", key.id());
             }
         }
     }
@@ -186,24 +160,25 @@ impl FileCache {
     pub fn get_watched(&mut self, watched: &mut WatchedPaths) {
         if watched.cleared {
             watched.cleared = false;
-            self.cache.clear();
+            self.paths.clear();
         }
 
-        for path in watched.added.drain() {
+        for (path, id) in watched.added.drain() {
             let infos = match watched.paths.get(&path) {
                 Some(infos) => infos,
-                None => {
-                    debug_assert!(false);
-                    continue;
-                },
+                None => continue,
             };
 
-            let values = PathValues {
-                id: infos.id.clone(),
-                values: infos.types.iter().map(|(&id, &ty)| (id, ty.into())).collect(),
+            let load = match infos.types.get(&id) {
+                Some(&load) => load,
+                None => continue,
             };
 
-            self.cache.insert(path, values);
+            let watched = self.paths.entry(path).or_insert_with(|| {
+                WatchedPath::new(infos.id.clone())
+            });
+
+            watched.types.insert(id, load);
         }
     }
 }

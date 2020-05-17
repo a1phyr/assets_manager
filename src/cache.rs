@@ -47,6 +47,18 @@ impl Key {
             type_id: TypeId::of::<T>(),
         }
     }
+
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    pub fn new_with(id: Box<str>, type_id: TypeId) -> Self {
+        Self { id, type_id }
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    pub fn id(&self) -> &str {
+        &self.id
+    }
 }
 
 /// A borrowed version of [`Key`]
@@ -67,12 +79,6 @@ impl<'a> AccessKey<'a> {
             id,
             type_id: TypeId::of::<T>(),
         }
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    #[inline]
-    pub fn new_with(id: &'a str, type_id: TypeId) -> Self {
-        Self { id, type_id }
     }
 }
 
