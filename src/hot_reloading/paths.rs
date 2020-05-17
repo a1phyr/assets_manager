@@ -1,14 +1,15 @@
 use std::{
     any::{Any, TypeId},
+    borrow::Cow,
     collections::{HashMap, HashSet},
     fs,
-    path::PathBuf,
+    io,
+    path::{Path, PathBuf},
 };
 
 use crate::{
     Asset,
     AssetCache,
-    AssetError,
     cache::AccessKey,
     loader::Loader,
     lock::CacheEntry,
@@ -17,22 +18,37 @@ use crate::{
 use crate::RandomState;
 
 
-type AnyBox = Box<dyn Any + Send + Sync>;
+type AnyBox = Box<dyn Any>;
 
-fn load<A: Asset>(content: Vec<u8>) -> Result<AnyBox, AssetError> {
+fn borrowed(content: &io::Result<Vec<u8>>) -> io::Result<Cow<[u8]>> {
+    match content {
+        Ok(bytes) => Ok(bytes.into()),
+        Err(err) => match err.raw_os_error() {
+            Some(e) => Err(io::Error::from_raw_os_error(e)),
+            None => Err(err.kind().into()),
+        },
+    }
+}
+
+fn load<A: Asset>(content: io::Result<Cow<[u8]>>, id: &str, path: &Path) -> Option<AnyBox> {
     match A::Loader::load(content) {
-        Ok(asset) => Ok(Box::new(asset)),
-        Err(e) => Err(AssetError::LoadError(e)),
+        Ok(asset) => Some(Box::new(asset)),
+        Err(e) => {
+            log::warn!("Error reloading {:?} from {:?}: {}", id, path, e);
+            None
+        },
     }
 }
 
 unsafe fn reload<A: Asset>(entry: &CacheEntry, asset: AnyBox) {
+    debug_assert!(asset.is::<A>());
     let asset = Box::from_raw(Box::into_raw(asset) as *mut A);
     entry.write(*asset);
 }
 
+#[derive(Clone, Copy)]
 struct TypeInfo {
-    load: fn(Vec<u8>) -> Result<AnyBox, AssetError>,
+    load: fn(io::Result<Cow<[u8]>>, id: &str, path: &Path) -> Option<AnyBox>,
     reload: unsafe fn(&CacheEntry, AnyBox),
 }
 
@@ -92,16 +108,14 @@ impl WatchedPaths {
 }
 
 struct Value {
-    load: fn(Vec<u8>) -> Result<AnyBox, AssetError>,
-    reload: unsafe fn(&CacheEntry, AnyBox),
+    infos: TypeInfo,
     value: Option<AnyBox>,
 }
 
-impl From<&TypeInfo> for Value {
-    fn from(infos: &TypeInfo) -> Self {
+impl From<TypeInfo> for Value {
+    fn from(infos: TypeInfo) -> Self {
         Self {
-            load: infos.load,
-            reload: infos.reload,
+            infos,
             value: None,
         }
     }
@@ -131,24 +145,14 @@ impl FileCache {
             None => return,
         };
 
-        let content = match fs::read(&path) {
-            Ok(content) => content,
-            Err(e) => {
-                log::warn!("Error reloading {:?} from {:?}: {}", infos.id, path, e);
-                return;
-            },
-        };
-
+        let content = fs::read(&path);
         let mut changed = false;
 
         for info in infos.values.values_mut() {
-            match (info.load)(content.clone()) {
-                Ok(asset) => {
-                    info.value = Some(asset);
-                    changed = true;
-                    log::info!("Reloading {:?} from {:?}", infos.id, path);
-                },
-                Err(e) => log::warn!("Error reloading {:?} from {:?}: {}", infos.id, path, e),
+            if let Some(asset) = (info.infos.load)(borrowed(&content), &infos.id, &path) {
+                info.value = Some(asset);
+                changed = true;
+                log::info!("Reloading {:?} from {:?}", infos.id, path);
             }
         }
 
@@ -171,7 +175,7 @@ impl FileCache {
                     let key = AccessKey::new_with(&path.id, *id);
                     if let Some(entry) = assets.get(&key) {
                         unsafe {
-                            (info.reload)(entry, val);
+                            (info.infos.reload)(entry, val);
                         }
                     }
                 }
@@ -196,7 +200,7 @@ impl FileCache {
 
             let values = PathValues {
                 id: infos.id.clone(),
-                values: infos.types.iter().map(|(id, ty)| (*id, ty.into())).collect(),
+                values: infos.types.iter().map(|(&id, &ty)| (id, ty.into())).collect(),
             };
 
             self.cache.insert(path, values);

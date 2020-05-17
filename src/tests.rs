@@ -16,10 +16,11 @@ impl Asset for X {
 
 
 mod loaders {
+    use std::{borrow::Cow, io::Result};
     use crate::loader::*;
 
-    fn raw(s: &str) -> Vec<u8> {
-        s.to_string().into_bytes()
+    fn raw(s: &str) -> Result<Cow<[u8]>> {
+        Ok(s.as_bytes().into())
     }
 
     #[test]
@@ -42,7 +43,8 @@ mod loaders {
     #[test]
     fn parse_loader() {
         let n = rand::random::<i32>();
-        let raw = raw(&format!("{}", n));
+        let s = &format!("{}", n);
+        let raw = raw(s);
 
         let loaded: i32 = ParseLoader::load(raw).unwrap();
 
@@ -54,7 +56,8 @@ mod loaders {
         use super::X;
 
         let n = rand::random::<i32>();
-        let raw = raw(&format!("{}", n));
+        let s = &format!("{}", n);
+        let raw = raw(s);
 
         let loaded: X = LoadFrom::<i32, ParseLoader>::load(raw).unwrap();
 
@@ -88,7 +91,7 @@ mod loaders {
                 #[test]
                 fn $name() {
                     let point = rand::random::<Point>();
-                    let raw = ($ser)(&point).unwrap();
+                    let raw = Ok(($ser)(&point).unwrap().into());
 
                     let loaded: Point = <$loader>::load(raw).unwrap();
 

@@ -1,7 +1,7 @@
 //! Definition of the cache
 use crate::{
     Asset,
-    AssetError,
+    AssetErr,
     dirs::{CachedDir, DirReader},
     loader::Loader,
     lock::{RwLock, CacheEntry, AssetRef},
@@ -213,7 +213,7 @@ impl AssetCache {
     }
 
     /// Adds an asset to the cache
-    pub(crate) fn add_asset<A: Asset>(&self, id: String) -> Result<AssetRef<A>, AssetError> {
+    pub(crate) fn add_asset<A: Asset>(&self, id: String) -> Result<AssetRef<A>, AssetErr<A>> {
         let path = self.path_of(&id, A::EXT);
         let asset: A = self.load_from_fs(&path)?;
 
@@ -256,7 +256,7 @@ impl AssetCache {
     /// Errors can occur in several cases :
     /// - The asset could not be loaded from the filesystem
     /// - Loaded data could not not be converted properly
-    pub fn load<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetError> {
+    pub fn load<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetErr<A>> {
         match self.load_cached(id) {
             Some(asset) => Ok(asset),
             None => self.add_asset(id.to_string()),
@@ -281,7 +281,10 @@ impl AssetCache {
     ///
     /// [`load`]: fn.load.html
     #[inline]
-    pub fn load_expect<A: Asset>(&self, id: &str) -> AssetRef<A> {
+    pub fn load_expect<A: Asset>(&self, id: &str) -> AssetRef<A>
+    where
+        AssetErr<A>: fmt::Debug,
+    {
         self.load(id).expect("Could not load essential asset")
     }
 
@@ -301,7 +304,7 @@ impl AssetCache {
     /// If an error occurs, the asset is left unmodified.
     ///
     /// [`load`]: fn.load.html
-    pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetError> {
+    pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetErr<A>> {
         let cache = self.assets.read();
         if let Some(cached) = cache.get(&AccessKey::new::<A>(id)) {
             let path = self.path_of(id, A::EXT);
@@ -313,9 +316,9 @@ impl AssetCache {
         self.add_asset(id.to_string())
     }
 
-    fn load_from_fs<A: Asset>(&self, path: &Path) -> Result<A, AssetError> {
-        let content = fs::read(&path)?;
-        A::Loader::load(content).map_err(|e| AssetError::LoadError(e))
+    fn load_from_fs<A: Asset>(&self, path: &Path) -> Result<A, AssetErr<A>> {
+        let content = fs::read(&path).map(Into::into);
+        A::Loader::load(content)
     }
 
     /// Load all assets of a given type in a directory.

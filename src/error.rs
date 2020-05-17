@@ -4,39 +4,106 @@ use std::{
     error::Error,
     fmt,
     io,
+    str::Utf8Error,
+    string::FromUtf8Error,
 };
 
-/// An error that occured when loading an asset.
+/// An error which occurs when loading a `String`.
+///
+/// This error is used as the error type of [`StringLoader`].
+///
+/// [`StringLoader`]: struct.StringLoader.html
 #[derive(Debug)]
-#[non_exhaustive]
-pub enum AssetError {
-    /// An I/O error occurred while trying to load the asset.
-    IoError(io::Error),
+pub enum StringLoaderError {
+    /// An I/O error has occured while loading the file from disk.
+    Io(io::Error),
 
-    /// An error occurred when changing raw bytes into the asset type.
-    LoadError(Box<dyn Error + Send + Sync>),
+    /// The loaded file was not valid UTF-8.
+    Utf8(FromUtf8Error),
 }
 
-impl From<io::Error> for AssetError {
+impl From<io::Error> for StringLoaderError {
     fn from(err: io::Error) -> Self {
-        Self::IoError(err)
+        Self::Io(err)
     }
 }
 
-impl fmt::Display for AssetError {
-     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            match self {
-                AssetError::IoError(err) => write!(f, "An I/O error occurred while trying to load an asset : {}", err),
-                AssetError::LoadError(err) => write!(f, "An conversion error occurred while trying to load an asset : {}", err),
-            }
-     }
+impl From<FromUtf8Error> for StringLoaderError {
+    fn from(err: FromUtf8Error) -> Self {
+        Self::Utf8(err)
+    }
 }
 
-impl Error for AssetError {
+impl fmt::Display for StringLoaderError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(err) => err.fmt(f),
+            Self::Utf8(err) => err.fmt(f),
+        }
+    }
+}
+
+impl Error for StringLoaderError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            AssetError::IoError(err) => Some(err),
-            AssetError::LoadError(err) => Some(err.as_ref()),
+            Self::Io(err) => Some(err),
+            Self::Utf8(err) => Some(err),
+        }
+    }
+}
+
+
+/// An error which occurs when loading a parsed value.
+///
+/// This error is used as the error type of [`ParseLoader`].
+///
+/// [`ParseLoader`]: struct.ParseLoader.html
+#[derive(Debug)]
+pub enum ParseLoaderError<E> {
+    /// An I/O error occured when loading the file from disk.
+    Io(io::Error),
+
+    /// The loaded file was not valid UTF-8.
+    Utf8(Utf8Error),
+
+    /// An error occured when parsing the file.
+    Parse(E),
+}
+
+impl<E> From<io::Error> for ParseLoaderError<E> {
+    fn from(err: io::Error) -> Self {
+        Self::Io(err)
+    }
+}
+
+impl<E> From<Utf8Error> for ParseLoaderError<E> {
+    fn from(err: Utf8Error) -> Self {
+        Self::Utf8(err)
+    }
+}
+
+impl<E> fmt::Display for ParseLoaderError<E>
+where
+    E: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(err) => err.fmt(f),
+            Self::Utf8(err) => err.fmt(f),
+            Self::Parse(err) => err.fmt(f),
+        }
+    }
+}
+
+impl<E> Error for ParseLoaderError<E>
+where
+    E: Error + 'static
+{
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Io(err) => Some(err),
+            Self::Utf8(err) => Some(err),
+            Self::Parse(err) => Some(err),
         }
     }
 }
