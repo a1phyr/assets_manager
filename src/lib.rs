@@ -95,22 +95,17 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod cache;
-#[doc(inline)]
 pub use cache::AssetCache;
 
 pub mod loader;
 
 mod lock;
-#[doc(inline)]
 pub use lock::{AssetRefLock, AssetRef};
 
 mod dirs;
-#[doc(inline)]
 pub use dirs::{DirReader, ReadAllDir, ReadDir};
 
 mod error;
-#[doc(inline)]
-pub use error::AssetError;
 
 #[cfg(feature = "hot-reloading")]
 mod hot_reloading;
@@ -175,3 +170,5 @@ pub trait Asset: Sized + Send + Sync + 'static {
     /// [`loader`]: loader/index.html
     type Loader: loader::Loader<Self>;
 }
+
+type AssetErr<A> = <<A as Asset>::Loader as loader::Loader<A>>::Err;

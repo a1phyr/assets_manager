@@ -16,11 +16,11 @@ impl Asset for X {
 
 
 mod loaders {
-    use std::borrow::Cow;
+    use std::{borrow::Cow, io::Result};
     use crate::loader::*;
 
-    fn raw(s: &str) -> Cow<[u8]> {
-        s.as_bytes().into()
+    fn raw(s: &str) -> Result<Cow<[u8]>> {
+        Ok(s.as_bytes().into())
     }
 
     #[test]
@@ -91,7 +91,7 @@ mod loaders {
                 #[test]
                 fn $name() {
                     let point = rand::random::<Point>();
-                    let raw = ($ser)(&point).unwrap().into();
+                    let raw = Ok(($ser)(&point).unwrap().into());
 
                     let loaded: Point = <$loader>::load(raw).unwrap();
 
