@@ -1,11 +1,10 @@
 //! Definitions of cache entries and locks
 
 use std::{
+    any::Any,
     fmt,
     hash,
-    mem,
     ops::Deref,
-    ptr,
 };
 
 
@@ -89,72 +88,42 @@ impl<T: ?Sized> Mutex<T> {
 }
 
 
-/// This struct is used to store [`ContreteCacheEntry`] of different types in
-/// the same container.
-///
-/// A [`ContreteCacheEntry`] can be safely transmuted in this struct. However,
-/// it can only be transmuted back with the type parameter which was used to
-/// create it.
-///
-/// The `repr(C)` attribute ensures that the compiler doesn't change the layout
-/// of the struct, so the data transmutation is legal. It is thus important to
-/// keep the definitions of these structs in sync.
+/// An entry in the cache
 ///
 /// # Safety
 ///
 /// - Methods that are generic over `T` can only be called with the same `T` used
 /// to create them.
 /// - When an `AssetRef<'a, T>` is returned, you have to ensure that `self`
-/// outlives it. The `CacheEntry` can be moved be cannot be dropped.
+/// outlives it. The `CacheEntry` can be moved but cannot be dropped.
 ///
 /// [`ContreteCacheEntry`]: struct.ContreteCacheEntry.html
-#[repr(C)]
-pub(crate) struct CacheEntry {
-    /// A pointeur representing the `Box` contained by the underlying `ContreteCacheEntry`.
-    data: *const RwLock<()>,
-
-    /// The concrete function to call to drop the concrete entry.
-    drop_concrete: unsafe fn(&mut CacheEntry),
-}
+pub(crate) struct CacheEntry(Box<dyn Any + Send + Sync>);
 
 impl<'a> CacheEntry {
     /// Creates a new `CacheEntry` containing an asset of type `T`.
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new<T: Send + Sync>(asset: T) -> Self {
-        let concrete = ContreteCacheEntry {
-            data: Box::new(RwLock::new(asset)),
-            drop: CacheEntry::drop_data::<T>,
-        };
-
-        unsafe { mem::transmute(concrete) }
+    pub fn new<T: Send + Sync + 'static>(asset: T) -> Self {
+        CacheEntry(Box::new(RwLock::new(asset)))
     }
 
-    /// Drops the inner data of the `CacheEntry`.
-    ///
-    /// Leaves `self.data` dangling.
-    ///
-    /// # Safety
-    ///
-    /// See type-level documentation.
-    unsafe fn drop_data<T: Send + Sync>(&mut self) {
-        let my_box = &mut self.data as *mut *const RwLock<()> as *mut Box<RwLock<T>>;
-        ptr::drop_in_place(my_box);
-    }
-
-    /// Reurns a reference to the underlying lock
+    /// Returns a reference to the underlying lock.
     ///
     /// # Safety
     ///
     /// See type-level documentation.
     #[inline]
-    pub unsafe fn get_ref<T: Send + Sync>(&self) -> AssetRef<'a, T> {
-        let concrete = {
-            let ptr = self as *const CacheEntry as *const ContreteCacheEntry<T>;
+    pub unsafe fn get_ref<T: Send + Sync + 'static>(&self) -> AssetRef<'a, T> {
+        debug_assert!(self.0.is::<RwLock<T>>());
+
+        let data = {
+            let ptr = &*self.0 as *const dyn Any as *const RwLock<T>;
             &*ptr
         };
-        concrete.get_ref()
+
+        AssetRef { data }
     }
 
     /// Write a value and a get reference to the underlying lock
@@ -162,7 +131,7 @@ impl<'a> CacheEntry {
     /// # Safety
     ///
     /// See type-level documentation.
-    pub unsafe fn write<T: Send + Sync>(&self, asset: T) -> AssetRef<'a, T> {
+    pub unsafe fn write<T: Send + Sync + 'static>(&self, asset: T) -> AssetRef<'a, T> {
         let lock = self.get_ref();
         let mut cached_guard = lock.data.write();
         *cached_guard = asset;
@@ -176,64 +145,19 @@ impl<'a> CacheEntry {
     ///
     /// See type-level documentation.
     #[inline]
-    pub unsafe fn into_inner<T: Send + Sync>(self) -> T {
-        let concrete: ContreteCacheEntry<T> = mem::transmute(self);
-        concrete.into_inner()
+    pub unsafe fn into_inner<T: Send + Sync + 'static>(self) -> T {
+        debug_assert!(self.0.is::<RwLock<T>>());
+
+        Box::from_raw(Box::into_raw(self.0) as *mut RwLock<T>).into_inner()
     }
 }
-
-// Safety: T is Send + Sync
-unsafe impl Send for CacheEntry {}
-unsafe impl Sync for CacheEntry {}
 
 impl fmt::Debug for CacheEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.pad("CacheEntry { ... }")
+        f.pad("CacheEntry")
     }
 }
 
-impl Drop for CacheEntry {
-    fn drop(&mut self) {
-        unsafe {
-            (self.drop_concrete)(self);
-        }
-    }
-}
-
-
-/// The concrete type behind a [`CacheEntry`].
-///
-/// See [`CacheEntry`] for more informations.
-///
-/// [`CacheEntry`]: struct.CacheEntry.html
-#[repr(C)]
-struct ContreteCacheEntry<T> {
-    data: Box<RwLock<T>>,
-    drop: unsafe fn(&mut CacheEntry),
-}
-
-impl<T: Send + Sync> ContreteCacheEntry<T> {
-    /// Gets a reference to the inner `RwLock`
-    #[inline]
-    fn get_ref(&self) -> AssetRef<T> {
-        AssetRef { data: &*self.data }
-    }
-
-    /// Consumes the `ContreteCacheEntry` to get the inner value.
-    #[inline]
-    fn into_inner(self) -> T {
-        self.data.into_inner()
-    }
-}
-
-impl<T> fmt::Debug for ContreteCacheEntry<T>
-where
-    T: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.data.read().fmt(f)
-    }
-}
 
 /// A lock on an asset.
 ///

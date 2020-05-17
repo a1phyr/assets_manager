@@ -216,31 +216,30 @@ mod asset_cache {
 }
 
 mod cache_entry {
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
     use crate::lock::CacheEntry;
 
-    struct DropCounter<'a> {
-        count: &'a Mutex<usize>,
-    }
+    #[derive(Clone)]
+    struct DropCounter(Arc<Mutex<usize>>);
 
-    impl Drop for DropCounter<'_> {
+    impl Drop for DropCounter {
         fn drop(&mut self) {
-            let mut count = self.count.lock().unwrap();
+            let mut count = self.0.lock().unwrap();
             *count += 1;
         }
     }
 
     #[test]
     fn drop_inner() {
-        let count = &Mutex::new(0);
+        let count = DropCounter(Arc::new(Mutex::new(0)));
 
-        let entry_1 = CacheEntry::new(DropCounter { count });
-        let entry_2 = CacheEntry::new(DropCounter { count });
-        assert_eq!(*count.lock().unwrap(), 0);
+        let entry_1 = CacheEntry::new(count.clone());
+        let entry_2 = CacheEntry::new(count.clone());
+        assert_eq!(*count.0.lock().unwrap(), 0);
         drop(entry_1);
-        assert_eq!(*count.lock().unwrap(), 1);
+        assert_eq!(*count.0.lock().unwrap(), 1);
         drop(entry_2);
-        assert_eq!(*count.lock().unwrap(), 2);
+        assert_eq!(*count.0.lock().unwrap(), 2);
     }
 
     #[test]
