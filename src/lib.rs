@@ -105,8 +105,6 @@ pub use lock::{AssetRef, AssetGuard};
 mod dirs;
 pub use dirs::{DirReader, ReadAllDir, ReadDir};
 
-mod error;
-
 #[cfg(feature = "hot-reloading")]
 mod hot_reloading;
 

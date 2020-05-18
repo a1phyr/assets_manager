@@ -23,7 +23,11 @@ use std::{
     str::{self, FromStr},
 };
 
-pub use crate::error::{StringLoaderError, ParseLoaderError};
+mod errors;
+pub use errors::{StringLoaderError, ParseLoaderError};
+
+#[cfg(test)]
+mod tests;
 
 /// Specifies how an asset is loaded.
 ///
