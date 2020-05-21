@@ -1,7 +1,7 @@
 use std::{
     any::{Any, TypeId},
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fs,
     io,
     path::{Path, PathBuf},
@@ -17,6 +17,38 @@ use crate::{
 
 use crate::RandomState;
 
+
+struct Types<T>(Vec<(TypeId, T)>);
+
+impl<T> Types<T> {
+    #[inline]
+    const fn new() -> Self {
+        Types(Vec::new())
+    }
+
+    fn get(&self, type_id: TypeId) -> Option<&T> {
+        for (id, t) in &self.0 {
+            if *id == type_id {
+                return Some(t);
+            }
+        }
+        None
+    }
+
+    #[inline]
+    fn insert(&mut self, type_id: TypeId, t: T) {
+        if self.get(type_id).is_none() {
+            self.0.push((type_id, t));
+        }
+    }
+}
+
+impl Types<LoadFn> {
+    #[inline]
+    fn insert_with<A: Asset>(&mut self) {
+        self.insert(TypeId::of::<A>(), load::<A>);
+    }
+}
 
 fn borrowed(content: &io::Result<Vec<u8>>) -> io::Result<Cow<[u8]>> {
     match content {
@@ -35,8 +67,7 @@ trait AnyAsset: Any + Send + Sync {
 
 impl<A: Asset> AnyAsset for A {
     unsafe fn reload(self: Box<Self>, entry: &CacheEntry) {
-        let asset: A = *self;
-        entry.write(asset);
+        entry.write::<A>(*self);
     }
 }
 
@@ -56,21 +87,21 @@ fn load<A: Asset>(content: io::Result<Cow<[u8]>>, id: &str, path: &Path) -> Opti
 
 struct WatchedPath {
     id: String,
-    types: HashMap<TypeId, LoadFn, RandomState>,
+    types: Types<LoadFn>,
 }
 
 impl WatchedPath {
     fn new(id: String) -> Self {
         Self {
             id,
-            types: HashMap::with_hasher(RandomState::new()),
+            types: Types::new(),
         }
     }
 }
 
 pub struct WatchedPaths {
     paths: HashMap<PathBuf, WatchedPath, RandomState>,
-    added: HashSet<(PathBuf, TypeId), RandomState>,
+    added: Vec<(PathBuf, TypeId)>,
     cleared: bool,
 }
 
@@ -78,7 +109,7 @@ impl WatchedPaths {
     pub fn new() -> Self {
         Self {
             paths: HashMap::with_hasher(RandomState::new()),
-            added: HashSet::with_hasher(RandomState::new()),
+            added: Vec::new(),
             cleared: false,
         }
     }
@@ -86,20 +117,19 @@ impl WatchedPaths {
     pub fn add<A: Asset>(&mut self, path: PathBuf, id: String) {
         match self.paths.get_mut(&path) {
             None => {
-                let mut types = HashMap::with_hasher(RandomState::new());
-                types.insert(TypeId::of::<A>(), load::<A> as LoadFn);
+                let mut info = WatchedPath::new(id);
+                info.types.insert_with::<A>();
 
-                let info = WatchedPath { id, types };
                 self.paths.insert(path.clone(), info);
             },
             Some(infos) => {
                 debug_assert_eq!(infos.id, id);
 
-                infos.types.insert(TypeId::of::<A>(), load::<A>);
+                infos.types.insert_with::<A>();
             },
         }
 
-        self.added.insert((path, TypeId::of::<A>()));
+        self.added.push((path, TypeId::of::<A>()));
     }
 
     pub fn clear(&mut self) {
@@ -131,9 +161,9 @@ impl FileCache {
 
         let content = fs::read(&path);
 
-        for (&type_id, load) in &mut path_infos.types {
+        for (type_id, load) in &mut path_infos.types.0 {
             if let Some(asset) = load(borrowed(&content), &path_infos.id, &path) {
-                let key = Key::new_with(path_infos.id.clone().into(), type_id);
+                let key = Key::new_with(path_infos.id.clone().into(), *type_id);
                 self.changed.insert(key, asset);
 
             }
@@ -163,13 +193,13 @@ impl FileCache {
             self.paths.clear();
         }
 
-        for (path, id) in watched.added.drain() {
+        for (path, id) in watched.added.drain(..) {
             let infos = match watched.paths.get(&path) {
                 Some(infos) => infos,
                 None => continue,
             };
 
-            let load = match infos.types.get(&id) {
+            let load = match infos.types.get(id) {
                 Some(&load) => load,
                 None => continue,
             };
