@@ -21,12 +21,12 @@ pub(crate) fn has_extension(path: &Path, ext: &str) -> bool {
 
 
 struct StringList {
-    list: RwLock<Vec<String>>,
+    list: RwLock<Vec<Box<str>>>,
 }
 
-impl From<Vec<String>> for StringList {
+impl From<Vec<Box<str>>> for StringList {
     #[inline]
-    fn from(vec: Vec<String>) -> Self {
+    fn from(vec: Vec<Box<str>>) -> Self {
         Self {
             list: RwLock::new(vec),
         }
@@ -53,10 +53,10 @@ impl<'a> IntoIterator for &'a StringList {
 }
 
 struct StringIter<'a> {
-    current: *const String,
-    end: *const String,
+    current: *const Box<str>,
+    end: *const Box<str>,
 
-    _guard: RwLockReadGuard<'a, Vec<String>>,
+    _guard: RwLockReadGuard<'a, Vec<Box<str>>>,
 }
 
 impl<'a> Iterator for StringIter<'a> {
@@ -107,7 +107,7 @@ impl CachedDir {
                     this_id.push_str(name);
 
                     let _ = cache.load::<A>(&this_id);
-                    loaded.push(this_id);
+                    loaded.push(this_id.into());
                 }
             }
         }
@@ -119,7 +119,7 @@ impl CachedDir {
 
     #[cfg(feature = "hot-reloading")]
     #[inline]
-    pub fn add(&self, id: String) {
+    pub fn add(&self, id: Box<str>) {
         let mut list = self.assets.list.write();
         if !list.contains(&id) {
             list.push(id);

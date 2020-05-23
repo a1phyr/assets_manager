@@ -86,12 +86,12 @@ fn load<A: Asset>(content: io::Result<Cow<[u8]>>, id: &str, path: &Path) -> Opti
 
 
 struct WatchedPath<T> {
-    id: String,
+    id: Box<str>,
     types: Types<T>,
 }
 
 impl<T> WatchedPath<T> {
-    fn new(id: String) -> Self {
+    fn new(id: Box<str>) -> Self {
         Self {
             id,
             types: Types::new(),
@@ -117,7 +117,7 @@ impl WatchedPaths {
         }
     }
 
-    fn _add_file(&mut self, path: PathBuf, id: String, load: LoadFn, type_id: TypeId) {
+    fn _add_file(&mut self, path: PathBuf, id: Box<str>, load: LoadFn, type_id: TypeId) {
         let infos = match self.files.get_mut(&path) {
             None => {
                 let info = WatchedPath::new(id);
@@ -133,7 +133,7 @@ impl WatchedPaths {
         self.added.push((path, type_id, true));
     }
 
-    fn _add_dir(&mut self, path: PathBuf, id: String, load: LoadFn, type_id: TypeId, ext: &'static str) {
+    fn _add_dir(&mut self, path: PathBuf, id: Box<str>, load: LoadFn, type_id: TypeId, ext: &'static str) {
         let infos = match self.dirs.get_mut(&path) {
             None => {
                 let info = WatchedPath::new(id);
@@ -150,12 +150,12 @@ impl WatchedPaths {
     }
 
     #[inline]
-    pub fn add_file<A: Asset>(&mut self, path: PathBuf, id: String) {
+    pub fn add_file<A: Asset>(&mut self, path: PathBuf, id: Box<str>) {
         self._add_file(path, id, load::<A>, TypeId::of::<A>());
     }
 
     #[inline]
-    pub fn add_dir<A: Asset>(&mut self, path: PathBuf, id: String) {
+    pub fn add_dir<A: Asset>(&mut self, path: PathBuf, id: Box<str>) {
         self._add_dir(path, id, load::<A>, TypeId::of::<A>(), A::EXT);
     }
 
@@ -173,7 +173,7 @@ pub struct FileCache {
     dirs: HashMap<PathBuf, WatchedPath<(LoadFn, &'static str)>, RandomState>,
 
     changed_files: HashMap<Key, Box<dyn AnyAsset>, RandomState>,
-    changed_dirs: HashMap<Key, String, RandomState>
+    changed_dirs: HashMap<Key, Box<str>, RandomState>
 }
 
 impl FileCache {
@@ -210,7 +210,7 @@ impl FileCache {
         for &(type_id, (load, ext)) in &path_infos.types.0 {
             if has_extension(&path, ext) {
                 let key = Key::new_with(path_infos.id.clone().into(), type_id);
-                let id = path_infos.id.clone() + "." + file_stem;
+                let id = (path_infos.id.to_string() + "." + file_stem).into();
                 self.changed_dirs.insert(key, id);
 
                 let content = fs::read(&path).map(Into::into);
