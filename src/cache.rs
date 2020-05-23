@@ -170,7 +170,7 @@ pub struct AssetCache {
     path: PathBuf,
 
     pub(crate) assets: RwLock<HashMap<Key, CacheEntry, RandomState>>,
-    dirs: RwLock<HashMap<Key, CachedDir, RandomState>>,
+    pub(crate) dirs: RwLock<HashMap<Key, CachedDir, RandomState>>,
 
     #[cfg(feature = "hot-reloading")]
     reloader: Mutex<Option<HotReloader>>,
@@ -211,7 +211,7 @@ impl AssetCache {
         &self.path
     }
 
-    pub(crate) fn path_of(&self, id: &str, ext: &str) -> PathBuf {
+    fn path_of(&self, id: &str, ext: &str) -> PathBuf {
         let mut path = self.path.clone();
         path.extend(id.split('.'));
         path.set_extension(ext);
@@ -230,10 +230,7 @@ impl AssetCache {
         let asset = unsafe { entry.get_ref() };
 
         #[cfg(feature = "hot-reloading")]
-        {
-            let mut watched = self.watched.lock();
-            watched.add::<A>(path, id.clone());
-        }
+        self.watched.lock().add_file::<A>(path, id.clone());
 
         let key = Key::new::<A>(id.into());
         let mut cache = self.assets.write();
@@ -243,8 +240,12 @@ impl AssetCache {
     }
 
     fn add_dir<A: Asset>(&self, id: String) -> Result<DirReader<A>, io::Error> {
-        let dir = CachedDir::load::<A>(self, &id)?;
+        let path = self.path_of(&id, "");
+        let dir = CachedDir::load::<A>(self, &path, &id)?;
         let reader = unsafe { dir.read(self) };
+
+        #[cfg(feature = "hot-reloading")]
+        self.watched.lock().add_dir::<A>(path, id.clone());
 
         let key = Key::new::<A>(id.into());
         let mut dirs = self.dirs.write();

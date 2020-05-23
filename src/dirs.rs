@@ -11,7 +11,13 @@ use std::{
     fmt,
     fs,
     marker::PhantomData,
+    path::Path,
 };
+
+
+pub(crate) fn has_extension(path: &Path, ext: &str) -> bool {
+    path.extension().unwrap_or_else(|| "".as_ref()) == ext
+}
 
 
 struct StringList {
@@ -75,8 +81,7 @@ pub(crate) struct CachedDir {
 }
 
 impl CachedDir {
-    pub fn load<A: Asset>(cache: &AssetCache, id: &str) -> Result<Self, io::Error> {
-        let path = cache.path_of(id, "");
+    pub fn load<A: Asset>(cache: &AssetCache, path: &Path, id: &str) -> Result<Self, io::Error> {
         let entries = fs::read_dir(path)?;
 
         let mut loaded = Vec::new();
@@ -85,7 +90,7 @@ impl CachedDir {
             if let Ok(entry) = entry {
                 let path = entry.path();
 
-                if path.extension().unwrap_or_else(|| "".as_ref()) != A::EXT {
+                if !has_extension(&path, A::EXT) {
                     continue;
                 }
 
@@ -110,6 +115,15 @@ impl CachedDir {
         Ok(Self {
             assets: Box::new(loaded.into()),
         })
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    pub fn add(&self, id: String) {
+        let mut list = self.assets.list.write();
+        if !list.contains(&id) {
+            list.push(id);
+        }
     }
 
     #[inline]
