@@ -126,6 +126,16 @@ impl CachedDir {
         }
     }
 
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    pub fn remove(&self, id: &str) {
+        let mut list = self.assets.list.write();
+
+        if let Some(pos) = list.iter().position(|s| s.as_ref() == id) {
+            list.remove(pos);
+        }
+    }
+
     #[inline]
     pub unsafe fn read<'a, A>(&self, cache: &'a AssetCache) -> DirReader<'a, A> {
         DirReader {

@@ -172,8 +172,9 @@ pub struct FileCache {
     files: HashMap<PathBuf, WatchedPath<LoadFn>, RandomState>,
     dirs: HashMap<PathBuf, WatchedPath<(LoadFn, &'static str)>, RandomState>,
 
-    changed_files: HashMap<Key, Box<dyn AnyAsset>, RandomState>,
-    changed_dirs: HashMap<Key, Box<str>, RandomState>
+    changed: HashMap<Key, Box<dyn AnyAsset>, RandomState>,
+    added: Vec<(Key, Box<str>)>,
+    removed: Vec<(Key, Box<str>)>,
 }
 
 impl FileCache {
@@ -181,8 +182,10 @@ impl FileCache {
         Self {
             files: HashMap::with_hasher(RandomState::new()),
             dirs: HashMap::with_hasher(RandomState::new()),
-            changed_files: HashMap::with_hasher(RandomState::new()),
-            changed_dirs: HashMap::with_hasher(RandomState::new()),
+
+            changed: HashMap::with_hasher(RandomState::new()),
+            added: Vec::new(),
+            removed: Vec::new(),
         }
     }
 
@@ -192,8 +195,8 @@ impl FileCache {
 
             for (type_id, load) in &path_infos.types.0 {
                 if let Some(asset) = load(borrowed(&content), &path_infos.id, &path) {
-                    let key = Key::new_with(path_infos.id.clone().into(), *type_id);
-                    self.changed_files.insert(key, asset);
+                    let key = Key::new_with(path_infos.id.clone(), *type_id);
+                    self.changed.insert(key, asset);
                 }
             }
         }
@@ -209,15 +212,32 @@ impl FileCache {
 
         for &(type_id, (load, ext)) in &path_infos.types.0 {
             if has_extension(&path, ext) {
-                let key = Key::new_with(path_infos.id.clone().into(), type_id);
+                let key = Key::new_with(path_infos.id.clone(), type_id);
                 let id = (path_infos.id.to_string() + "." + file_stem).into();
-                self.changed_dirs.insert(key, id);
+                self.added.push((key, id));
 
                 let content = fs::read(&path).map(Into::into);
                 if let Some(asset) = load(content, &path_infos.id, &path) {
-                    let key = Key::new_with(path_infos.id.clone().into(), type_id);
-                    self.changed_files.insert(key, asset);
+                    let key = Key::new_with(path_infos.id.clone(), type_id);
+                    self.changed.insert(key, asset);
                 }
+            }
+        }
+
+        Some(())
+    }
+
+    pub fn remove(&mut self, path: PathBuf) -> Option<()> {
+        let parent = path.parent()?;
+        let path_infos = self.dirs.get(parent)?;
+
+        let file_stem = path.file_stem()?.to_str()?;
+
+        for &(type_id, (_, ext)) in &path_infos.types.0 {
+            if has_extension(&path, ext) {
+                let key = Key::new_with(path_infos.id.clone(), type_id);
+                let id = (path_infos.id.to_string() + "." + file_stem).into();
+                self.removed.push((key, id));
             }
         }
 
@@ -227,7 +247,7 @@ impl FileCache {
     pub fn update(&mut self, cache: &AssetCache) {
         let mut assets = cache.assets.write();
 
-        for (key, value) in self.changed_files.drain() {
+        for (key, value) in self.changed.drain() {
             log::info!("Reloading {:?}", key.id());
 
             use std::collections::hash_map::Entry::*;
@@ -241,7 +261,14 @@ impl FileCache {
 
         let dirs = cache.dirs.read();
 
-        for (key, id) in self.changed_dirs.drain() {
+        for (key, id) in self.removed.drain(..) {
+            if let Some(dir) = dirs.get(&key) {
+                dir.remove(&id);
+                log::info!("Removing {:?}", id);
+            }
+        }
+
+        for (key, id) in self.added.drain(..) {
             if let Some(dir) = dirs.get(&key) {
                 dir.add(id);
             }

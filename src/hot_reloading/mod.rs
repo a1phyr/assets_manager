@@ -86,9 +86,15 @@ impl HotReloader {
                     match event {
                         DebouncedEvent::Write(path)
                         | DebouncedEvent::Chmod(path)
-                        | DebouncedEvent::Create(path)
-                        | DebouncedEvent::Rename(_, path) => {
+                        | DebouncedEvent::Create(path) => {
                             cache.load(path);
+                        },
+                        DebouncedEvent::Remove(path) => {
+                            cache.remove(path);
+                        },
+                        DebouncedEvent::Rename(src, dst) => {
+                            cache.load(dst);
+                            cache.remove(src);
                         },
                         _ => (),
                     }
