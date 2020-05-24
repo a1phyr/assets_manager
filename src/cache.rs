@@ -170,7 +170,7 @@ pub struct AssetCache {
     path: PathBuf,
 
     pub(crate) assets: RwLock<HashMap<Key, CacheEntry, RandomState>>,
-    dirs: RwLock<HashMap<Key, CachedDir, RandomState>>,
+    pub(crate) dirs: RwLock<HashMap<Key, CachedDir, RandomState>>,
 
     #[cfg(feature = "hot-reloading")]
     reloader: Mutex<Option<HotReloader>>,
@@ -211,7 +211,7 @@ impl AssetCache {
         &self.path
     }
 
-    pub(crate) fn path_of(&self, id: &str, ext: &str) -> PathBuf {
+    fn path_of(&self, id: &str, ext: &str) -> PathBuf {
         let mut path = self.path.clone();
         path.extend(id.split('.'));
         path.set_extension(ext);
@@ -219,7 +219,7 @@ impl AssetCache {
     }
 
     /// Adds an asset to the cache
-    pub(crate) fn add_asset<A: Asset>(&self, id: String) -> Result<AssetRef<A>, AssetErr<A>> {
+    pub(crate) fn add_asset<A: Asset>(&self, id: Box<str>) -> Result<AssetRef<A>, AssetErr<A>> {
         let path = self.path_of(&id, A::EXT);
         let asset: A = self.load_from_fs(&path)?;
 
@@ -230,10 +230,7 @@ impl AssetCache {
         let asset = unsafe { entry.get_ref() };
 
         #[cfg(feature = "hot-reloading")]
-        {
-            let mut watched = self.watched.lock();
-            watched.add::<A>(path, id.clone());
-        }
+        self.watched.lock().add_file::<A>(path, id.clone());
 
         let key = Key::new::<A>(id.into());
         let mut cache = self.assets.write();
@@ -242,9 +239,13 @@ impl AssetCache {
         Ok(asset)
     }
 
-    fn add_dir<A: Asset>(&self, id: String) -> Result<DirReader<A>, io::Error> {
-        let dir = CachedDir::load::<A>(self, &id)?;
+    fn add_dir<A: Asset>(&self, id: Box<str>) -> Result<DirReader<A>, io::Error> {
+        let path = self.path_of(&id, "");
+        let dir = CachedDir::load::<A>(self, &path, &id)?;
         let reader = unsafe { dir.read(self) };
+
+        #[cfg(feature = "hot-reloading")]
+        self.watched.lock().add_dir::<A>(path, id.clone());
 
         let key = Key::new::<A>(id.into());
         let mut dirs = self.dirs.write();
@@ -265,7 +266,7 @@ impl AssetCache {
     pub fn load<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetErr<A>> {
         match self.load_cached(id) {
             Some(asset) => Ok(asset),
-            None => self.add_asset(id.to_string()),
+            None => self.add_asset(id.into()),
         }
     }
 
@@ -319,7 +320,7 @@ impl AssetCache {
         }
         drop(cache);
 
-        self.add_asset(id.to_string())
+        self.add_asset(id.into())
     }
 
     fn load_from_fs<A: Asset>(&self, path: &Path) -> Result<A, AssetErr<A>> {
@@ -345,7 +346,7 @@ impl AssetCache {
         }
         drop(dirs);
 
-        self.add_dir(id.to_string())
+        self.add_dir(id.into())
     }
 
     /// Remove an asset from the cache.

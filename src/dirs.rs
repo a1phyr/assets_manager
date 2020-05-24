@@ -11,16 +11,22 @@ use std::{
     fmt,
     fs,
     marker::PhantomData,
+    path::Path,
 };
 
 
-struct StringList {
-    list: RwLock<Vec<String>>,
+pub(crate) fn has_extension(path: &Path, ext: &str) -> bool {
+    path.extension().unwrap_or_else(|| "".as_ref()) == ext
 }
 
-impl From<Vec<String>> for StringList {
+
+struct StringList {
+    list: RwLock<Vec<Box<str>>>,
+}
+
+impl From<Vec<Box<str>>> for StringList {
     #[inline]
-    fn from(vec: Vec<String>) -> Self {
+    fn from(vec: Vec<Box<str>>) -> Self {
         Self {
             list: RwLock::new(vec),
         }
@@ -47,10 +53,10 @@ impl<'a> IntoIterator for &'a StringList {
 }
 
 struct StringIter<'a> {
-    current: *const String,
-    end: *const String,
+    current: *const Box<str>,
+    end: *const Box<str>,
 
-    _guard: RwLockReadGuard<'a, Vec<String>>,
+    _guard: RwLockReadGuard<'a, Vec<Box<str>>>,
 }
 
 impl<'a> Iterator for StringIter<'a> {
@@ -75,8 +81,7 @@ pub(crate) struct CachedDir {
 }
 
 impl CachedDir {
-    pub fn load<A: Asset>(cache: &AssetCache, id: &str) -> Result<Self, io::Error> {
-        let path = cache.path_of(id, "");
+    pub fn load<A: Asset>(cache: &AssetCache, path: &Path, id: &str) -> Result<Self, io::Error> {
         let entries = fs::read_dir(path)?;
 
         let mut loaded = Vec::new();
@@ -85,7 +90,7 @@ impl CachedDir {
             if let Ok(entry) = entry {
                 let path = entry.path();
 
-                if path.extension().unwrap_or_else(|| "".as_ref()) != A::EXT {
+                if !has_extension(&path, A::EXT) {
                     continue;
                 }
 
@@ -102,7 +107,7 @@ impl CachedDir {
                     this_id.push_str(name);
 
                     let _ = cache.load::<A>(&this_id);
-                    loaded.push(this_id);
+                    loaded.push(this_id.into());
                 }
             }
         }
@@ -110,6 +115,25 @@ impl CachedDir {
         Ok(Self {
             assets: Box::new(loaded.into()),
         })
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    pub fn add(&self, id: Box<str>) {
+        let mut list = self.assets.list.write();
+        if !list.contains(&id) {
+            list.push(id);
+        }
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    pub fn remove(&self, id: &str) {
+        let mut list = self.assets.list.write();
+
+        if let Some(pos) = list.iter().position(|s| s.as_ref() == id) {
+            list.remove(pos);
+        }
     }
 
     #[inline]

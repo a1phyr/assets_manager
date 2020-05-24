@@ -11,6 +11,7 @@ use crate::{
     Asset,
     AssetCache,
     cache::Key,
+    dirs::has_extension,
     loader::Loader,
     lock::CacheEntry,
 };
@@ -43,12 +44,6 @@ impl<T> Types<T> {
     }
 }
 
-impl Types<LoadFn> {
-    #[inline]
-    fn insert_with<A: Asset>(&mut self) {
-        self.insert(TypeId::of::<A>(), load::<A>);
-    }
-}
 
 fn borrowed(content: &io::Result<Vec<u8>>) -> io::Result<Cow<[u8]>> {
     match content {
@@ -63,11 +58,16 @@ fn borrowed(content: &io::Result<Vec<u8>>) -> io::Result<Cow<[u8]>> {
 
 trait AnyAsset: Any + Send + Sync {
     unsafe fn reload(self: Box<Self>, entry: &CacheEntry);
+    fn create(self: Box<Self>) -> CacheEntry;
 }
 
 impl<A: Asset> AnyAsset for A {
     unsafe fn reload(self: Box<Self>, entry: &CacheEntry) {
         entry.write::<A>(*self);
+    }
+
+    fn create(self: Box<Self>) -> CacheEntry {
+        CacheEntry::new::<A>(*self)
     }
 }
 
@@ -85,13 +85,13 @@ fn load<A: Asset>(content: io::Result<Cow<[u8]>>, id: &str, path: &Path) -> Opti
 }
 
 
-struct WatchedPath {
-    id: String,
-    types: Types<LoadFn>,
+struct WatchedPath<T> {
+    id: Box<str>,
+    types: Types<T>,
 }
 
-impl WatchedPath {
-    fn new(id: String) -> Self {
+impl<T> WatchedPath<T> {
+    fn new(id: Box<str>) -> Self {
         Self {
             id,
             types: Types::new(),
@@ -100,40 +100,68 @@ impl WatchedPath {
 }
 
 pub struct WatchedPaths {
-    paths: HashMap<PathBuf, WatchedPath, RandomState>,
-    added: Vec<(PathBuf, TypeId)>,
+    files: HashMap<PathBuf, WatchedPath<LoadFn>, RandomState>,
+    dirs: HashMap<PathBuf, WatchedPath<(LoadFn, &'static str)>, RandomState>,
+
+    added: Vec<(PathBuf, TypeId, bool)>,
     cleared: bool,
 }
 
 impl WatchedPaths {
     pub fn new() -> Self {
         Self {
-            paths: HashMap::with_hasher(RandomState::new()),
+            files: HashMap::with_hasher(RandomState::new()),
+            dirs: HashMap::with_hasher(RandomState::new()),
             added: Vec::new(),
             cleared: false,
         }
     }
 
-    pub fn add<A: Asset>(&mut self, path: PathBuf, id: String) {
-        match self.paths.get_mut(&path) {
+    fn _add_file(&mut self, path: PathBuf, id: Box<str>, load: LoadFn, type_id: TypeId) {
+        let infos = match self.files.get_mut(&path) {
             None => {
-                let mut info = WatchedPath::new(id);
-                info.types.insert_with::<A>();
-
-                self.paths.insert(path.clone(), info);
+                let info = WatchedPath::new(id);
+                self.files.entry(path.clone()).or_insert(info)
             },
             Some(infos) => {
                 debug_assert_eq!(infos.id, id);
-
-                infos.types.insert_with::<A>();
+                infos
             },
-        }
+        };
 
-        self.added.push((path, TypeId::of::<A>()));
+        infos.types.insert(type_id, load);
+        self.added.push((path, type_id, true));
+    }
+
+    fn _add_dir(&mut self, path: PathBuf, id: Box<str>, load: LoadFn, type_id: TypeId, ext: &'static str) {
+        let infos = match self.dirs.get_mut(&path) {
+            None => {
+                let info = WatchedPath::new(id);
+                self.dirs.entry(path.clone()).or_insert(info)
+            },
+            Some(infos) => {
+                debug_assert_eq!(infos.id, id);
+                infos
+            },
+        };
+
+        infos.types.insert(type_id, (load, ext));
+        self.added.push((path, type_id, false));
+    }
+
+    #[inline]
+    pub fn add_file<A: Asset>(&mut self, path: PathBuf, id: Box<str>) {
+        self._add_file(path, id, load::<A>, TypeId::of::<A>());
+    }
+
+    #[inline]
+    pub fn add_dir<A: Asset>(&mut self, path: PathBuf, id: Box<str>) {
+        self._add_dir(path, id, load::<A>, TypeId::of::<A>(), A::EXT);
     }
 
     pub fn clear(&mut self) {
-        self.paths.clear();
+        self.files.clear();
+        self.dirs.clear();
         self.added.clear();
         self.cleared = true;
     }
@@ -141,48 +169,108 @@ impl WatchedPaths {
 
 
 pub struct FileCache {
-    paths: HashMap<PathBuf, WatchedPath, RandomState>,
+    files: HashMap<PathBuf, WatchedPath<LoadFn>, RandomState>,
+    dirs: HashMap<PathBuf, WatchedPath<(LoadFn, &'static str)>, RandomState>,
+
     changed: HashMap<Key, Box<dyn AnyAsset>, RandomState>,
+    added: Vec<(Key, Box<str>)>,
+    removed: Vec<(Key, Box<str>)>,
 }
 
 impl FileCache {
     pub fn new() -> Self {
         Self {
-            paths: HashMap::with_hasher(RandomState::new()),
+            files: HashMap::with_hasher(RandomState::new()),
+            dirs: HashMap::with_hasher(RandomState::new()),
+
             changed: HashMap::with_hasher(RandomState::new()),
+            added: Vec::new(),
+            removed: Vec::new(),
         }
     }
 
     pub fn load(&mut self, path: PathBuf) {
-        let path_infos = match self.paths.get_mut(&path) {
-            Some(i) => i,
-            None => return,
-        };
+        if let Some(path_infos) = self.files.get(&path) {
+            let content = fs::read(&path);
 
-        let content = fs::read(&path);
-
-        for (type_id, load) in &mut path_infos.types.0 {
-            if let Some(asset) = load(borrowed(&content), &path_infos.id, &path) {
-                let key = Key::new_with(path_infos.id.clone().into(), *type_id);
-                self.changed.insert(key, asset);
-
+            for (type_id, load) in &path_infos.types.0 {
+                if let Some(asset) = load(borrowed(&content), &path_infos.id, &path) {
+                    let key = Key::new_with(path_infos.id.clone(), *type_id);
+                    self.changed.insert(key, asset);
+                }
             }
         }
+
+        self.load_dir(path);
+    }
+
+    fn load_dir(&mut self, path: PathBuf) -> Option<()> {
+        let parent = path.parent()?;
+        let path_infos = self.dirs.get(parent)?;
+
+        let file_stem = path.file_stem()?.to_str()?;
+
+        for &(type_id, (load, ext)) in &path_infos.types.0 {
+            if has_extension(&path, ext) {
+                let key = Key::new_with(path_infos.id.clone(), type_id);
+                let id = (path_infos.id.to_string() + "." + file_stem).into();
+                self.added.push((key, id));
+
+                let content = fs::read(&path).map(Into::into);
+                if let Some(asset) = load(content, &path_infos.id, &path) {
+                    let key = Key::new_with(path_infos.id.clone(), type_id);
+                    self.changed.insert(key, asset);
+                }
+            }
+        }
+
+        Some(())
+    }
+
+    pub fn remove(&mut self, path: PathBuf) -> Option<()> {
+        let parent = path.parent()?;
+        let path_infos = self.dirs.get(parent)?;
+
+        let file_stem = path.file_stem()?.to_str()?;
+
+        for &(type_id, (_, ext)) in &path_infos.types.0 {
+            if has_extension(&path, ext) {
+                let key = Key::new_with(path_infos.id.clone(), type_id);
+                let id = (path_infos.id.to_string() + "." + file_stem).into();
+                self.removed.push((key, id));
+            }
+        }
+
+        Some(())
     }
 
     pub fn update(&mut self, cache: &AssetCache) {
-        let assets = cache.assets.read();
+        let mut assets = cache.assets.write();
 
         for (key, value) in self.changed.drain() {
-            let mut changed = false;
+            log::info!("Reloading {:?}", key.id());
 
-            if let Some(entry) = assets.get(&key) {
-                unsafe { value.reload(entry) };
-                changed = true;
+            use std::collections::hash_map::Entry::*;
+            match assets.entry(key) {
+                Occupied(entry) => unsafe { value.reload(entry.get()) },
+                Vacant(entry) =>  { entry.insert(value.create()); },
             }
 
-            if changed {
-                log::info!("Reloading {:?}", key.id());
+        }
+        drop(assets);
+
+        let dirs = cache.dirs.read();
+
+        for (key, id) in self.removed.drain(..) {
+            if let Some(dir) = dirs.get(&key) {
+                dir.remove(&id);
+                log::info!("Removing {:?}", id);
+            }
+        }
+
+        for (key, id) in self.added.drain(..) {
+            if let Some(dir) = dirs.get(&key) {
+                dir.add(id);
             }
         }
     }
@@ -190,25 +278,38 @@ impl FileCache {
     pub fn get_watched(&mut self, watched: &mut WatchedPaths) {
         if watched.cleared {
             watched.cleared = false;
-            self.paths.clear();
+            self.files.clear();
+            self.dirs.clear();
         }
 
-        for (path, id) in watched.added.drain(..) {
-            let infos = match watched.paths.get(&path) {
-                Some(infos) => infos,
-                None => continue,
-            };
+        for (path, id, is_file) in watched.added.drain(..) {
+            if is_file {
+                let infos = match watched.files.get(&path) {
+                    Some(infos) => infos,
+                    None => continue,
+                };
 
-            let load = match infos.types.get(id) {
-                Some(&load) => load,
-                None => continue,
-            };
+                if let Some(&load) = infos.types.get(id) {
+                    let watched = self.files.entry(path).or_insert_with(|| {
+                        WatchedPath::new(infos.id.clone())
+                    });
 
-            let watched = self.paths.entry(path).or_insert_with(|| {
-                WatchedPath::new(infos.id.clone())
-            });
+                    watched.types.insert(id, load);
+                }
+            } else {
+                let infos = match watched.dirs.get(&path) {
+                    Some(infos) => infos,
+                    None => continue,
+                };
 
-            watched.types.insert(id, load);
+                if let Some(&load) = infos.types.get(id) {
+                    let watched = self.dirs.entry(path).or_insert_with(|| {
+                        WatchedPath::new(infos.id.clone())
+                    });
+
+                    watched.types.insert(id, load);
+                }
+            }
         }
     }
 }
