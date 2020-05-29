@@ -7,6 +7,7 @@ use crate::{
 };
 
 use std::{
+    iter::FusedIterator,
     io,
     fmt,
     fs,
@@ -74,7 +75,23 @@ impl<'a> Iterator for StringIter<'a> {
             }
         }
     }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.len();
+        (len, Some(len))
+    }
 }
+
+impl ExactSizeIterator for StringIter<'_> {
+    #[inline]
+    fn len(&self) -> usize {
+        let diff = (self.end as usize) - (self.current as usize);
+        diff / std::mem::size_of::<Box<str>>()
+    }
+}
+
+impl FusedIterator for StringIter<'_> {}
 
 pub(crate) struct CachedDir {
     assets: Box<StringList>,
@@ -261,7 +278,14 @@ where
             }
         }
     }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, self.iter.size_hint().1)
+    }
 }
+
+impl<A> FusedIterator for ReadDir<'_, A> where A: Asset {}
 
 /// An iterator over all assets in a directory.
 ///
@@ -288,7 +312,24 @@ where
         let id = self.iter.next()?;
         Some((id, self.cache.load(id)))
     }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
 }
+
+impl<A> ExactSizeIterator for ReadAllDir<'_, A>
+where
+    A: Asset,
+{
+    #[inline]
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
+}
+
+impl<A> FusedIterator for ReadAllDir<'_, A> where A: Asset {}
 
 impl<A> fmt::Debug for DirReader<'_, A>
 where
