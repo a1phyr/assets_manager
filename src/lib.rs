@@ -55,7 +55,7 @@
 //! // Specify how you want the structure to be loaded
 //! impl Asset for Point {
 //!     // The extension of the files to look into
-//!     const EXT: &'static str = "ron";
+//!     const EXTENSION: &'static str = "ron";
 //!
 //!     // The serialization format
 //!     type Loader = loader::RonLoader;
@@ -123,10 +123,25 @@ use std::collections::hash_map::RandomState;
 ///
 /// `Asset`s can loaded and retreived by an [`AssetCache`].
 ///
-/// ## Example
+/// # Extension
 ///
-/// Suppose you make a physics simulutation, and you positions and speeds in
-/// a Bincode-encoded files, with extension ".data"
+/// You can provide several extensions that will be used to search and load
+/// assets. When loaded, each extension is tried in order until a file is
+/// correctly loaded or no extension remain. The empty string `""` means a file
+/// without extension. You cannot use character `.`.
+///
+/// The `EXTENSION` field is a convenient shortcut if your asset uses only one
+/// extension. If you set a value for `EXTENSIONS` too, this field is ignored.
+///
+/// If neither `EXTENSION` nor `EXTENSIONS` is set, the default is no extension.
+///
+/// If you use hot-reloading, the asset will be reloaded each time one of the
+/// file with the given extension is touched.
+///
+/// # Example
+///
+/// Suppose you make a physics simulutation, and you store positions and speeds
+/// in a Bincode-encoded files, with extension ".data".
 ///
 /// ```no_run
 /// # cfg_if::cfg_if! { if #[cfg(feature = "bincode")] {
@@ -147,19 +162,26 @@ use std::collections::hash_map::RandomState;
 /// }
 ///
 /// impl Asset for World {
-///     const EXT: &'static str = "data";
+///     const EXTENSION: &'static str = "data";
 ///     type Loader = loader::BincodeLoader;
 /// }
 /// # }}
 /// ```
 /// [`AssetCache`]: struct.AssetCache.html
 pub trait Asset: Sized + Send + Sync + 'static {
-    /// The extension used by the asset files from the given asset type.
+    /// Use this field if your asset only uses one extension.
     ///
-    /// It must not contain the `.` caracter.
+    /// It is ignored if your set `EXTENSIONS` too.
+    const EXTENSION: &'static str = "";
+
+    /// This field enables you to specify multiple extension for an asset.
     ///
-    /// Use `""` for no extension.
-    const EXT: &'static str;
+    /// You must always provide at least one extension, ie this array cannot be
+    /// empty.
+    const EXTENSIONS: &'static [&'static str] = &[Self::EXTENSION];
+
+    #[doc(hidden)]
+    const _AT_LEAST_ONE_EXTENSION_REQUIRED: &'static str = Self::EXTENSIONS[0];
 
     /// Specifies a way to to convert raw bytes into the asset.
     ///

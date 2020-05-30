@@ -45,7 +45,7 @@ struct Point {
 // Specify how you want the structure to be loaded
 impl Asset for Point {
     // The extension of the files to look into
-    const EXT: &'static str = "ron";
+    const EXTENSION: &'static str = "ron";
 
     // The serialization format
     type Loader = loader::RonLoader;

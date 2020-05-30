@@ -54,7 +54,7 @@ mod tests;
 /// }
 ///
 /// impl Asset for Point {
-///     const EXT: &'static str = "ron";
+///     const EXTENSION: &'static str = "ron";
 ///
 ///     // Specify here how to convert raw data
 ///     type Loader = loader::RonLoader;
@@ -131,7 +131,7 @@ pub trait Loader<T> {
 /// }
 ///
 /// impl Asset for Point {
-///     const EXT: &'static str = "ron";
+///     const EXTENSION: &'static str = "ron";
 ///     type Loader = LoadOrDefault<RonLoader>;
 /// }
 /// # }}
@@ -170,7 +170,7 @@ where
 /// }
 ///
 /// impl Asset for Ip {
-///     const EXT: &'static str = "ip";
+///     const EXTENSION: &'static str = "ip";
 ///     type Loader = LoadFrom<IpAddr, ParseLoader>;
 /// }
 /// ```

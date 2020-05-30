@@ -29,7 +29,7 @@ impl From<i32> for X {
 }
 
 impl Asset for X {
-    const EXT: &'static str = "x";
+    const EXTENSION: &'static str = "x";
 
     // An asset of type X is loaded by parsing the file as an i32
     // X: From<i32> is needed for this

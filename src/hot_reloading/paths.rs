@@ -84,6 +84,7 @@ fn load<A: Asset>(content: io::Result<Cow<[u8]>>, id: &str, path: &Path) -> Opti
     }
 }
 
+type Ext = &'static [&'static str];
 
 struct WatchedPath<T> {
     id: Box<str>,
@@ -101,7 +102,7 @@ impl<T> WatchedPath<T> {
 
 pub struct WatchedPaths {
     files: HashMap<PathBuf, WatchedPath<LoadFn>, RandomState>,
-    dirs: HashMap<PathBuf, WatchedPath<(LoadFn, &'static str)>, RandomState>,
+    dirs: HashMap<PathBuf, WatchedPath<(LoadFn, Ext)>, RandomState>,
 
     added: Vec<(PathBuf, TypeId, bool)>,
     cleared: bool,
@@ -133,7 +134,7 @@ impl WatchedPaths {
         self.added.push((path, type_id, true));
     }
 
-    fn _add_dir(&mut self, path: PathBuf, id: Box<str>, load: LoadFn, type_id: TypeId, ext: &'static str) {
+    fn _add_dir(&mut self, path: PathBuf, id: Box<str>, load: LoadFn, type_id: TypeId, ext: Ext) {
         let infos = match self.dirs.get_mut(&path) {
             None => {
                 let info = WatchedPath::new(id);
@@ -156,7 +157,7 @@ impl WatchedPaths {
 
     #[inline]
     pub fn add_dir<A: Asset>(&mut self, path: PathBuf, id: Box<str>) {
-        self._add_dir(path, id, load::<A>, TypeId::of::<A>(), A::EXT);
+        self._add_dir(path, id, load::<A>, TypeId::of::<A>(), A::EXTENSIONS);
     }
 
     pub fn clear(&mut self) {
@@ -170,7 +171,7 @@ impl WatchedPaths {
 
 pub struct FileCache {
     files: HashMap<PathBuf, WatchedPath<LoadFn>, RandomState>,
-    dirs: HashMap<PathBuf, WatchedPath<(LoadFn, &'static str)>, RandomState>,
+    dirs: HashMap<PathBuf, WatchedPath<(LoadFn, Ext)>, RandomState>,
 
     changed: HashMap<Key, Box<dyn AnyAsset>, RandomState>,
     added: Vec<(Key, Box<str>)>,

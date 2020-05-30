@@ -16,8 +16,9 @@ use std::{
 };
 
 
-pub(crate) fn has_extension(path: &Path, ext: &str) -> bool {
-    path.extension().unwrap_or_else(|| "".as_ref()) == ext
+pub(crate) fn has_extension(path: &Path, ext: &[&str]) -> bool {
+    let file_ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    ext.contains(&file_ext)
 }
 
 
@@ -107,7 +108,7 @@ impl CachedDir {
             if let Ok(entry) = entry {
                 let path = entry.path();
 
-                if !has_extension(&path, A::EXT) {
+                if !has_extension(&path, A::EXTENSIONS) {
                     continue;
                 }
 

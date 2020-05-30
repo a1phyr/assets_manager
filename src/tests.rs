@@ -11,7 +11,7 @@ impl From<i32> for X {
 
 impl Asset for X {
     type Loader = loader::LoadFrom<i32, loader::ParseLoader>;
-    const EXT: &'static str = "x";
+    const EXTENSION: &'static str = "x";
 }
 
 

@@ -43,7 +43,7 @@ impl Image {
 
 impl Asset for Image {
     // The extension used by our type
-    const EXT: &'static str = "img";
+    const EXTENSION: &'static str = "img";
 
     // The way we load the image
     type Loader = loader::BincodeLoader;
@@ -57,6 +57,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Load an asset with type `Image`
     // The result is a lock on the image
     // This is necessary because we may want to reload it from disk
+
     let img_lock = cache.load::<Image>("example.demo")?;
 
     // Lock the image for reading

@@ -136,7 +136,7 @@ impl fmt::Debug for AccessKey<'_> {
 /// }
 ///
 /// impl Asset for Point {
-///     const EXT: &'static str = "ron";
+///     const EXTENSION: &'static str = "ron";
 ///     type Loader = loader::RonLoader;
 /// }
 ///
@@ -211,17 +211,24 @@ impl AssetCache {
         &self.path
     }
 
-    fn path_of(&self, id: &str, ext: &str) -> PathBuf {
+    fn path_of(&self, id: &str) -> PathBuf {
         let mut path = self.path.clone();
         path.extend(id.split('.'));
-        path.set_extension(ext);
         path
     }
 
     /// Adds an asset to the cache
     pub(crate) fn add_asset<A: Asset>(&self, id: Box<str>) -> Result<AssetRef<A>, AssetErr<A>> {
-        let path = self.path_of(&id, A::EXT);
-        let asset: A = self.load_from_fs(&path)?;
+        let path = self.path_of(&id);
+
+        #[cfg(feature = "hot-reloading")]
+        for ext in A::EXTENSIONS {
+            let mut path = path.clone();
+            path.set_extension(ext);
+            self.watched.lock().add_file::<A>(path, id.clone());
+        }
+
+        let asset: A = load_from_fs(path)?;
 
         let entry = CacheEntry::new(asset);
         // Safety:
@@ -229,10 +236,7 @@ impl AssetCache {
         // The cache entry is garantied to live long enough
         let asset = unsafe { entry.get_ref() };
 
-        #[cfg(feature = "hot-reloading")]
-        self.watched.lock().add_file::<A>(path, id.clone());
-
-        let key = Key::new::<A>(id.into());
+        let key = Key::new::<A>(id);
         let mut cache = self.assets.write();
         cache.insert(key, entry);
 
@@ -240,14 +244,14 @@ impl AssetCache {
     }
 
     fn add_dir<A: Asset>(&self, id: Box<str>) -> Result<DirReader<A>, io::Error> {
-        let path = self.path_of(&id, "");
+        let path = self.path_of(&id);
         let dir = CachedDir::load::<A>(self, &path, &id)?;
         let reader = unsafe { dir.read(self) };
 
         #[cfg(feature = "hot-reloading")]
         self.watched.lock().add_dir::<A>(path, id.clone());
 
-        let key = Key::new::<A>(id.into());
+        let key = Key::new::<A>(id);
         let mut dirs = self.dirs.write();
         dirs.insert(key, dir);
 
@@ -314,18 +318,13 @@ impl AssetCache {
     pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetErr<A>> {
         let cache = self.assets.read();
         if let Some(cached) = cache.get(&AccessKey::new::<A>(id)) {
-            let path = self.path_of(id, A::EXT);
-            let asset = self.load_from_fs(&path)?;
+            let path = self.path_of(id);
+            let asset = load_from_fs(path)?;
             return unsafe { Ok(cached.write(asset)) };
         }
         drop(cache);
 
         self.add_asset(id.into())
-    }
-
-    fn load_from_fs<A: Asset>(&self, path: &Path) -> Result<A, AssetErr<A>> {
-        let content = fs::read(&path).map(Into::into);
-        A::Loader::load(content)
     }
 
     /// Load all assets of a given type in a directory.
@@ -436,4 +435,24 @@ impl fmt::Debug for AssetCache {
             .field("assets", &self.assets.read())
             .finish()
     }
+}
+
+fn load_from_fs<A: Asset>(mut path: PathBuf) -> Result<A, AssetErr<A>> {
+    // Compile-time assert that the asset type has at least one extension
+    let _ = <A as Asset>::_AT_LEAST_ONE_EXTENSION_REQUIRED;
+
+    let mut err = None;
+
+    for ext in A::EXTENSIONS {
+        path.set_extension(ext);
+        let content = fs::read(&path).map(Into::into);
+
+        match A::Loader::load(content) {
+            Err(e) => err = Some(e),
+            asset => return asset,
+        }
+    }
+
+    // The for loop is taken at least once, so unwrap never panics
+    Err(err.unwrap())
 }
