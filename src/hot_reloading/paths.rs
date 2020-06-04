@@ -197,18 +197,21 @@ impl FileCache {
     }
 
     pub fn load(&mut self, path: PathBuf) {
-        if let Some(path_infos) = self.files.get(&path) {
-            let content = fs::read(&path);
+        match self.files.get(&path) {
+            Some(path_infos) => {
+                let content = fs::read(&path);
 
-            for (type_id, load) in &path_infos.types.0 {
-                if let Some(asset) = load(borrowed(&content), &path_infos.id, &path) {
-                    let key = Key::new_with(path_infos.id.clone(), *type_id);
-                    self.changed.insert(key, asset);
+                for (type_id, load) in &path_infos.types.0 {
+                    if let Some(asset) = load(borrowed(&content), &path_infos.id, &path) {
+                        let key = Key::new_with(path_infos.id.clone(), *type_id);
+                        self.changed.insert(key, asset);
+                    }
                 }
             }
+            None => {
+                self.load_dir(path);
+            },
         }
-
-        self.load_dir(path);
     }
 
     fn load_dir(&mut self, path: PathBuf) -> Option<()> {
@@ -271,12 +274,13 @@ impl FileCache {
         for (key, id) in self.removed.drain(..) {
             if let Some(dir) = dirs.get(&key) {
                 dir.remove(&id);
-                log::info!("Removing {:?}", id);
+                log::info!("Removing {:?} from {:?}", id, key.id());
             }
         }
 
         for (key, id) in self.added.drain(..) {
             if let Some(dir) = dirs.get(&key) {
+                log::info!("Adding {:?} to {:?}", id, key.id());
                 dir.add(id);
             }
         }
