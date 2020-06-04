@@ -74,7 +74,7 @@ mod tests;
 /// ## Example
 ///
 /// ```
-/// use assets_manager::loader::Loader;
+/// use assets_manager::{Asset, loader::Loader};
 /// use std::{borrow::Cow, error::Error, io, str};
 ///
 /// # #[derive(PartialEq, Eq, Debug)]
@@ -96,6 +96,11 @@ mod tests;
 ///             _ => Err("Invalid fruit".into()),
 ///         }
 ///     }
+/// }
+///
+/// impl Asset for Fruit {
+///     const EXTENSION: &'static str = "txt";
+///     type Loader = FruitLoader;
 /// }
 ///
 /// # let fruit = Ok(b" banana \n"[..].into());

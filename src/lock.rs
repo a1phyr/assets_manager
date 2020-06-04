@@ -168,10 +168,16 @@ impl fmt::Debug for CacheEntry {
 /// exist while reloading an asset.
 ///
 /// This is the structure you want to use to store a reference to an asset.
-/// However, shared data threads is usually required to be `'static`. The first
-/// solution is to create static `AssetCache`s and references (for example with
-/// `lazy_static` crate). You can also use crates allow threads with non-static
-/// data (such as `crossbeam-utils::scope`).
+/// However, data shared between threads is usually required to be `'static`,
+/// which is usually false for this structure. The preferred way to share assets
+/// is to share the `AssetCache` and to load assets from it whenever you need
+/// it: it is a very cheap operation. You can also create a `&'static AssetCache`
+/// (for example with `lazy_static` crate or by [leaking a `Box`]), but doing
+/// this prevents from removing assets from the cache. Another solution is to
+/// use crates that allow threads with non-static data (such as
+/// `crossbeam-utils::scope`).
+///
+/// [leaking a `Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak
 pub struct AssetRef<'a, A> {
     data: &'a RwLock<A>,
 }
@@ -198,7 +204,7 @@ impl<A> AssetRef<'_, A>
 where
     A: Clone
 {
-    /// Returns a cloned version of the inner asset.
+    /// Returns a clone of the inner asset.
     #[inline]
     pub fn cloned(self) -> A {
         self.data.read().clone()
@@ -234,6 +240,8 @@ where
 }
 
 /// RAII guard used to keep a read lock on an asset and release it when dropped.
+///
+/// This type is a smart pointer to type `A`.
 ///
 /// It can be obtained by calling [`AssetRef::read`].
 ///

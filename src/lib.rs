@@ -191,4 +191,5 @@ pub trait Asset: Sized + Send + Sync + 'static {
     type Loader: loader::Loader<Self>;
 }
 
-type AssetErr<A> = <<A as Asset>::Loader as loader::Loader<A>>::Err;
+/// The error type when loading an asset.
+pub type AssetErr<A> = <<A as Asset>::Loader as loader::Loader<A>>::Err;

@@ -168,22 +168,12 @@ impl CachedDir {
 ///
 /// This type provides methods to iterates over theses assets.
 ///
-/// It can be obtained by calling [`AssetCache::load_dir`].
+/// When [hot-reloading] is used, added/removed files will be added/removed from
+/// this structure.
+///
+/// This structure can be obtained by calling [`AssetCache::load_dir`].
 ///
 /// [`AssetCache::load_dir`]: struct.AssetCache.html#method.load_dir
-///
-/// ## Hot-reloading
-///
-/// *This part is only relevant when [hot-reloading] is used.*
-///
-/// Hot-reloading integration is not perfect for now. Added/removed files won't
-/// be added/removed from this structure, even if you try to re-load it from
-/// the cache (you would get the cached result). This is planned for a future
-/// version, though.
-///
-/// On the contrary, assets returned when iterating this structure will be
-/// automatically reloaded when the corresponding file is changed.
-///
 /// [hot-reloading]: struct.AssetCache.html#method.hot_reload
 pub struct DirReader<'a, A> {
     cache: &'a AssetCache,
@@ -208,10 +198,13 @@ impl<'a, A: Asset> DirReader<'a, A> {
     /// An iterator over successfully loaded assets in a directory.
     ///
     /// This iterator yields each asset that was successfully loaded. It is
-    /// garantied to do no I/O.
+    /// garantied to perform no I/O. This is the method you want to use most of
+    /// the time.
     ///
-    /// Note that if an asset is removed from the cache, it won't be returned
+    /// Note that if an asset is [removed from the cache], it won't be returned
     /// by this iterator until it is cached again.
+    ///
+    /// [removed from the cache]: struct.AssetCache.html#method.remove
     #[inline]
     pub fn iter(&self) -> ReadDir<'a, A> {
         ReadDir {
@@ -244,6 +237,7 @@ where
     type Item = AssetRef<'a, A>;
     type IntoIter = ReadDir<'a, A>;
 
+    /// Equivalent to [`iter`](#method.iter).
     #[inline]
     fn into_iter(self) -> ReadDir<'a, A> {
         self.iter()
@@ -291,7 +285,7 @@ impl<A> FusedIterator for ReadDir<'_, A> where A: Asset {}
 /// An iterator over all assets in a directory.
 ///
 /// This iterator yields the id asset of each asset in a directory, with the
-/// result of its last loading from the cache.
+/// result of its loading from the cache.
 ///
 /// It can be obtained by calling [`DirReader::iter_all`].
 ///

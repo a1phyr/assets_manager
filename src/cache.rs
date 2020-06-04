@@ -118,9 +118,9 @@ impl fmt::Debug for AccessKey<'_> {
 /// the extension. Given that, you cannot use `.` in your file names except for
 /// the extension.
 ///
-/// **Note**: This cache uses paths of files to refer to them, so using symbolic or
-/// hard links can lead to suprising behaviour (especially with hot-reloading), and
-/// thus should be avoided
+/// **Note**: Using symbolic or hard links within the cached directory can lead
+/// to surprising behaviour (especially with hot-reloading), and thus should be
+/// avoided.
 ///
 /// # Example
 ///
