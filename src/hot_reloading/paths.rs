@@ -11,7 +11,7 @@ use crate::{
     Asset,
     AssetCache,
     cache::Key,
-    dirs::has_extension,
+    dirs::{has_extension, id_push},
     loader::Loader,
     lock::CacheEntry,
 };
@@ -53,6 +53,12 @@ fn borrowed(content: &io::Result<Vec<u8>>) -> io::Result<Cow<[u8]>> {
             None => Err(err.kind().into()),
         },
     }
+}
+
+fn clone_and_push(id: &str, name: &str) -> Box<str> {
+    let mut id = id.to_string();
+    id_push(&mut id, name);
+    id.into()
 }
 
 
@@ -214,7 +220,7 @@ impl FileCache {
         for &(type_id, (load, ext)) in &path_infos.types.0 {
             if has_extension(&path, ext) {
                 let key = Key::new_with(path_infos.id.clone(), type_id);
-                let id = (path_infos.id.to_string() + "." + file_stem).into();
+                let id = clone_and_push(&path_infos.id, file_stem);
                 self.added.push((key, id));
 
                 let content = fs::read(&path).map(Into::into);
@@ -237,7 +243,7 @@ impl FileCache {
         for &(type_id, (_, ext)) in &path_infos.types.0 {
             if has_extension(&path, ext) {
                 let key = Key::new_with(path_infos.id.clone(), type_id);
-                let id = (path_infos.id.to_string() + "." + file_stem).into();
+                let id = clone_and_push(&path_infos.id, file_stem);
                 self.removed.push((key, id));
             }
         }

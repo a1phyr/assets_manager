@@ -21,6 +21,12 @@ pub(crate) fn has_extension(path: &Path, ext: &[&str]) -> bool {
     ext.contains(&file_ext)
 }
 
+pub(crate) fn id_push(id: &mut String, name: &str) {
+    if !id.is_empty() {
+        id.push('.');
+    }
+    id.push_str(name);
+}
 
 struct StringList {
     list: RwLock<Vec<Box<str>>>,
@@ -119,10 +125,7 @@ impl CachedDir {
 
                 if path.is_file() {
                     let mut this_id = id.to_owned();
-                    if !this_id.is_empty() {
-                        this_id.push('.');
-                    }
-                    this_id.push_str(name);
+                    id_push(&mut this_id, name);
 
                     let _ = cache.load::<A>(&this_id);
                     loaded.push(this_id.into());
