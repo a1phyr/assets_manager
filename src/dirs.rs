@@ -167,6 +167,12 @@ impl CachedDir {
     }
 }
 
+impl fmt::Debug for CachedDir {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(&*self.assets.list.read()).finish()
+    }
+}
+
 /// A reference to all assets in a directory.
 ///
 /// This type provides methods to iterates over theses assets.

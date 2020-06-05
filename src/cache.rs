@@ -433,6 +433,7 @@ impl fmt::Debug for AssetCache {
         f.debug_struct("AssetCache")
             .field("path", &self.path)
             .field("assets", &self.assets.read())
+            .field("dirs", &self.dirs.read())
             .finish()
     }
 }
