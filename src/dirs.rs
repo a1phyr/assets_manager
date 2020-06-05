@@ -1,7 +1,7 @@
 use crate::{
     Asset,
     AssetCache,
-    AssetErr,
+    AssetError,
     AssetRef,
     lock::{RwLock, RwLockReadGuard},
 };
@@ -303,7 +303,7 @@ impl<'a, A> Iterator for ReadAllDir<'a, A>
 where
     A: Asset,
 {
-    type Item = (&'a str, Result<AssetRef<'a, A>, AssetErr<A>>);
+    type Item = (&'a str, Result<AssetRef<'a, A>, AssetError<A>>);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {

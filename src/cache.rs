@@ -1,7 +1,7 @@
 //! Definition of the cache
 use crate::{
     Asset,
-    AssetErr,
+    AssetError,
     dirs::{CachedDir, DirReader},
     loader::Loader,
     lock::{RwLock, CacheEntry, AssetRef},
@@ -218,7 +218,7 @@ impl AssetCache {
     }
 
     /// Adds an asset to the cache
-    pub(crate) fn add_asset<A: Asset>(&self, id: Box<str>) -> Result<AssetRef<A>, AssetErr<A>> {
+    pub(crate) fn add_asset<A: Asset>(&self, id: Box<str>) -> Result<AssetRef<A>, AssetError<A>> {
         let path = self.path_of(&id);
 
         #[cfg(feature = "hot-reloading")]
@@ -267,7 +267,7 @@ impl AssetCache {
     /// Errors can occur in several cases :
     /// - The asset could not be loaded from the filesystem
     /// - Loaded data could not not be converted properly
-    pub fn load<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetErr<A>> {
+    pub fn load<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetError<A>> {
         match self.load_cached(id) {
             Some(asset) => Ok(asset),
             None => self.add_asset(id.into()),
@@ -294,7 +294,7 @@ impl AssetCache {
     #[inline]
     pub fn load_expect<A: Asset>(&self, id: &str) -> AssetRef<A>
     where
-        AssetErr<A>: fmt::Debug,
+        AssetError<A>: fmt::Debug,
     {
         self.load(id).expect("Could not load essential asset")
     }
@@ -315,7 +315,7 @@ impl AssetCache {
     /// If an error occurs, the asset is left unmodified.
     ///
     /// [`load`]: fn.load.html
-    pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetErr<A>> {
+    pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetError<A>> {
         let cache = self.assets.read();
         if let Some(cached) = cache.get(&AccessKey::new::<A>(id)) {
             let path = self.path_of(id);
@@ -437,7 +437,7 @@ impl fmt::Debug for AssetCache {
     }
 }
 
-fn load_from_fs<A: Asset>(mut path: PathBuf) -> Result<A, AssetErr<A>> {
+fn load_from_fs<A: Asset>(mut path: PathBuf) -> Result<A, AssetError<A>> {
     // Compile-time assert that the asset type has at least one extension
     let _ = <A as Asset>::_AT_LEAST_ONE_EXTENSION_REQUIRED;
 
