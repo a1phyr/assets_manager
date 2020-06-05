@@ -10,7 +10,7 @@ use crate::{
 #[cfg(feature = "hot-reloading")]
 use crate::{
     lock::Mutex,
-    hot_reloading::{HotReloader, WatchedPaths}
+    hot_reloading::{HotReloader, HotReloadingError, WatchedPaths}
 };
 
 use std::{
@@ -402,7 +402,7 @@ impl AssetCache {
     /// This function will return an error it it failed to start hot-reloading.
     #[cfg(feature = "hot-reloading")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
-    pub fn hot_reload(&self) -> Result<(), notify::Error> {
+    pub fn hot_reload(&self) -> Result<(), HotReloadingError> {
         let mut reloader = self.reloader.lock();
         match &*reloader {
             Some(reloader) => reloader.reload(self),
