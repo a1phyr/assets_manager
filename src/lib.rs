@@ -1,10 +1,11 @@
 //! Conveniently load, store and cache external resources.
 //!
+//! This crate aims at providing a filesystem abstraction to easily load external resources.
+//! It was originally thought for games, but can of course be used in other contexts.
 //!
-//! It has multiple goals
-//! - Easy to use: Rusty API
-//! - Light: Pay for what you take, no dependencies bloat
-//! - Fast: Share your resources between threads without using expensive `Arc::clone`
+//! The structure [`AssetCache`] is the entry point of the crate.
+//!
+//! [`AssetCache`]: struct.AssetCache.html
 //!
 //! ## Cargo features
 //!
@@ -85,7 +86,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
-#![doc(html_root_url = "https://docs.rs/assets_manager/0.1")]
+#![doc(html_root_url = "https://docs.rs/assets_manager/0.3.0")]
 
 #![warn(
     missing_docs,
