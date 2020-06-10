@@ -6,6 +6,7 @@ use paths::FileCache;
 use std::{
     fmt,
     mem::ManuallyDrop,
+    path::Path,
     ptr::NonNull,
     sync::mpsc::{self, channel, Receiver, Sender},
     thread,
@@ -53,14 +54,14 @@ pub struct HotReloader {
 
 
 impl HotReloader {
-    pub fn start(cache: &AssetCache) -> Result<Self, HotReloadingError> {
+    pub fn start(path: &Path) -> Result<Self, notify::Error> {
         let (notify_tx, notify_rx) = channel();
 
         let (ptr_tx, ptr_rx) = channel();
         let (answer_tx, answer_rx) = channel();
 
         let mut watcher = notify::watcher(notify_tx, Duration::from_millis(50))?;
-        watcher.watch(cache.path(), RecursiveMode::Recursive)?;
+        watcher.watch(path, RecursiveMode::Recursive)?;
 
         let handle = thread::spawn(move || {
             const TIMEOUT: Duration = Duration::from_millis(20);
@@ -120,35 +121,5 @@ impl HotReloader {
 impl fmt::Debug for HotReloader {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.pad("HotReloader { .. }")
-    }
-}
-
-
-/// An error which occurs when starting hot-reoading.
-///
-/// This error can be returned by [`AssetCache::hot_reload`]
-///
-/// [`AssetCache::hot_reload`]: struct.AssetCache.html#method.hot_reload
-#[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
-#[derive(Debug)]
-pub struct HotReloadingError(notify::Error);
-
-#[doc(hidden)]
-impl From<notify::Error> for HotReloadingError {
-    fn from(err: notify::Error) -> Self { Self(err) }
-}
-
-impl fmt::Display for HotReloadingError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
-    }
-}
-
-impl std::error::Error for HotReloadingError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match &self.0 {
-            notify::Error::Io(err) => Some(err),
-            _ => None,
-        }
     }
 }

@@ -92,13 +92,45 @@ fn load<A: Asset>(content: io::Result<Cow<[u8]>>, ext: &str, id: &str, path: &Pa
 
 type Ext = &'static [&'static str];
 
+pub struct WatchedPaths {
+    assets: Vec<(PathBuf, Box<str>, TypeId, LoadFn)>,
+    dirs: Vec<(PathBuf, Box<str>, TypeId, LoadFn, Ext)>,
+    cleared: bool,
+}
+
+impl WatchedPaths {
+    pub fn new() -> Self {
+        Self {
+            assets: Vec::new(),
+            dirs: Vec::new(),
+            cleared: false,
+        }
+    }
+
+    #[inline]
+    pub fn add_file<A: Asset>(&mut self, path: PathBuf, id: Box<str>) {
+        self.assets.push((path, id, TypeId::of::<A>(), load::<A>));
+    }
+
+    #[inline]
+    pub fn add_dir<A: Asset>(&mut self, path: PathBuf, id: Box<str>) {
+        self.dirs.push((path, id, TypeId::of::<A>(), load::<A>, A::EXTENSIONS));
+    }
+
+    pub fn clear(&mut self) {
+        self.assets.clear();
+        self.dirs.clear();
+        self.cleared = true;
+    }
+}
+
 struct WatchedPath<T> {
     id: Box<str>,
     types: Types<T>,
 }
 
 impl<T> WatchedPath<T> {
-    fn new(id: Box<str>) -> Self {
+    const fn new(id: Box<str>) -> Self {
         Self {
             id,
             types: Types::new(),
@@ -106,77 +138,8 @@ impl<T> WatchedPath<T> {
     }
 }
 
-pub struct WatchedPaths {
-    files: HashMap<PathBuf, WatchedPath<LoadFn>, RandomState>,
-    dirs: HashMap<PathBuf, WatchedPath<(LoadFn, Ext)>, RandomState>,
-
-    added: Vec<(PathBuf, TypeId, bool)>,
-    cleared: bool,
-}
-
-impl WatchedPaths {
-    pub fn new() -> Self {
-        Self {
-            files: HashMap::with_hasher(RandomState::new()),
-            dirs: HashMap::with_hasher(RandomState::new()),
-            added: Vec::new(),
-            cleared: false,
-        }
-    }
-
-    fn _add_file(&mut self, path: PathBuf, id: Box<str>, load: LoadFn, type_id: TypeId) {
-        let infos = match self.files.get_mut(&path) {
-            None => {
-                let info = WatchedPath::new(id);
-                self.files.entry(path.clone()).or_insert(info)
-            },
-            Some(infos) => {
-                debug_assert_eq!(infos.id, id);
-                infos
-            },
-        };
-
-        infos.types.insert(type_id, load);
-        self.added.push((path, type_id, true));
-    }
-
-    fn _add_dir(&mut self, path: PathBuf, id: Box<str>, load: LoadFn, type_id: TypeId, ext: Ext) {
-        let infos = match self.dirs.get_mut(&path) {
-            None => {
-                let info = WatchedPath::new(id);
-                self.dirs.entry(path.clone()).or_insert(info)
-            },
-            Some(infos) => {
-                debug_assert_eq!(infos.id, id);
-                infos
-            },
-        };
-
-        infos.types.insert(type_id, (load, ext));
-        self.added.push((path, type_id, false));
-    }
-
-    #[inline]
-    pub fn add_file<A: Asset>(&mut self, path: PathBuf, id: Box<str>) {
-        self._add_file(path, id, load::<A>, TypeId::of::<A>());
-    }
-
-    #[inline]
-    pub fn add_dir<A: Asset>(&mut self, path: PathBuf, id: Box<str>) {
-        self._add_dir(path, id, load::<A>, TypeId::of::<A>(), A::EXTENSIONS);
-    }
-
-    pub fn clear(&mut self) {
-        self.files.clear();
-        self.dirs.clear();
-        self.added.clear();
-        self.cleared = true;
-    }
-}
-
-
 pub struct FileCache {
-    files: HashMap<PathBuf, WatchedPath<LoadFn>, RandomState>,
+    assets: HashMap<PathBuf, WatchedPath<LoadFn>, RandomState>,
     dirs: HashMap<PathBuf, WatchedPath<(LoadFn, Ext)>, RandomState>,
 
     changed: HashMap<Key, Box<dyn AnyAsset>, RandomState>,
@@ -187,7 +150,7 @@ pub struct FileCache {
 impl FileCache {
     pub fn new() -> Self {
         Self {
-            files: HashMap::with_hasher(RandomState::new()),
+            assets: HashMap::with_hasher(RandomState::new()),
             dirs: HashMap::with_hasher(RandomState::new()),
 
             changed: HashMap::with_hasher(RandomState::new()),
@@ -202,7 +165,7 @@ impl FileCache {
             None => return,
         };
 
-        match self.files.get(&path) {
+        match self.assets.get(&path) {
             Some(path_infos) => {
                 let content = fs::read(&path);
 
@@ -295,38 +258,20 @@ impl FileCache {
     pub fn get_watched(&mut self, watched: &mut WatchedPaths) {
         if watched.cleared {
             watched.cleared = false;
-            self.files.clear();
+            self.assets.clear();
             self.dirs.clear();
         }
 
-        for (path, id, is_file) in watched.added.drain(..) {
-            if is_file {
-                let infos = match watched.files.get(&path) {
-                    Some(infos) => infos,
-                    None => continue,
-                };
+        for (path, id, type_id, load) in watched.assets.drain(..) {
+            let watched = self.assets.entry(path).or_insert_with(|| WatchedPath::new(id));
 
-                if let Some(&load) = infos.types.get(id) {
-                    let watched = self.files.entry(path).or_insert_with(|| {
-                        WatchedPath::new(infos.id.clone())
-                    });
+            watched.types.insert(type_id, load);
+        }
 
-                    watched.types.insert(id, load);
-                }
-            } else {
-                let infos = match watched.dirs.get(&path) {
-                    Some(infos) => infos,
-                    None => continue,
-                };
+        for (path, id, type_id, load, ext) in watched.dirs.drain(..) {
+            let watched = self.dirs.entry(path).or_insert_with(|| WatchedPath::new(id));
 
-                if let Some(&load) = infos.types.get(id) {
-                    let watched = self.dirs.entry(path).or_insert_with(|| {
-                        WatchedPath::new(infos.id.clone())
-                    });
-
-                    watched.types.insert(id, load);
-                }
-            }
+            watched.types.insert(type_id, (load, ext));
         }
     }
 }

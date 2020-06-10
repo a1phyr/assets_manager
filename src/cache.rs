@@ -10,13 +10,14 @@ use crate::{
 #[cfg(feature = "hot-reloading")]
 use crate::{
     lock::Mutex,
-    hot_reloading::{HotReloader, HotReloadingError, WatchedPaths}
+    hot_reloading::{HotReloader, WatchedPaths}
 };
 
 use std::{
     any::TypeId,
     borrow::Borrow,
     collections::HashMap,
+    error::Error,
     fmt,
     fs,
     io,
@@ -173,7 +174,7 @@ pub struct AssetCache {
     pub(crate) dirs: RwLock<HashMap<Key, CachedDir, RandomState>>,
 
     #[cfg(feature = "hot-reloading")]
-    reloader: Mutex<Option<HotReloader>>,
+    reloader: Mutex<HotReloader>,
     #[cfg(feature = "hot-reloading")]
     pub(crate) watched: Mutex<WatchedPaths>,
 }
@@ -186,19 +187,24 @@ impl AssetCache {
     ///
     /// # Errors
     ///
-    /// An error will be returned if `path` is not valid readable directory.
+    /// An error will be returned if `path` is not valid readable directory or
+    /// if hot-reloading failed to start (if feature `hot-reloading` is used).
     #[inline]
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<AssetCache, io::Error> {
-        let path = path.as_ref().canonicalize()?;
-        let _ = path.read_dir()?;
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<AssetCache, CacheError> {
+        let path = path.as_ref().canonicalize().map_err(ErrorKind::Io)?;
+        let _ = path.read_dir().map_err(ErrorKind::Io)?;
+
+        #[cfg(feature = "hot-reloading")]
+        let reloader = Mutex::new(HotReloader::start(&path).map_err(ErrorKind::Notify)?);
 
         Ok(AssetCache {
+
             assets: RwLock::new(HashMap::with_hasher(RandomState::new())),
             dirs: RwLock::new(HashMap::with_hasher(RandomState::new())),
             path,
 
             #[cfg(feature = "hot-reloading")]
-            reloader: Mutex::new(None),
+            reloader,
             #[cfg(feature = "hot-reloading")]
             watched: Mutex::new(WatchedPaths::new()),
         })
@@ -379,52 +385,26 @@ impl AssetCache {
 
     /// Reloads changed assets.
     ///
-    /// The first time this function is called, the hot-reloading is started.
-    /// Next calls to this function update assets if the cache if their related
-    /// file have changed since the last call to this function.
-    ///
     /// This function is typically called within a loop.
     ///
     /// If an error occurs while reloading an asset, a warning will be logged
     /// and the asset will be left unchanged.
     ///
-    /// This function will block the current thread until all changed assets are
-    /// reloaded, but it does not perform any I/O. However, it will need to lock
-    /// some assets for writing, so you **must not** have any [`AssetGuard`] from
-    /// the given `AssetCache`, or you might experience deadlocks. You are free
-    /// to keep [`AssetRef`]s, though.
+    /// This function blocks the current thread until all changed assets are
+    /// reloaded, but it does not perform any I/O. However, it needs to lock
+    /// some assets for writing, so you **must not** have any [`AssetGuard`]
+    /// from the given `AssetCache`, or you might experience deadlocks. You are
+    /// free to keep [`AssetRef`]s, though. The same restriction applies to
+    /// [`ReadDir`] and [`ReadAllDir`].
     ///
     /// [`AssetGuard`]: struct.AssetGuard.html
     /// [`AssetRef`]: struct.AssetRef.html
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error it it failed to start hot-reloading.
+    /// [`ReadDir`]: struct.ReadDir.html
+    /// [`ReadAllDir`]: struct.ReadAllDir.html
     #[cfg(feature = "hot-reloading")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
-    pub fn hot_reload(&self) -> Result<(), HotReloadingError> {
-        let mut reloader = self.reloader.lock();
-        match &*reloader {
-            Some(reloader) => reloader.reload(self),
-            None => {
-                *reloader = Some(HotReloader::start(self)?);
-            }
-        }
-        Ok(())
-    }
-
-    /// Stops the hot-reloading.
-    ///
-    /// If [`hot_reload`] has not been called on this `AssetCache`, this method
-    /// has no effect. Hot-reloading will restart when [`hot_reload`] is called
-    /// again.
-    ///
-    /// [`hot_reload`]: #method.hot_reload
-    #[cfg(feature = "hot-reloading")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
-    pub fn stop_hot_reloading(&self) {
-        let mut reloader = self.reloader.lock();
-        reloader.take();
+    pub fn hot_reload(&self) {
+        self.reloader.lock().reload(self);
     }
 }
 
@@ -456,4 +436,56 @@ fn load_from_fs<A: Asset>(mut path: PathBuf) -> Result<A, AssetError<A>> {
 
     // The for loop is taken at least once, so unwrap never panics
     Err(err.unwrap())
+}
+
+
+enum ErrorKind {
+    Io(io::Error),
+    #[cfg(feature = "hot-reloading")]
+    Notify(notify::Error),
+}
+
+/// An error which occurs when creating a cache.
+///
+/// This error can be returned by [`AssetCache::new`].
+///
+/// [`AssetCache::new`]: struct.AssetCache.html#method.new
+pub struct CacheError(ErrorKind);
+
+impl From<ErrorKind> for CacheError {
+    fn from(err: ErrorKind) -> Self {
+        Self(err)
+    }
+}
+
+impl fmt::Debug for CacheError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut debug = f.debug_tuple("CacheError");
+
+        match &self.0 {
+            ErrorKind::Io(err) => debug.field(err),
+            #[cfg(feature = "hot-reloading")]
+            ErrorKind::Notify(err) => debug.field(err),
+        }.finish()
+    }
+}
+
+impl fmt::Display for CacheError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.0 {
+            ErrorKind::Io(err) => err.fmt(f),
+            #[cfg(feature = "hot-reloading")]
+            ErrorKind::Notify(err) => err.fmt(f),
+        }
+    }
+}
+
+impl Error for CacheError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.0 {
+            ErrorKind::Io(err) => Some(err),
+            #[cfg(feature = "hot-reloading")]
+            ErrorKind::Notify(err) => Some(err),
+        }
+    }
 }

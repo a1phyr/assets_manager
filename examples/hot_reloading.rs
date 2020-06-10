@@ -44,7 +44,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Indefinitly reload assets if they changed and print `x`
     loop {
-        cache.hot_reload()?;
+        cache.hot_reload();
 
         print!("          \r");
         print!("{}\r", x.read().0);
