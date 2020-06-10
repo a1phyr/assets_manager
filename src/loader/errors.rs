@@ -53,7 +53,7 @@ impl Error for StringLoaderError {
 }
 
 
-/// An error which occurs when loading a parsed value.
+/// An error which occurs when loading a parsed asset.
 ///
 /// This error is used as the error type of [`ParseLoader`].
 ///
@@ -104,6 +104,47 @@ where
             Self::Io(err) => Some(err),
             Self::Utf8(err) => Some(err),
             Self::Parse(err) => Some(err),
+        }
+    }
+}
+
+
+/// An error which occurs when loading an asset with `serde`.
+#[derive(Debug)]
+pub enum SerdeLoaderError<E> {
+    /// An I/O error occured when loading the file from disk.
+    Io(io::Error),
+
+    /// An error occured when deserializing the file.
+    Serde(E),
+}
+
+impl<E> From<io::Error> for SerdeLoaderError<E> {
+    fn from(err: io::Error) -> Self {
+        Self::Io(err)
+    }
+}
+
+impl<E> fmt::Display for SerdeLoaderError<E>
+where
+    E: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(err) => err.fmt(f),
+            Self::Serde(err) => err.fmt(f),
+        }
+    }
+}
+
+impl<E> Error for SerdeLoaderError<E>
+where
+    E: Error + 'static
+{
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Io(err) => Some(err),
+            Self::Serde(err) => Some(err),
         }
     }
 }

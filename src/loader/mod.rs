@@ -24,7 +24,11 @@ use std::{
 };
 
 mod errors;
-pub use errors::{StringLoaderError, ParseLoaderError};
+pub use errors::{
+    ParseLoaderError,
+    SerdeLoaderError,
+    StringLoaderError,
+};
 
 #[cfg(test)]
 mod tests;
@@ -273,11 +277,11 @@ macro_rules! serde_loader {
         where
             T: for<'de> serde::Deserialize<'de>,
         {
-            type Error = $error;
+            type Error = SerdeLoaderError<$error>;
 
             #[inline]
             fn load(content: io::Result<Cow<[u8]>>, _: &str) -> Result<T, Self::Error> {
-                Ok($fun(&*content?)?)
+                Ok($fun(&*content?).map_err(SerdeLoaderError::Serde)?)
             }
         }
 
@@ -286,8 +290,8 @@ macro_rules! serde_loader {
 
 serde_loader!("bincode", "Loads assets from Bincode encoded files.", BincodeLoader, serde_bincode::deserialize, serde_bincode::Error);
 serde_loader!("cbor", "Loads assets from CBOR encoded files.", CborLoader, serde_cbor::from_slice, serde_cbor::Error);
-serde_loader!("json", "Loads assets from JSON files.", JsonLoader, serde_json::from_slice, Box<dyn Error>);
-serde_loader!("msgpack", "Loads assets from MessagePack files.", MessagePackLoader, serde_msgpack::decode::from_read, Box<dyn Error>);
+serde_loader!("json", "Loads assets from JSON files.", JsonLoader, serde_json::from_slice, serde_json::Error);
+serde_loader!("msgpack", "Loads assets from MessagePack files.", MessagePackLoader, serde_msgpack::decode::from_read, serde_msgpack::decode::Error);
 serde_loader!("ron", "Loads assets from RON files.", RonLoader, serde_ron::de::from_bytes, serde_ron::de::Error);
-serde_loader!("toml", "Loads assets from TOML files.", TomlLoader, serde_toml::de::from_slice, Box<dyn Error>);
-serde_loader!("yaml", "Loads assets from YAML files.", YamlLoader, serde_yaml::from_slice, Box<dyn Error>);
+serde_loader!("toml", "Loads assets from TOML files.", TomlLoader, serde_toml::de::from_slice, serde_toml::de::Error);
+serde_loader!("yaml", "Loads assets from YAML files.", YamlLoader, serde_yaml::from_slice, serde_yaml::Error);
