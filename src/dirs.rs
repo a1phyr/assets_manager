@@ -15,12 +15,23 @@ use std::{
     path::Path,
 };
 
-
-pub(crate) fn has_extension(path: &Path, ext: &[&str]) -> bool {
-    let file_ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-    ext.contains(&file_ext)
+#[inline]
+pub(crate) fn extension_of(path: &Path) -> Option<&str> {
+    match path.extension() {
+        Some(ext) => ext.to_str(),
+        None => Some(""),
+    }
 }
 
+#[inline]
+pub(crate) fn has_extension(path: &Path, ext: &[&str]) -> bool {
+    match extension_of(path) {
+        Some(file_ext) => ext.contains(&file_ext),
+        None => false,
+    }
+}
+
+#[inline]
 pub(crate) fn id_push(id: &mut String, name: &str) {
     if !id.is_empty() {
         id.push('.');

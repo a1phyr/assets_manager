@@ -71,6 +71,9 @@ mod tests;
 /// the loader to handle an eventual I/O error. If no I/O error happen, bytes
 /// are given as a `Cow<[u8]>` to avoid unnecessary clones.
 ///
+/// The extension used to load the asset is also passed as parameter, which can
+/// be useful if an asset type uses several extensions.
+///
 /// ## Example
 ///
 /// ```
@@ -88,7 +91,7 @@ mod tests;
 /// impl Loader<Fruit> for FruitLoader {
 ///     type Error = Box<dyn Error>;
 ///
-///     fn load(content: io::Result<Cow<[u8]>>) -> Result<Fruit, Self::Error> {
+///     fn load(content: io::Result<Cow<[u8]>>, _: &str) -> Result<Fruit, Self::Error> {
 ///         match str::from_utf8(&content?)?.trim() {
 ///             "apple" => Ok(Fruit::Apple),
 ///             "banana" => Ok(Fruit::Banana),
@@ -104,7 +107,7 @@ mod tests;
 /// }
 ///
 /// # let fruit = Ok(b" banana \n"[..].into());
-/// # assert_eq!(FruitLoader::load(fruit).unwrap(), Fruit::Banana);
+/// # assert_eq!(FruitLoader::load(fruit, "").unwrap(), Fruit::Banana);
 /// ```
 
 pub trait Loader<T> {
@@ -114,7 +117,7 @@ pub trait Loader<T> {
     type Error: Display;
 
     /// Loads an asset from its raw bytes representation.
-    fn load(content: io::Result<Cow<[u8]>>) -> Result<T, Self::Error>;
+    fn load(content: io::Result<Cow<[u8]>>, ext: &str) -> Result<T, Self::Error>;
 }
 
 /// Returns the default value in case of failure.
@@ -150,8 +153,8 @@ where
 {
     type Error = Infallible;
 
-    fn load(content: io::Result<Cow<[u8]>>) -> Result<T, Self::Error> {
-        L::load(content).or_else(|_| Ok(T::default()))
+    fn load(content: io::Result<Cow<[u8]>>, ext: &str) -> Result<T, Self::Error> {
+        L::load(content, ext).or_else(|_| Ok(T::default()))
     }
 }
 
@@ -188,8 +191,8 @@ where
 {
     type Error = L::Error;
 
-    fn load(content: io::Result<Cow<[u8]>>) -> Result<T, Self::Error> {
-        Ok(L::load(content)?.into())
+    fn load(content: io::Result<Cow<[u8]>>, ext: &str) -> Result<T, Self::Error> {
+        Ok(L::load(content, ext)?.into())
     }
 }
 
@@ -204,7 +207,7 @@ pub struct BytesLoader;
 impl Loader<Vec<u8>> for BytesLoader {
     type Error = io::Error;
 
-    fn load(content: io::Result<Cow<[u8]>>) -> Result<Vec<u8>, Self::Error> {
+    fn load(content: io::Result<Cow<[u8]>>, _: &str) -> Result<Vec<u8>, Self::Error> {
         Ok(content?.into_owned())
     }
 }
@@ -222,7 +225,7 @@ pub struct StringLoader;
 impl Loader<String> for StringLoader {
     type Error = StringLoaderError;
 
-    fn load(content: io::Result<Cow<[u8]>>) -> Result<String, Self::Error> {
+    fn load(content: io::Result<Cow<[u8]>>, _: &str) -> Result<String, Self::Error> {
         Ok(String::from_utf8(content?.into_owned())?)
     }
 }
@@ -248,7 +251,7 @@ where
 {
     type Error = ParseLoaderError<<T as FromStr>::Err>;
 
-    fn load(content: io::Result<Cow<[u8]>>) -> Result<T, Self::Error> {
+    fn load(content: io::Result<Cow<[u8]>>, _: &str) -> Result<T, Self::Error> {
         str::from_utf8(&content?)?.parse().map_err(ParseLoaderError::Parse)
     }
 }
@@ -273,7 +276,7 @@ macro_rules! serde_loader {
             type Error = $error;
 
             #[inline]
-            fn load(content: io::Result<Cow<[u8]>>) -> Result<T, Self::Error> {
+            fn load(content: io::Result<Cow<[u8]>>, _: &str) -> Result<T, Self::Error> {
                 Ok($fun(&*content?)?)
             }
         }

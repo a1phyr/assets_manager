@@ -448,7 +448,7 @@ fn load_from_fs<A: Asset>(mut path: PathBuf) -> Result<A, AssetError<A>> {
         path.set_extension(ext);
         let content = fs::read(&path).map(Into::into);
 
-        match A::Loader::load(content) {
+        match A::Loader::load(content, ext) {
             Err(e) => err = Some(e),
             asset => return asset,
         }

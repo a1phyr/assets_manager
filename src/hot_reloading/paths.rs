@@ -11,7 +11,7 @@ use crate::{
     Asset,
     AssetCache,
     cache::Key,
-    dirs::{has_extension, id_push},
+    dirs::{extension_of, has_extension, id_push},
     loader::Loader,
     lock::CacheEntry,
 };
@@ -78,10 +78,10 @@ impl<A: Asset> AnyAsset for A {
 }
 
 
-type LoadFn = fn(content: io::Result<Cow<[u8]>>, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>>;
+type LoadFn = fn(content: io::Result<Cow<[u8]>>, ext: &str, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>>;
 
-fn load<A: Asset>(content: io::Result<Cow<[u8]>>, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>> {
-    match A::Loader::load(content) {
+fn load<A: Asset>(content: io::Result<Cow<[u8]>>, ext: &str, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>> {
+    match A::Loader::load(content, ext) {
         Ok(asset) => Some(Box::new(asset)),
         Err(e) => {
             log::warn!("Error reloading {:?} from {:?}: {}", id, path, e);
@@ -197,12 +197,17 @@ impl FileCache {
     }
 
     pub fn load(&mut self, path: PathBuf) {
+        let ext = match extension_of(&path) {
+            Some(ext) => ext,
+            None => return,
+        };
+
         match self.files.get(&path) {
             Some(path_infos) => {
                 let content = fs::read(&path);
 
                 for (type_id, load) in &path_infos.types.0 {
-                    if let Some(asset) = load(borrowed(&content), &path_infos.id, &path) {
+                    if let Some(asset) = load(borrowed(&content), ext, &path_infos.id, &path) {
                         let key = Key::new_with(path_infos.id.clone(), *type_id);
                         self.changed.insert(key, asset);
                     }
@@ -215,6 +220,7 @@ impl FileCache {
     }
 
     fn load_dir(&mut self, path: PathBuf) -> Option<()> {
+        let file_ext = extension_of(&path)?;
         let parent = path.parent()?;
         let path_infos = self.dirs.get(parent)?;
 
@@ -227,7 +233,7 @@ impl FileCache {
                 self.added.push((key, id));
 
                 let content = fs::read(&path).map(Into::into);
-                if let Some(asset) = load(content, &path_infos.id, &path) {
+                if let Some(asset) = load(content, file_ext, &path_infos.id, &path) {
                     let key = Key::new_with(path_infos.id.clone(), type_id);
                     self.changed.insert(key, asset);
                 }
