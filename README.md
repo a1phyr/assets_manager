@@ -4,19 +4,36 @@
 [![Docs.rs](https://docs.rs/assets_manager/badge.svg)](https://docs.rs/assets_manager/)
 ![Minimum rustc version](https://img.shields.io/badge/rustc-1.42+-lightgray.svg)
 
-Conveniently load, cache, and reload external resources.
 
+This crate aims at providing a filesystem abstraction to easily load external resources.
+It was originally thought for games, but can of course be used in other contexts.
 
-This crate's main focuses are:
-- Pleasant to use: Simple and well-documented high-level API
-- Light: Pay for what you take, no dependency bloat
-- Concurrency: Essential for computing-heavy uses such as games
+Original idea was inspired by [Veloren](https://gitlab.com/veloren/veloren)'s assets system.
+
 
 This crate follow semver convention and supports rustc 1.42.0 and higher.
 Changing this is considered a breaking change.
 
-**Note**: this crate is still under developpement and breaking changes will
-happen in the future, but use, feedbacks and requests are welcome and encouraged.
+## Goals
+
+This crates focuses on:
+
+- **Good perfomances**:\
+  Crucial for perfomance-oriented applications such as games.\
+  Loaded assets are cached so loading one several times is as fast as loading it once.
+  This crate was thought for use with concurrency.
+
+- **Hot-reloading**:\
+  Hot-reloading means updating assets in memory as soon as the corresponding file is changed,
+  without restarting your program. It may greatly ease development.\
+  Your time is precious, and first-class support of hot-reloading helps you saving it.
+
+- **Pleasant to use**:\
+  A well-documented high-level API, easy to learn.\
+  Built-in support of common formats with serde.\
+
+- **Lightness**:\
+  Pay for what you take, no dependency bloat.
 
 ## Example
 
@@ -47,7 +64,7 @@ impl Asset for Point {
     // The extension of the files to look into
     const EXTENSION: &'static str = "ron";
 
-    // The serialization format
+    // The serialization format (RON)
     type Loader = loader::RonLoader;
 }
 
@@ -87,14 +104,6 @@ loop {
     println!("Current value: {:?}", asset_lock.read());
 }
 ```
-
-## Features
-
-Current features:
-- Convenient load of external files
-- Cache loaded assets
-- Hot-reloading
-- Built-in support of most common data formats with serde
 
 ## License
 
