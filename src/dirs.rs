@@ -24,7 +24,7 @@ pub(crate) fn extension_of(path: &Path) -> Option<&str> {
 }
 
 #[inline]
-pub(crate) fn has_extension(path: &Path, ext: &[&str]) -> bool {
+fn has_extension(path: &Path, ext: &[&str]) -> bool {
     match extension_of(path) {
         Some(file_ext) => ext.contains(&file_ext),
         None => false,
@@ -151,11 +151,15 @@ impl CachedDir {
 
     #[cfg(feature = "hot-reloading")]
     #[inline]
+    pub fn contains(&self, id: &str) -> bool {
+        self.assets.into_iter().find(|&s| s == id).is_some()
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
     pub fn add(&self, id: Box<str>) {
         let mut list = self.assets.list.write();
-        if !list.contains(&id) {
-            list.push(id);
-        }
+        list.push(id);
     }
 
     #[cfg(feature = "hot-reloading")]

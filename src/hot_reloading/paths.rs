@@ -11,7 +11,7 @@ use crate::{
     Asset,
     AssetCache,
     cache::Key,
-    dirs::{extension_of, has_extension, id_push},
+    dirs::{extension_of, id_push},
     loader::Loader,
     lock::CacheEntry,
 };
@@ -159,46 +159,42 @@ impl FileCache {
         }
     }
 
-    pub fn load(&mut self, path: PathBuf) {
-        let ext = match extension_of(&path) {
-            Some(ext) => ext,
-            None => return,
-        };
+    pub fn load(&mut self, path: PathBuf) -> Option<()> {
+        let file_ext = extension_of(&path)?;
 
-        match self.assets.get(&path) {
-            Some(path_infos) => {
-                let content = fs::read(&path);
+        self.load_dir(&path, file_ext)?;
+        self.load_asset(&path, file_ext);
 
-                for (type_id, load) in &path_infos.types.0 {
-                    if let Some(asset) = load(borrowed(&content), ext, &path_infos.id, &path) {
-                        let key = Key::new_with(path_infos.id.clone(), *type_id);
-                        self.changed.insert(key, asset);
-                    }
+        Some(())
+    }
+
+    fn load_asset(&mut self, path: &Path, file_ext: &str) {
+        if let Some(path_infos) = self.assets.get(path) {
+            let content = fs::read(path);
+
+            for (type_id, load) in &path_infos.types.0 {
+                if let Some(asset) = load(borrowed(&content), file_ext, &path_infos.id, path) {
+                    let key = Key::new_with(path_infos.id.clone(), *type_id);
+                    self.changed.insert(key, asset);
                 }
             }
-            None => {
-                self.load_dir(path);
-            },
         }
     }
 
-    fn load_dir(&mut self, path: PathBuf) -> Option<()> {
-        let file_ext = extension_of(&path)?;
+    fn load_dir(&mut self, path: &Path, file_ext: &str) -> Option<()> {
         let parent = path.parent()?;
-        let path_infos = self.dirs.get(parent)?;
-
         let file_stem = path.file_stem()?.to_str()?;
 
-        for &(type_id, (load, ext)) in &path_infos.types.0 {
-            if has_extension(&path, ext) {
-                let key = Key::new_with(path_infos.id.clone(), type_id);
-                let id = clone_and_push(&path_infos.id, file_stem);
-                self.added.push((key, id));
-
-                let content = fs::read(&path).map(Into::into);
-                if let Some(asset) = load(content, file_ext, &path_infos.id, &path) {
+        if let Some(path_infos) = self.dirs.get(parent) {
+            for &(type_id, (load, type_ext)) in &path_infos.types.0 {
+                if type_ext.contains(&file_ext) {
                     let key = Key::new_with(path_infos.id.clone(), type_id);
-                    self.changed.insert(key, asset);
+                    let file_id = clone_and_push(&path_infos.id, file_stem);
+
+                    let watched = self.assets.entry(path.into()).or_insert_with(|| WatchedPath::new(file_id.clone()));
+                    watched.types.insert(type_id, load);
+
+                    self.added.push((key, file_id));
                 }
             }
         }
@@ -209,11 +205,12 @@ impl FileCache {
     pub fn remove(&mut self, path: PathBuf) -> Option<()> {
         let parent = path.parent()?;
         let path_infos = self.dirs.get(parent)?;
+        let file_ext = extension_of(&path)?;
 
         let file_stem = path.file_stem()?.to_str()?;
 
-        for &(type_id, (_, ext)) in &path_infos.types.0 {
-            if has_extension(&path, ext) {
+        for &(type_id, (_, type_ext)) in &path_infos.types.0 {
+            if type_ext.contains(&file_ext) {
                 let key = Key::new_with(path_infos.id.clone(), type_id);
                 let id = clone_and_push(&path_infos.id, file_stem);
                 self.removed.push((key, id));
@@ -242,15 +239,17 @@ impl FileCache {
 
         for (key, id) in self.removed.drain(..) {
             if let Some(dir) = dirs.get(&key) {
-                dir.remove(&id);
                 log::info!("Removing {:?} from {:?}", id, key.id());
+                dir.remove(&id);
             }
         }
 
         for (key, id) in self.added.drain(..) {
             if let Some(dir) = dirs.get(&key) {
-                log::info!("Adding {:?} to {:?}", id, key.id());
-                dir.add(id);
+                if !dir.contains(&id) {
+                    log::info!("Adding {:?} to {:?}", id, key.id());
+                    dir.add(id);
+                }
             }
         }
     }
