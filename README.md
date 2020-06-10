@@ -70,7 +70,7 @@ impl Asset for Point {
 
 
 // Create a new cache to load assets under the "./assets" folder
-let cache = AssetCache::new("assets");
+let cache = AssetCache::new("assets")?;
 
 // Get a lock on the asset
 // This will load the file `./assets/common/position.ron`
@@ -93,7 +93,7 @@ assert!(asset_lock.ptr_eq(&other_lock));
 Hot-reloading is also very easy to use:
 
 ```rust
-let cache = AssetCache::new("assets");
+let cache = AssetCache::new("assets")?;
 let asset_lock = cache.load::<Point>("common.position")?;
 
 loop {
