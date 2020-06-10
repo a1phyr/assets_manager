@@ -54,7 +54,7 @@ serde = {version = "1.0", features = ["derive"]}
 
 [[example]]
 name = "basic"
-required-features = ["bincode"]
+required-features = ["ron"]
 
 [[example]]
 name = "hot_reloading"
