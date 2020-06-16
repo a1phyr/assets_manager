@@ -1,5 +1,8 @@
 mod paths;
 
+#[cfg(test)]
+mod tests;
+
 pub(crate) use paths::WatchedPaths;
 use paths::FileCache;
 

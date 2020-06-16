@@ -181,6 +181,21 @@ pub trait Asset: Sized + Send + Sync + 'static {
     /// empty.
     const EXTENSIONS: &'static [&'static str] = &[Self::EXTENSION];
 
+    /// Compile-time assertion that `Self::EXTENSIONS` is not empty.
+    ///
+    /// ```compile_fail
+    /// use assets_manager::{Asset, AssetCache, loader::{LoadFrom, ParseLoader}};
+    ///
+    /// struct T;
+    /// impl From<i32> for T { fn from(_: i32) -> T { T } }
+    /// impl Asset for T {
+    ///     type Loader = LoadFrom<i32, ParseLoader>;
+    ///     const EXTENSIONS: &'static [&'static str] = &[];
+    /// }
+    ///
+    /// let cache = AssetCache::new(".").unwrap();
+    /// let _ = cache.load::<T>("");
+    /// ```
     #[doc(hidden)]
     const _AT_LEAST_ONE_EXTENSION_REQUIRED: &'static str = Self::EXTENSIONS[0];
 
