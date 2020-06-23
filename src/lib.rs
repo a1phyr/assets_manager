@@ -96,15 +96,17 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod cache;
-pub use cache::{AssetCache, CacheError};
+pub use cache::AssetCache;
+
+mod dirs;
+pub use dirs::{DirReader, ReadAllDir, ReadDir};
 
 pub mod loader;
 
 mod lock;
 pub use lock::{AssetRef, AssetGuard};
 
-mod dirs;
-pub use dirs::{DirReader, ReadAllDir, ReadDir};
+pub mod source;
 
 #[cfg(feature = "hot-reloading")]
 mod hot_reloading;
