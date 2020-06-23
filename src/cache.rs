@@ -353,6 +353,15 @@ impl AssetCache {
         self.add_dir(id.into())
     }
 
+    /// Load an owned version of the asset
+    ///
+    /// Note that it will not try to fetch it from the cache nor to cache it.
+    /// In addition, hot-reloading will not affect the returned value.
+    pub fn load_owned<A: Asset>(&self, id: &str) -> Result<A, AssetError<A>> {
+        let path = self.path_of(id);
+        load_from_fs(path)
+    }
+
     /// Remove an asset from the cache.
     ///
     /// The removed asset matches both the id and the type parameter.

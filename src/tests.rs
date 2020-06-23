@@ -45,6 +45,13 @@ mod asset_cache {
     }
 
     #[test]
+    fn load_owned() {
+        let cache = AssetCache::new("assets").unwrap();
+
+        assert_eq!(cache.load_owned::<X>("test.cache").unwrap(), X(42));
+    }
+
+    #[test]
     fn load_cached() {
         let cache = AssetCache::new("assets").unwrap();
 
