@@ -86,7 +86,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
-#![doc(html_root_url = "https://docs.rs/assets_manager/0.3.0")]
+#![doc(html_root_url = "https://docs.rs/assets_manager/0.3.1")]
 
 #![warn(
     missing_docs,
