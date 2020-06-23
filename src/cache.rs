@@ -298,11 +298,10 @@ impl AssetCache {
     ///
     /// [`load`]: fn.load.html
     #[inline]
-    pub fn load_expect<A: Asset>(&self, id: &str) -> AssetRef<A>
-    where
-        AssetError<A>: fmt::Debug,
-    {
-        self.load(id).expect("Could not load essential asset")
+    pub fn load_expect<A: Asset>(&self, id: &str) -> AssetRef<A> {
+        self.load(id).unwrap_or_else(|err| {
+            panic!("Failed to load essential asset {:?}: {}", id, err)
+        })
     }
 
     /// Reloads an asset from the filesystem.
