@@ -247,6 +247,17 @@ impl<A> Clone for AssetRef<'_, A> {
 
 impl<A> Copy for AssetRef<'_, A> {}
 
+impl<T, U> PartialEq<AssetRef<'_, U>> for AssetRef<'_, T>
+where
+    T: PartialEq<U>,
+{
+    fn eq(&self, other: &AssetRef<U>) -> bool {
+        self.data.lock.read().eq(&other.data.lock.read())
+    }
+}
+
+impl<A> Eq for AssetRef<'_, A> where A: Eq {}
+
 impl<A> hash::Hash for AssetRef<'_, A>
 where
     A: hash::Hash,
