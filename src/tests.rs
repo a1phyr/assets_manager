@@ -61,6 +61,17 @@ mod asset_cache {
     }
 
     #[test]
+    fn reload_set_flag() {
+        let cache = AssetCache::new("assets").unwrap();
+
+        let asset = cache.load_expect::<X>("test.cache");
+        assert!(!asset.reloaded());
+        cache.force_reload::<X>("test.cache").unwrap();
+        assert!(asset.reloaded());
+        assert!(!asset.reloaded());
+    }
+
+    #[test]
     fn load_dir_ok() {
         let cache = AssetCache::new("assets").unwrap();
 

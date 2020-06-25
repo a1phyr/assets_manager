@@ -5,6 +5,7 @@ use std::{
     fmt,
     hash,
     ops::Deref,
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 
@@ -88,6 +89,28 @@ impl<T: ?Sized> Mutex<T> {
 }
 
 
+struct Inner<T> {
+    lock: RwLock<T>,
+    reloaded: AtomicBool,
+}
+
+impl<T> Inner<T> {
+    #[inline]
+    fn new(value: T) -> Self {
+        Self {
+            lock: RwLock::new(value),
+            reloaded: AtomicBool::new(false),
+        }
+    }
+
+    #[inline]
+    fn write(&self, value: T) {
+        let mut data = self.lock.write();
+        self.reloaded.store(true, Ordering::Relaxed);
+        *data = value;
+    }
+}
+
 /// An entry in the cache
 ///
 /// # Safety
@@ -106,7 +129,7 @@ impl<'a> CacheEntry {
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
     pub fn new<T: Send + Sync + 'static>(asset: T) -> Self {
-        CacheEntry(Box::new(RwLock::new(asset)))
+        CacheEntry(Box::new(Inner::new(asset)))
     }
 
     /// Returns a reference to the underlying lock.
@@ -116,10 +139,10 @@ impl<'a> CacheEntry {
     /// See type-level documentation.
     #[inline]
     pub unsafe fn get_ref<T: Send + Sync + 'static>(&self) -> AssetRef<'a, T> {
-        debug_assert!(self.0.is::<RwLock<T>>());
+        debug_assert!(self.0.is::<Inner<T>>());
 
         let data = {
-            let ptr = &*self.0 as *const dyn Any as *const RwLock<T>;
+            let ptr = &*self.0 as *const dyn Any as *const Inner<T>;
             &*ptr
         };
 
@@ -133,9 +156,7 @@ impl<'a> CacheEntry {
     /// See type-level documentation.
     pub unsafe fn write<T: Send + Sync + 'static>(&self, asset: T) -> AssetRef<'a, T> {
         let lock = self.get_ref();
-        let mut cached_guard = lock.data.write();
-        *cached_guard = asset;
-        drop(cached_guard);
+        lock.data.write(asset);
         lock
     }
 
@@ -146,7 +167,7 @@ impl<'a> CacheEntry {
     /// See type-level documentation.
     #[inline]
     pub unsafe fn into_inner<T: Send + Sync + 'static>(self) -> T {
-        debug_assert!(self.0.is::<RwLock<T>>());
+        debug_assert!(self.0.is::<Inner<T>>());
 
         Box::from_raw(Box::into_raw(self.0) as *mut RwLock<T>).into_inner()
     }
@@ -179,7 +200,7 @@ impl fmt::Debug for CacheEntry {
 ///
 /// [leaking a `Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak
 pub struct AssetRef<'a, A> {
-    data: &'a RwLock<A>,
+    data: &'a Inner<A>,
 }
 
 impl<'a, A> AssetRef<'a, A> {
@@ -189,11 +210,16 @@ impl<'a, A> AssetRef<'a, A> {
     #[inline]
     pub fn read(&self) -> AssetGuard<'a, A> {
         AssetGuard {
-            guard: self.data.read(),
+            guard: self.data.lock.read(),
         }
     }
 
-    /// Checks if the two assets refer to the same cache entry
+    /// Returns `true` if the asset has been reloaded since last call.
+    pub fn reloaded(&self) -> bool {
+        self.data.reloaded.swap(false, Ordering::Relaxed)
+    }
+
+    /// Checks if the two assets refer to the same cache entry.
     #[inline]
     pub fn ptr_eq(&self, other: &Self) -> bool {
         std::ptr::eq(self.data, other.data)
@@ -207,7 +233,7 @@ where
     /// Returns a clone of the inner asset.
     #[inline]
     pub fn cloned(self) -> A {
-        self.data.read().clone()
+        self.data.lock.read().clone()
     }
 }
 
@@ -226,7 +252,7 @@ where
     A: hash::Hash,
 {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.data.read().hash(state);
+        self.data.lock.read().hash(state);
     }
 }
 
@@ -235,9 +261,10 @@ where
     A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AssetRef").field("data", &*self.data.read()).finish()
+        f.debug_struct("AssetRef").field("data", &*self.data.lock.read()).finish()
     }
 }
+
 
 /// RAII guard used to keep a read lock on an asset and release it when dropped.
 ///
