@@ -162,7 +162,7 @@ where
     }
 }
 
-/// Load assets from another type.
+/// Loads assets from another type.
 ///
 /// An example case for this is to easily load wrapper types, which is needed
 /// if the wrapped type is defined in another crate.
@@ -199,6 +199,9 @@ where
         Ok(L::load(content, ext)?.into())
     }
 }
+
+/// Loads assets from another asset.
+pub type LoadFromAsset<A> = LoadFrom<A, <A as crate::Asset>::Loader>;
 
 /// Loads assets as a `Vec<u8>`.
 ///
