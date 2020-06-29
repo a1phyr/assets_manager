@@ -207,5 +207,21 @@ pub trait Asset: Sized + Send + Sync + 'static {
     type Loader: loader::Loader<Self>;
 }
 
+impl<A> Asset for Box<A>
+where
+    A: Asset,
+{
+    const EXTENSIONS: &'static [&'static str] = A::EXTENSIONS;
+    type Loader = loader::LoadFromAsset<A>;
+}
+
+impl<A> Asset for std::sync::Arc<A>
+where
+    A: Asset,
+{
+    const EXTENSIONS: &'static [&'static str] = A::EXTENSIONS;
+    type Loader = loader::LoadFromAsset<A>;
+}
+
 /// The error type when loading an asset.
 pub type AssetError<A> = <<A as Asset>::Loader as loader::Loader<A>>::Error;
