@@ -169,7 +169,8 @@ impl<'a> CacheEntry {
     pub unsafe fn into_inner<T: Send + Sync + 'static>(self) -> T {
         debug_assert!(self.0.is::<Inner<T>>());
 
-        Box::from_raw(Box::into_raw(self.0) as *mut RwLock<T>).into_inner()
+        let inner = Box::from_raw(Box::into_raw(self.0) as *mut Inner<T>);
+        inner.lock.into_inner()
     }
 }
 

@@ -177,6 +177,16 @@ mod cache_entry {
     }
 
     #[test]
+    fn into_inner() {
+        let x = rand::random::<i32>();
+
+        let entry = CacheEntry::new(x);
+        let y = unsafe { entry.into_inner::<i32>() };
+
+        assert_eq!(x, y);
+    }
+
+    #[test]
     fn ptr_eq() {
         let x = rand::random::<i32>();
 
