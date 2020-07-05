@@ -5,7 +5,7 @@ use std::{
     fmt,
     hash,
     ops::Deref,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 
@@ -91,7 +91,7 @@ impl<T: ?Sized> Mutex<T> {
 
 struct Inner<T> {
     lock: RwLock<T>,
-    reloaded: AtomicBool,
+    reload: AtomicUsize,
 }
 
 impl<T> Inner<T> {
@@ -99,15 +99,15 @@ impl<T> Inner<T> {
     fn new(value: T) -> Self {
         Self {
             lock: RwLock::new(value),
-            reloaded: AtomicBool::new(false),
+            reload: AtomicUsize::new(0),
         }
     }
 
     #[inline]
     fn write(&self, value: T) {
         let mut data = self.lock.write();
-        self.reloaded.store(true, Ordering::Relaxed);
         *data = value;
+        self.reload.fetch_add(1, Ordering::Release);
     }
 }
 
@@ -146,7 +146,7 @@ impl<'a> CacheEntry {
             &*ptr
         };
 
-        AssetRef { data }
+        AssetRef::new(data)
     }
 
     /// Write a value and a get reference to the underlying lock
@@ -202,9 +202,18 @@ impl fmt::Debug for CacheEntry {
 /// [leaking a `Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak
 pub struct AssetRef<'a, A> {
     data: &'a Inner<A>,
+    last_reload: usize,
 }
 
 impl<'a, A> AssetRef<'a, A> {
+    #[inline]
+    fn new(inner: &'a Inner<A>) -> Self {
+        Self {
+            data: inner,
+            last_reload: inner.reload.load(Ordering::Acquire),
+        }
+    }
+
     /// Locks the pointed asset for reading.
     ///
     /// Returns a RAII guard which will release the lock once dropped.
@@ -215,9 +224,49 @@ impl<'a, A> AssetRef<'a, A> {
         }
     }
 
-    /// Returns `true` if the asset has been reloaded since last call.
-    pub fn reloaded(&self) -> bool {
-        self.data.reloaded.swap(false, Ordering::Relaxed)
+    /// Returns `true` if the asset has been reloaded since last call to this
+    /// method with this `AssetRef`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use assets_manager::{Asset, AssetCache};
+    /// # use assets_manager::loader::{LoadFrom, ParseLoader};
+    ///
+    /// struct Example;
+    /// # impl From<i32> for Example {
+    /// #     fn from(n: i32) -> Self { Self }
+    /// # }
+    /// impl Asset for Example {
+    ///     /* ... */
+    ///     # const EXTENSION: &'static str = "x";
+    ///     # type Loader = LoadFrom<i32, ParseLoader>;
+    /// }
+    ///
+    /// let cache = AssetCache::new("assets")?;
+    ///
+    /// let mut ref1 = cache.load::<Example>("example.reload")?;
+    /// let mut ref2 = cache.load::<Example>("example.reload")?;
+    ///
+    /// assert!(!ref1.reloaded());
+    ///
+    /// cache.force_reload::<Example>("example.reload")?;
+    ///
+    /// assert!(ref1.reloaded());
+    /// assert!(!ref1.reloaded());
+    ///
+    /// assert!(ref2.reloaded());
+    /// # Ok::<_, Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn reloaded(&mut self) -> bool {
+        let last_reload = self.data.reload.load(Ordering::Acquire);
+
+        if last_reload > self.last_reload {
+            self.last_reload = last_reload;
+            true
+        } else {
+            false
+        }
     }
 
     /// Checks if the two assets refer to the same cache entry.
@@ -242,6 +291,7 @@ impl<A> Clone for AssetRef<'_, A> {
     fn clone(&self) -> Self {
         Self {
             data: self.data,
+            last_reload: self.last_reload,
         }
     }
 }

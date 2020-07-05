@@ -64,7 +64,7 @@ mod asset_cache {
     fn reload_set_flag() {
         let cache = AssetCache::new("assets").unwrap();
 
-        let asset = cache.load_expect::<X>("test.cache");
+        let mut asset = cache.load_expect::<X>("test.cache");
         assert!(!asset.reloaded());
         cache.force_reload::<X>("test.cache").unwrap();
         assert!(asset.reloaded());
