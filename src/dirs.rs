@@ -152,7 +152,7 @@ impl CachedDir {
     #[cfg(feature = "hot-reloading")]
     #[inline]
     pub fn contains(&self, id: &str) -> bool {
-        self.assets.into_iter().find(|&s| s == id).is_some()
+        self.assets.into_iter().any(|s| s == id)
     }
 
     #[cfg(feature = "hot-reloading")]
