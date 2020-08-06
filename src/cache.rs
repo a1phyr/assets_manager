@@ -4,27 +4,25 @@ use crate::{
     AssetError,
     dirs::{CachedDir, DirReader},
     loader::Loader,
-    lock::{RwLock, CacheEntry, AssetRef},
+    entry::{CacheEntry, AssetRef},
+    utils::{HashMap, RwLock},
 };
 
 #[cfg(feature = "hot-reloading")]
 use crate::{
-    lock::Mutex,
-    hot_reloading::{HotReloader, WatchedPaths}
+    hot_reloading::{HotReloader, WatchedPaths},
+    utils::Mutex,
 };
 
 use std::{
     any::TypeId,
     borrow::Borrow,
-    collections::HashMap,
     error::Error,
     fmt,
     fs,
     io,
     path::{Path, PathBuf},
 };
-
-use crate::RandomState;
 
 
 /// The key used to identify assets
@@ -170,8 +168,8 @@ impl fmt::Debug for AccessKey<'_> {
 pub struct AssetCache {
     path: PathBuf,
 
-    pub(crate) assets: RwLock<HashMap<Key, CacheEntry, RandomState>>,
-    pub(crate) dirs: RwLock<HashMap<Key, CachedDir, RandomState>>,
+    pub(crate) assets: RwLock<HashMap<Key, CacheEntry>>,
+    pub(crate) dirs: RwLock<HashMap<Key, CachedDir>>,
 
     #[cfg(feature = "hot-reloading")]
     reloader: Mutex<HotReloader>,
@@ -199,8 +197,8 @@ impl AssetCache {
 
         Ok(AssetCache {
 
-            assets: RwLock::new(HashMap::with_hasher(RandomState::new())),
-            dirs: RwLock::new(HashMap::with_hasher(RandomState::new())),
+            assets: RwLock::new(HashMap::new()),
+            dirs: RwLock::new(HashMap::new()),
             path,
 
             #[cfg(feature = "hot-reloading")]

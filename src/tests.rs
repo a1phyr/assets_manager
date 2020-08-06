@@ -127,7 +127,7 @@ mod asset_cache {
 
 mod cache_entry {
     use std::sync::{Arc, Mutex};
-    use crate::lock::CacheEntry;
+    use crate::entry::CacheEntry;
 
     #[derive(Clone)]
     struct DropCounter(Arc<Mutex<usize>>);

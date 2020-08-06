@@ -100,8 +100,8 @@ pub use cache::{AssetCache, CacheError};
 
 pub mod loader;
 
-mod lock;
-pub use lock::{AssetRef, AssetGuard};
+mod entry;
+pub use entry::{AssetRef, AssetGuard};
 
 mod dirs;
 pub use dirs::{DirReader, ReadAllDir, ReadDir};
@@ -109,15 +109,10 @@ pub use dirs::{DirReader, ReadAllDir, ReadDir};
 #[cfg(feature = "hot-reloading")]
 mod hot_reloading;
 
+mod utils;
+
 #[cfg(test)]
 mod tests;
-
-
-#[cfg(feature = "ahash")]
-use ahash::RandomState;
-
-#[cfg(not(feature = "ahash"))]
-use std::collections::hash_map::RandomState;
 
 
 /// An asset is a type loadable from a file.

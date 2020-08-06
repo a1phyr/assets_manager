@@ -1,7 +1,6 @@
 use std::{
     any::{Any, TypeId},
     borrow::Cow,
-    collections::HashMap,
     fs,
     io,
     path::{Path, PathBuf},
@@ -13,10 +12,10 @@ use crate::{
     cache::Key,
     dirs::{extension_of, id_push},
     loader::Loader,
-    lock::CacheEntry,
+    entry::CacheEntry,
+    utils::HashMap,
 };
 
-use crate::RandomState;
 
 
 struct Types<T>(Vec<(TypeId, T)>);
@@ -147,20 +146,20 @@ enum Action {
 }
 
 pub struct FileCache {
-    assets: HashMap<PathBuf, WatchedPath<LoadFn>, RandomState>,
-    dirs: HashMap<PathBuf, WatchedPath<(LoadFn, Ext)>, RandomState>,
+    assets: HashMap<PathBuf, WatchedPath<LoadFn>>,
+    dirs: HashMap<PathBuf, WatchedPath<(LoadFn, Ext)>>,
 
-    changed: HashMap<Key, Box<dyn AnyAsset>, RandomState>,
+    changed: HashMap<Key, Box<dyn AnyAsset>>,
     changed_dirs: Vec<(Key, Box<str>, Action)>,
 }
 
 impl FileCache {
     pub fn new() -> Self {
         Self {
-            assets: HashMap::with_hasher(RandomState::new()),
-            dirs: HashMap::with_hasher(RandomState::new()),
+            assets: HashMap::new(),
+            dirs: HashMap::new(),
 
-            changed: HashMap::with_hasher(RandomState::new()),
+            changed: HashMap::new(),
             changed_dirs: Vec::new(),
         }
     }

@@ -3,7 +3,7 @@ use crate::{
     AssetCache,
     AssetError,
     AssetRef,
-    lock::{RwLock, RwLockReadGuard},
+    utils::{RwLock, RwLockReadGuard},
 };
 
 use std::{

@@ -1,4 +1,4 @@
-//! Definitions of cache entries and locks
+//! Definitions of cache entries
 
 use std::{
     any::Any,
@@ -8,86 +8,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-
-#[cfg(feature = "parking_lot")]
-use parking_lot as sync;
-#[cfg(not(feature = "parking_lot"))]
-use std::sync;
-
-pub(crate) use sync::{RwLockReadGuard, RwLockWriteGuard};
-
-
-#[cfg(feature = "parking_lot")]
-#[inline]
-fn wrap<T>(param: T) -> T {
-    param
-}
-
-#[cfg(not(feature = "parking_lot"))]
-#[inline]
-fn wrap<T>(param: sync::LockResult<T>) -> T {
-    param.unwrap_or_else(sync::PoisonError::into_inner)
-}
-
-
-/// `RwLock` from `parking_lot` and `std` have different APIs, so we use this
-/// simple wrapper to easily permit both.
-pub(crate) struct RwLock<T: ?Sized>(sync::RwLock<T>);
-
-impl<T> RwLock<T> {
-    #[inline]
-    pub fn new(inner: T) -> Self {
-        Self(sync::RwLock::new(inner))
-    }
-
-    #[inline]
-    pub fn into_inner(self) -> T {
-        wrap(self.0.into_inner())
-    }
-}
-
-impl<T: ?Sized> RwLock<T> {
-    #[inline]
-    pub fn read(&self) -> RwLockReadGuard<T> {
-        wrap(self.0.read())
-    }
-
-    #[inline]
-    pub fn write(&self) -> RwLockWriteGuard<T> {
-        wrap(self.0.write())
-    }
-
-    #[inline]
-    pub fn get_mut(&mut self) -> &mut T {
-        wrap(self.0.get_mut())
-    }
-}
-
-
-#[cfg(feature = "hot-reloading")]
-pub(crate) struct Mutex<T: ?Sized>(sync::Mutex<T>);
-
-#[cfg(feature = "hot-reloading")]
-impl<T> Mutex<T> {
-    #[inline]
-    pub fn new(inner: T) -> Self {
-        Self(sync::Mutex::new(inner))
-    }
-}
-
-#[cfg(feature = "hot-reloading")]
-impl<T: ?Sized> Mutex<T> {
-    #[inline]
-    pub fn lock(&self) -> sync::MutexGuard<T> {
-        wrap(self.0.lock())
-    }
-
-    #[inline]
-    pub fn get_mut(&mut self) -> &mut T {
-        wrap(self.0.get_mut())
-    }
-}
-
+use crate::utils::{RwLock, RwLockReadGuard};
 
 struct Inner<T> {
     lock: RwLock<T>,
@@ -110,6 +31,7 @@ impl<T> Inner<T> {
         self.reload.fetch_add(1, Ordering::Release);
     }
 }
+
 
 /// An entry in the cache
 ///
