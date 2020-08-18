@@ -208,11 +208,7 @@ pub struct DirReader<'a, A> {
 impl<A> Clone for DirReader<'_, A> {
     #[inline]
     fn clone(&self) -> Self {
-        Self {
-            cache: self.cache,
-            assets: self.assets,
-            _marker: PhantomData,
-        }
+        *self
     }
 }
 

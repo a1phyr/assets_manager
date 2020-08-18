@@ -225,10 +225,7 @@ where
 
 impl<A> Clone for AssetRef<'_, A> {
     fn clone(&self) -> Self {
-        Self {
-            data: self.data,
-            last_reload: self.last_reload,
-        }
+        *self
     }
 }
 
