@@ -200,6 +200,20 @@ impl<'a, A> AssetRef<'a, A> {
 
 impl<A> AssetRef<'_, A>
 where
+    A: Copy
+{
+    /// Returns a copy of the inner asset.
+    ///
+    /// This is fonctionnally equivalent to `cloned`, but it ensures that no
+    /// expensive operation is used (eg if a type is refactored).
+    #[inline]
+    pub fn copied(self) -> A {
+        *self.data.lock.read()
+    }
+}
+
+impl<A> AssetRef<'_, A>
+where
     A: Clone
 {
     /// Returns a clone of the inner asset.
