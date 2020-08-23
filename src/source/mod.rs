@@ -14,7 +14,6 @@ use crate::{
 
 use std::{
     borrow::Cow,
-    error::Error,
     fmt,
     fs,
     io,
@@ -84,12 +83,12 @@ pub struct FileSystem {
 
 impl FileSystem {
     /// TODO
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<FileSystem, CacheError> {
-        let path = path.as_ref().canonicalize().map_err(ErrorKind::Io)?;
-        let _ = path.read_dir().map_err(ErrorKind::Io)?;
+    pub fn new<P: AsRef<Path>>(path: P) -> io::Result<FileSystem> {
+        let path = path.as_ref().canonicalize()?;
+        let _ = path.read_dir()?;
 
         #[cfg(feature = "hot-reloading")]
-        let reloader = Mutex::new(HotReloader::start(&path).map_err(ErrorKind::Notify)?);
+        let reloader = Mutex::new(HotReloader::start(&path).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?);
 
         Ok(FileSystem {
             path,
@@ -175,57 +174,5 @@ impl Source for FileSystem {
 impl fmt::Debug for FileSystem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FileSystem").field("root", &self.path).finish()
-    }
-}
-
-
-enum ErrorKind {
-    Io(io::Error),
-    #[cfg(feature = "hot-reloading")]
-    Notify(notify::Error),
-}
-
-/// An error which occurs when creating a cache.
-///
-/// This error can be returned by [`AssetCache::new`].
-///
-/// [`AssetCache::new`]: struct.AssetCache.html#method.new
-pub struct CacheError(ErrorKind);
-
-impl From<ErrorKind> for CacheError {
-    fn from(err: ErrorKind) -> Self {
-        Self(err)
-    }
-}
-
-impl fmt::Debug for CacheError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut debug = f.debug_tuple("CacheError");
-
-        match &self.0 {
-            ErrorKind::Io(err) => debug.field(err),
-            #[cfg(feature = "hot-reloading")]
-            ErrorKind::Notify(err) => debug.field(err),
-        }.finish()
-    }
-}
-
-impl fmt::Display for CacheError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.0 {
-            ErrorKind::Io(err) => err.fmt(f),
-            #[cfg(feature = "hot-reloading")]
-            ErrorKind::Notify(err) => err.fmt(f),
-        }
-    }
-}
-
-impl Error for CacheError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self.0 {
-            ErrorKind::Io(err) => Some(err),
-            #[cfg(feature = "hot-reloading")]
-            ErrorKind::Notify(err) => Some(err),
-        }
     }
 }

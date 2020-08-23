@@ -6,7 +6,7 @@ use crate::{
     loader::Loader,
     lock::{RwLock, CacheEntry, AssetRef},
     RandomState,
-    source::{CacheError, FileSystem, Source}
+    source::{FileSystem, Source}
 };
 
 use std::{
@@ -178,7 +178,7 @@ impl AssetCache<FileSystem> {
     /// An error will be returned if `path` is not valid readable directory or
     /// if hot-reloading failed to start (if feature `hot-reloading` is used).
     #[inline]
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<AssetCache, CacheError> {
+    pub fn new<P: AsRef<Path>>(path: P) -> io::Result<AssetCache> {
         let source = FileSystem::new(path)?;
         Ok(Self::with_source(source))
     }

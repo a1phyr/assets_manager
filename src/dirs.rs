@@ -91,7 +91,7 @@ pub(crate) struct CachedDir {
 }
 
 impl CachedDir {
-    pub fn load<A: Asset, S: Source>(cache: &AssetCache<S>, dir_id: &str) -> Result<Self, io::Error> {
+    pub fn load<A: Asset, S: Source>(cache: &AssetCache<S>, dir_id: &str) -> io::Result<Self> {
         let names = cache.source().read_dir(dir_id, A::EXTENSIONS)?;
         let mut ids = Vec::with_capacity(names.len());
 
