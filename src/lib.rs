@@ -95,6 +95,8 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+extern crate self as assets_manager;
+
 mod cache;
 pub use cache::AssetCache;
 

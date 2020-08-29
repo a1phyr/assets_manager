@@ -6,7 +6,7 @@ use crate::{
     loader::Loader,
     lock::{RwLock, CacheEntry, AssetRef},
     RandomState,
-    source::{FileSystem, Source}
+    source::{FileSystem, Source},
 };
 
 use std::{

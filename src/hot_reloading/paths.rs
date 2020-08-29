@@ -13,7 +13,6 @@ use crate::{
     cache::Key,
     loader::Loader,
     lock::CacheEntry,
-    source::extension_of,
 };
 
 use crate::RandomState;
@@ -62,6 +61,14 @@ fn clone_and_push(id: &str, name: &str) -> Box<str> {
     }
     id.push_str(name);
     id.into()
+}
+
+#[inline]
+fn extension_of(path: &Path) -> Option<&str> {
+    match path.extension() {
+        Some(ext) => ext.to_str(),
+        None => Some(""),
+    }
 }
 
 
