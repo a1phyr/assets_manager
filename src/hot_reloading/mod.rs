@@ -79,7 +79,7 @@ impl HotReloader {
                             // valid until we reply back
                             let asset_cache = unsafe { ptr.as_ref() };
                             cache.update(asset_cache);
-                            cache.get_watched(&mut asset_cache.watched.lock());
+                            cache.get_watched(&mut asset_cache.source().watched.lock());
                         }
                         answer_tx.send(()).unwrap();
                     },

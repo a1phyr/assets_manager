@@ -6,22 +6,15 @@ use crate::{
     loader::Loader,
     entry::{CacheEntry, AssetRef},
     utils::{HashMap, RwLock},
-};
-
-#[cfg(feature = "hot-reloading")]
-use crate::{
-    hot_reloading::{HotReloader, WatchedPaths},
-    utils::Mutex,
+    source::{FileSystem, Source},
 };
 
 use std::{
     any::TypeId,
     borrow::Borrow,
-    error::Error,
     fmt,
-    fs,
     io,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 
@@ -165,74 +158,53 @@ impl fmt::Debug for AccessKey<'_> {
 /// # }}
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub struct AssetCache {
-    path: PathBuf,
+pub struct AssetCache<S=FileSystem> {
+    source: S,
 
     pub(crate) assets: RwLock<HashMap<Key, CacheEntry>>,
     pub(crate) dirs: RwLock<HashMap<Key, CachedDir>>,
-
-    #[cfg(feature = "hot-reloading")]
-    reloader: Mutex<HotReloader>,
-    #[cfg(feature = "hot-reloading")]
-    pub(crate) watched: Mutex<WatchedPaths>,
 }
 
-impl AssetCache {
-    /// Creates a new cache.
-    ///
-    /// Assets will be searched in the directory given by `path`. Symbolic links
-    /// will be followed.
+impl AssetCache<FileSystem> {
+    /// Creates a cache that loads assets from the given directory.
     ///
     /// # Errors
     ///
     /// An error will be returned if `path` is not valid readable directory or
     /// if hot-reloading failed to start (if feature `hot-reloading` is used).
     #[inline]
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<AssetCache, CacheError> {
-        let path = path.as_ref().canonicalize().map_err(ErrorKind::Io)?;
-        let _ = path.read_dir().map_err(ErrorKind::Io)?;
+    pub fn new<P: AsRef<Path>>(path: P) -> io::Result<AssetCache<FileSystem>> {
+        let source = FileSystem::new(path)?;
+        Ok(Self::with_source(source))
+    }
+}
 
-        #[cfg(feature = "hot-reloading")]
-        let reloader = Mutex::new(HotReloader::start(&path).map_err(ErrorKind::Notify)?);
-
-        Ok(AssetCache {
-
+impl<S> AssetCache<S>
+where
+    S: Source,
+{
+    /// Creates a cache that loads assets from the given source.
+    pub fn with_source(source: S) -> AssetCache<S> {
+        AssetCache {
             assets: RwLock::new(HashMap::new()),
             dirs: RwLock::new(HashMap::new()),
-            path,
 
-            #[cfg(feature = "hot-reloading")]
-            reloader,
-            #[cfg(feature = "hot-reloading")]
-            watched: Mutex::new(WatchedPaths::new()),
-        })
+            source,
+        }
     }
 
-    /// Gets the path of the cache's root.
-    ///
-    /// The path is currently given as absolute, but this may change in the future.
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
-    fn path_of(&self, id: &str) -> PathBuf {
-        let mut path = self.path.clone();
-        path.extend(id.split('.'));
-        path
+    /// Returns a reference to the cache's [`Source`](source/trait.Source.html)
+    #[inline]
+    pub fn source(&self) -> &S {
+        &self.source
     }
 
     /// Adds an asset to the cache
     pub(crate) fn add_asset<A: Asset>(&self, id: Box<str>) -> Result<AssetRef<A>, AssetError<A>> {
-        let path = self.path_of(&id);
-
         #[cfg(feature = "hot-reloading")]
-        for ext in A::EXTENSIONS {
-            let mut path = path.clone();
-            path.set_extension(ext);
-            self.watched.lock().add_file::<A>(path, id.clone());
-        }
+        self.source.__private_hr_add_asset::<A>(&id);
 
-        let asset: A = load_from_fs(path)?;
+        let asset: A = load_from_source(&self.source, &id)?;
 
         let entry = CacheEntry::new(asset);
         // Safety:
@@ -241,23 +213,20 @@ impl AssetCache {
         let asset = unsafe { entry.get_ref() };
 
         let key = Key::new::<A>(id);
-        let mut cache = self.assets.write();
-        cache.insert(key, entry);
+        self.assets.write().insert(key, entry);
 
         Ok(asset)
     }
 
-    fn add_dir<A: Asset>(&self, id: Box<str>) -> Result<DirReader<A>, io::Error> {
-        let path = self.path_of(&id);
-        let dir = CachedDir::load::<A>(self, &path, &id)?;
+    fn add_dir<A: Asset>(&self, id: Box<str>) -> Result<DirReader<A, S>, io::Error> {
+        #[cfg(feature = "hot-reloading")]
+        self.source.__private_hr_add_dir::<A>(&id);
+
+        let dir = CachedDir::load::<A, S>(self, &id)?;
         let reader = unsafe { dir.read(self) };
 
-        #[cfg(feature = "hot-reloading")]
-        self.watched.lock().add_dir::<A>(path, id.clone());
-
         let key = Key::new::<A>(id);
-        let mut dirs = self.dirs.write();
-        dirs.insert(key, dir);
+        self.dirs.write().insert(key, dir);
 
         Ok(reader)
     }
@@ -321,8 +290,7 @@ impl AssetCache {
     pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetError<A>> {
         let cache = self.assets.read();
         if let Some(cached) = cache.get(&AccessKey::new::<A>(id)) {
-            let path = self.path_of(id);
-            let asset = load_from_fs(path)?;
+            let asset = load_from_source(&self.source, id)?;
             return unsafe { Ok(cached.write(asset)) };
         }
         drop(cache);
@@ -341,23 +309,24 @@ impl AssetCache {
     ///
     /// An error is returned if the given id does not match a valid readable
     /// directory.
-    pub fn load_dir<A: Asset>(&self, id: &str) -> io::Result<DirReader<A>> {
+    pub fn load_dir<A: Asset>(&self, id: &str) -> io::Result<DirReader<A, S>> {
         let dirs = self.dirs.read();
-        if let Some(dir) = dirs.get(&AccessKey::new::<A>(id)) {
-            return unsafe { Ok(dir.read(self)) };
+        match dirs.get(&AccessKey::new::<A>(id)) {
+            Some(dir) => unsafe { Ok(dir.read(self)) },
+            None => {
+                drop(dirs);
+                self.add_dir(id.into())
+            }
         }
-        drop(dirs);
-
-        self.add_dir(id.into())
     }
 
     /// Load an owned version of the asset
     ///
     /// Note that it will not try to fetch it from the cache nor to cache it.
     /// In addition, hot-reloading will not affect the returned value.
+    #[inline]
     pub fn load_owned<A: Asset>(&self, id: &str) -> Result<A, AssetError<A>> {
-        let path = self.path_of(id);
-        load_from_fs(path)
+        load_from_source(&self.source, id)
     }
 
     /// Remove an asset from the cache.
@@ -386,9 +355,11 @@ impl AssetCache {
         self.dirs.get_mut().clear();
 
         #[cfg(feature = "hot-reloading")]
-        self.watched.get_mut().clear();
+        self.source.__private_hr_clear();
     }
+}
 
+impl AssetCache<FileSystem> {
     /// Reloads changed assets.
     ///
     /// This function is typically called within a loop.
@@ -410,29 +381,31 @@ impl AssetCache {
     #[cfg(feature = "hot-reloading")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
     pub fn hot_reload(&self) {
-        self.reloader.lock().reload(self);
+        self.source.reloader.lock().reload(self);
     }
 }
 
-impl fmt::Debug for AssetCache {
+impl<S> fmt::Debug for AssetCache<S>
+where
+    S: fmt::Debug,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AssetCache")
-            .field("path", &self.path)
+            .field("source", &self.source)
             .field("assets", &self.assets.read())
             .field("dirs", &self.dirs.read())
             .finish()
     }
 }
 
-fn load_from_fs<A: Asset>(mut path: PathBuf) -> Result<A, AssetError<A>> {
+fn load_from_source<A: Asset, S: Source>(source: &S, id: &str) -> Result<A, AssetError<A>> {
     // Compile-time assert that the asset type has at least one extension
     let _ = <A as Asset>::_AT_LEAST_ONE_EXTENSION_REQUIRED;
 
     let mut err = None;
 
     for ext in A::EXTENSIONS {
-        path.set_extension(ext);
-        let content = fs::read(&path).map(Into::into);
+        let content = source.read(id, ext);
 
         match A::Loader::load(content, ext) {
             Err(e) => err = Some(e),
@@ -442,56 +415,4 @@ fn load_from_fs<A: Asset>(mut path: PathBuf) -> Result<A, AssetError<A>> {
 
     // The for loop is taken at least once, so unwrap never panics
     Err(err.unwrap())
-}
-
-
-enum ErrorKind {
-    Io(io::Error),
-    #[cfg(feature = "hot-reloading")]
-    Notify(notify::Error),
-}
-
-/// An error which occurs when creating a cache.
-///
-/// This error can be returned by [`AssetCache::new`].
-///
-/// [`AssetCache::new`]: struct.AssetCache.html#method.new
-pub struct CacheError(ErrorKind);
-
-impl From<ErrorKind> for CacheError {
-    fn from(err: ErrorKind) -> Self {
-        Self(err)
-    }
-}
-
-impl fmt::Debug for CacheError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut debug = f.debug_tuple("CacheError");
-
-        match &self.0 {
-            ErrorKind::Io(err) => debug.field(err),
-            #[cfg(feature = "hot-reloading")]
-            ErrorKind::Notify(err) => debug.field(err),
-        }.finish()
-    }
-}
-
-impl fmt::Display for CacheError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.0 {
-            ErrorKind::Io(err) => err.fmt(f),
-            #[cfg(feature = "hot-reloading")]
-            ErrorKind::Notify(err) => err.fmt(f),
-        }
-    }
-}
-
-impl Error for CacheError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self.0 {
-            ErrorKind::Io(err) => Some(err),
-            #[cfg(feature = "hot-reloading")]
-            ErrorKind::Notify(err) => Some(err),
-        }
-    }
 }

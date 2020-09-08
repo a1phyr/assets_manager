@@ -3,6 +3,7 @@ use crate::{
     AssetCache,
     AssetError,
     AssetRef,
+    source::Source,
     utils::{RwLock, RwLockReadGuard},
 };
 
@@ -10,34 +11,8 @@ use std::{
     iter::FusedIterator,
     io,
     fmt,
-    fs,
     marker::PhantomData,
-    path::Path,
 };
-
-#[inline]
-pub(crate) fn extension_of(path: &Path) -> Option<&str> {
-    match path.extension() {
-        Some(ext) => ext.to_str(),
-        None => Some(""),
-    }
-}
-
-#[inline]
-fn has_extension(path: &Path, ext: &[&str]) -> bool {
-    match extension_of(path) {
-        Some(file_ext) => ext.contains(&file_ext),
-        None => false,
-    }
-}
-
-#[inline]
-pub(crate) fn id_push(id: &mut String, name: &str) {
-    if !id.is_empty() {
-        id.push('.');
-    }
-    id.push_str(name);
-}
 
 struct StringList {
     list: RwLock<Vec<Box<str>>>,
@@ -116,36 +91,21 @@ pub(crate) struct CachedDir {
 }
 
 impl CachedDir {
-    pub fn load<A: Asset>(cache: &AssetCache, path: &Path, id: &str) -> Result<Self, io::Error> {
-        let entries = fs::read_dir(path)?;
+    pub fn load<A: Asset, S: Source>(cache: &AssetCache<S>, dir_id: &str) -> io::Result<Self> {
+        let names = cache.source().read_dir(dir_id, A::EXTENSIONS)?;
+        let mut ids = Vec::with_capacity(names.len());
 
-        let mut loaded = Vec::new();
-
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-
-                if !has_extension(&path, A::EXTENSIONS) {
-                    continue;
-                }
-
-                let name = match path.file_stem().and_then(|n| n.to_str()) {
-                    Some(name) => name,
-                    None => continue,
-                };
-
-                if path.is_file() {
-                    let mut this_id = id.to_owned();
-                    id_push(&mut this_id, name);
-
-                    let _ = cache.load::<A>(&this_id);
-                    loaded.push(this_id.into());
-                }
+        for mut id in names {
+            if !dir_id.is_empty() {
+                id.insert(0, '.');
             }
+            id.insert_str(0, dir_id);
+            let _ = cache.load::<A>(&id);
+            ids.push(id.into());
         }
 
         Ok(Self {
-            assets: Box::new(loaded.into()),
+            assets: Box::new(ids.into()),
         })
     }
 
@@ -173,7 +133,7 @@ impl CachedDir {
     }
 
     #[inline]
-    pub unsafe fn read<'a, A>(&self, cache: &'a AssetCache) -> DirReader<'a, A> {
+    pub unsafe fn read<'a, A, S>(&self, cache: &'a AssetCache<S>) -> DirReader<'a, A, S> {
         DirReader {
             cache,
             assets: &*(&*self.assets as *const StringList),
@@ -199,22 +159,22 @@ impl fmt::Debug for CachedDir {
 ///
 /// [`AssetCache::load_dir`]: struct.AssetCache.html#method.load_dir
 /// [hot-reloading]: struct.AssetCache.html#method.hot_reload
-pub struct DirReader<'a, A> {
-    cache: &'a AssetCache,
+pub struct DirReader<'a, A, S> {
+    cache: &'a AssetCache<S>,
     assets: &'a StringList,
     _marker: PhantomData<&'a A>,
 }
 
-impl<A> Clone for DirReader<'_, A> {
+impl<A, S> Clone for DirReader<'_, A, S> {
     #[inline]
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<A> Copy for DirReader<'_, A> {}
+impl<A, S> Copy for DirReader<'_, A, S> {}
 
-impl<'a, A: Asset> DirReader<'a, A> {
+impl<'a, A: Asset, S> DirReader<'a, A, S> {
     /// An iterator over successfully loaded assets in a directory.
     ///
     /// This iterator yields each asset that was successfully loaded. It is
@@ -226,7 +186,7 @@ impl<'a, A: Asset> DirReader<'a, A> {
     ///
     /// [removed from the cache]: struct.AssetCache.html#method.remove
     #[inline]
-    pub fn iter(&self) -> ReadDir<'a, A> {
+    pub fn iter(&self) -> ReadDir<'a, A, S> {
         ReadDir {
             cache: self.cache,
             iter: self.assets.into_iter(),
@@ -241,7 +201,7 @@ impl<'a, A: Asset> DirReader<'a, A> {
     /// any asset that is not in the cache (e.g. that previously failed to load
     /// or was removed).
     #[inline]
-    pub fn iter_all(&self) -> ReadAllDir<'a, A> {
+    pub fn iter_all(&self) -> ReadAllDir<'a, A, S> {
         ReadAllDir {
             cache: self.cache,
             iter: self.assets.into_iter(),
@@ -250,16 +210,17 @@ impl<'a, A: Asset> DirReader<'a, A> {
     }
 }
 
-impl<'a, A> IntoIterator for &DirReader<'a, A>
+impl<'a, A, S> IntoIterator for &DirReader<'a, A, S>
 where
     A: Asset,
+    S: Source,
 {
     type Item = AssetRef<'a, A>;
-    type IntoIter = ReadDir<'a, A>;
+    type IntoIter = ReadDir<'a, A, S>;
 
     /// Equivalent to [`iter`](#method.iter).
     #[inline]
-    fn into_iter(self) -> ReadDir<'a, A> {
+    fn into_iter(self) -> ReadDir<'a, A, S> {
         self.iter()
     }
 }
@@ -271,15 +232,16 @@ where
 /// It can be obtained by calling [`DirReader::iter`].
 ///
 /// [`DirReader::iter`]: struct.DirReader.html#method.iter
-pub struct ReadDir<'a, A> {
-    cache: &'a AssetCache,
+pub struct ReadDir<'a, A, S> {
+    cache: &'a AssetCache<S>,
     iter: StringIter<'a>,
     _marker: PhantomData<&'a A>,
 }
 
-impl<'a, A> Iterator for ReadDir<'a, A>
+impl<'a, A, S> Iterator for ReadDir<'a, A, S>
 where
     A: Asset,
+    S: Source,
 {
     type Item = AssetRef<'a, A>;
 
@@ -300,7 +262,11 @@ where
     }
 }
 
-impl<A> FusedIterator for ReadDir<'_, A> where A: Asset {}
+impl<A, S> FusedIterator for ReadDir<'_, A, S>
+where
+    A: Asset,
+    S: Source,
+{}
 
 /// An iterator over all assets in a directory.
 ///
@@ -310,15 +276,16 @@ impl<A> FusedIterator for ReadDir<'_, A> where A: Asset {}
 /// It can be obtained by calling [`DirReader::iter_all`].
 ///
 /// [`DirReader::iter_all`]: struct.DirReader.html#method.iter_all
-pub struct ReadAllDir<'a, A> {
-    cache: &'a AssetCache,
+pub struct ReadAllDir<'a, A, S> {
+    cache: &'a AssetCache<S>,
     iter: StringIter<'a>,
     _marker: PhantomData<&'a A>,
 }
 
-impl<'a, A> Iterator for ReadAllDir<'a, A>
+impl<'a, A, S> Iterator for ReadAllDir<'a, A, S>
 where
     A: Asset,
+    S: Source,
 {
     type Item = (&'a str, Result<AssetRef<'a, A>, AssetError<A>>);
 
@@ -334,9 +301,10 @@ where
     }
 }
 
-impl<A> ExactSizeIterator for ReadAllDir<'_, A>
+impl<A, S> ExactSizeIterator for ReadAllDir<'_, A, S>
 where
     A: Asset,
+    S: Source,
 {
     #[inline]
     fn len(&self) -> usize {
@@ -344,18 +312,23 @@ where
     }
 }
 
-impl<A> FusedIterator for ReadAllDir<'_, A> where A: Asset {}
+impl<A, S> FusedIterator for ReadAllDir<'_, A, S>
+where
+    A: Asset,
+    S: Source,
+{}
 
-impl<A> fmt::Debug for DirReader<'_, A>
+impl<A, S> fmt::Debug for DirReader<'_, A, S>
 where
     A: fmt::Debug + Asset,
+    S: Source,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.iter()).finish()
     }
 }
 
-impl<A> fmt::Debug for ReadDir<'_, A>
+impl<A, S> fmt::Debug for ReadDir<'_, A, S>
 where
     A: fmt::Debug,
 {
@@ -364,7 +337,7 @@ where
     }
 }
 
-impl<A> fmt::Debug for ReadAllDir<'_, A>
+impl<A, S> fmt::Debug for ReadAllDir<'_, A, S>
 where
     A: fmt::Debug,
 {

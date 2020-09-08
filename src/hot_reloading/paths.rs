@@ -10,7 +10,6 @@ use crate::{
     Asset,
     AssetCache,
     cache::Key,
-    dirs::{extension_of, id_push},
     loader::Loader,
     entry::CacheEntry,
     utils::HashMap,
@@ -56,8 +55,19 @@ fn borrowed(content: &io::Result<Vec<u8>>) -> io::Result<Cow<[u8]>> {
 
 fn clone_and_push(id: &str, name: &str) -> Box<str> {
     let mut id = id.to_string();
-    id_push(&mut id, name);
+    if !id.is_empty() {
+        id.push('.');
+    }
+    id.push_str(name);
     id.into()
+}
+
+#[inline]
+fn extension_of(path: &Path) -> Option<&str> {
+    match path.extension() {
+        Some(ext) => ext.to_str(),
+        None => Some(""),
+    }
 }
 
 

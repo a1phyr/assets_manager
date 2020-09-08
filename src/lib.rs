@@ -95,16 +95,20 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+extern crate self as assets_manager;
+
 mod cache;
-pub use cache::{AssetCache, CacheError};
+pub use cache::AssetCache;
+
+mod dirs;
+pub use dirs::{DirReader, ReadAllDir, ReadDir};
 
 pub mod loader;
 
 mod entry;
 pub use entry::{AssetRef, AssetGuard};
 
-mod dirs;
-pub use dirs::{DirReader, ReadAllDir, ReadDir};
+pub mod source;
 
 #[cfg(feature = "hot-reloading")]
 mod hot_reloading;
