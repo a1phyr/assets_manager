@@ -30,7 +30,16 @@ fn has_extension(path: &Path, ext: &[&str]) -> bool {
     }
 }
 
-/// TODO
+/// A [`Source`](trait.Source.html) to load assets from a directory in the
+/// filesystem.
+///
+/// This is the default `Source` of [`AssetCache`](../struct.AssetCache.html).
+///
+/// ## Hot-reloading
+///
+/// This source supports hot-reloading: when a file is edited, the corresponding
+/// assets are reloaded when [`AssetCache::hot_reload`](../struct.AssetCache.html#method.hot_reload)
+/// is called.
 pub struct FileSystem {
     path: PathBuf,
 
@@ -41,7 +50,16 @@ pub struct FileSystem {
 }
 
 impl FileSystem {
-    /// TODO
+    /// Creates a new `FileSystem` from a directory.
+    ///
+    /// Generally you do not need to call this function directly, as the
+    /// [`AssetCache::new`](../struct.AssetCache.html#method.new) method provides
+    /// a shortcut to create a cache reading from the filesystem.
+    ///
+    /// # Errors
+    ///
+    /// An error can occur if `path` is not a valid readable directory or if
+    /// hot-reloading fails to start (if feature `hot-reloading` is used).
     pub fn new<P: AsRef<Path>>(path: P) -> io::Result<FileSystem> {
         let path = path.as_ref().canonicalize()?;
         let _ = path.read_dir()?;
@@ -67,7 +85,8 @@ impl FileSystem {
         &self.path
     }
 
-    /// TODO
+    /// Returns the path of the (eventual) file represented by an id and an
+    /// extension.
     pub fn path_of(&self, id: &str, ext: &str) -> PathBuf {
         let mut path = self.path.clone();
         path.extend(id.split('.'));
@@ -82,8 +101,8 @@ impl super::Source for FileSystem {
         fs::read(path).map(Into::into)
     }
 
-    fn read_dir(&self, dir: &str, ext: &[&str]) -> io::Result<Vec<String>> {
-        let dir_path = self.path_of(dir, "");
+    fn read_dir(&self, id: &str, ext: &[&str]) -> io::Result<Vec<String>> {
+        let dir_path = self.path_of(id, "");
         let entries = fs::read_dir(dir_path)?;
 
         let mut loaded = Vec::new();

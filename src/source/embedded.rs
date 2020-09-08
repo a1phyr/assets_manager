@@ -5,18 +5,37 @@ use std::{
 };
 
 
-/// TODO
+/// The raw represention of embedded files. The common way to create one is the
+/// [`embed!`](macro.embed.html) macro, and it is used to create an
+/// [`Embedded`](struct.Embedded.html) source.
+///
+/// Most of the time you will want a `'static` one, but it can also borrow data
+/// from the current context;
+///
+/// Unlike `Embedded`, it is possible to create it in a const context.
 #[cfg_attr(docsrs, doc(cfg(feature = "embedded")))]
 #[derive(Clone, Copy, Debug)]
 pub struct RawEmbedded<'a> {
-    /// TODO
+    /// A list of files, represented by their id and their extension, with
+    /// their content.
     pub files: &'a [((&'a str, &'a str), &'a [u8])],
 
-    /// TODO
+    /// A list of directory, represented by their id, with the list of files
+    /// they contain.
     pub dirs: &'a [(&'a str, &'a [(&'a str, &'a str)])],
 }
 
-/// TODO
+/// A [`Source`](trait.Source.html) which is embedded in the binary. It is
+/// created using a [`RawEmbedded`](struct.RawEmbedded.html) struct.
+///
+/// ## Usage
+///
+/// ```no_run
+/// use assets_manager::{AssetCache, source::{embed, Embedded}};
+///
+/// let embed = Embedded::from(embed!("assets"));
+/// let cache = AssetCache::with_source(embed);
+/// ```
 #[cfg_attr(docsrs, doc(cfg(feature = "embedded")))]
 #[derive(Clone, Debug)]
 pub struct Embedded<'a> {
@@ -41,8 +60,8 @@ impl<'a> super::Source for Embedded<'a> {
         }
     }
 
-    fn read_dir(&self, dir: &str, ext: &[&str]) -> io::Result<Vec<String>> {
-        let dir = self.dirs.get(dir).ok_or(io::ErrorKind::NotFound)?;
+    fn read_dir(&self, id: &str, ext: &[&str]) -> io::Result<Vec<String>> {
+        let dir = self.dirs.get(id).ok_or(io::ErrorKind::NotFound)?;
 
         Ok(dir.iter().copied()
             .filter(|(_, file_ext)| ext.contains(file_ext))

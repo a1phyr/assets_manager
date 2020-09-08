@@ -168,17 +168,14 @@ pub struct AssetCache<S=FileSystem> {
 }
 
 impl AssetCache<FileSystem> {
-    /// Creates a new cache.
-    ///
-    /// Assets will be searched in the directory given by `path`. Symbolic links
-    /// will be followed.
+    /// Creates a cache that loads assets from the given directory.
     ///
     /// # Errors
     ///
     /// An error will be returned if `path` is not valid readable directory or
     /// if hot-reloading failed to start (if feature `hot-reloading` is used).
     #[inline]
-    pub fn new<P: AsRef<Path>>(path: P) -> io::Result<AssetCache> {
+    pub fn new<P: AsRef<Path>>(path: P) -> io::Result<AssetCache<FileSystem>> {
         let source = FileSystem::new(path)?;
         Ok(Self::with_source(source))
     }
@@ -188,7 +185,7 @@ impl<S> AssetCache<S>
 where
     S: Source,
 {
-    /// TODO
+    /// Creates a cache that loads assets from the given source.
     pub fn with_source(source: S) -> AssetCache<S> {
         AssetCache {
             assets: RwLock::new(HashMap::with_hasher(RandomState::new())),
@@ -198,7 +195,7 @@ where
         }
     }
 
-    /// TODO
+    /// Returns a reference to the cache's [`Source`](source/trait.Source.html)
     #[inline]
     pub fn source(&self) -> &S {
         &self.source
