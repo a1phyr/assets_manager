@@ -265,6 +265,7 @@ where
     ///
     /// [`load`]: fn.load.html
     #[inline]
+    #[track_caller]
     pub fn load_expect<A: Asset>(&self, id: &str) -> AssetRef<A> {
         self.load(id).unwrap_or_else(|err| {
             panic!("Failed to load essential asset {:?}: {}", id, err)
