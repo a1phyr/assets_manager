@@ -9,14 +9,105 @@ use std::{
 use crate::{
     Asset,
     AssetCache,
-    cache::Key,
+    cache::{Key, OwnedKey},
     loader::Loader,
     entry::CacheEntry,
     utils::HashMap,
 };
 
 
+fn borrowed(content: &io::Result<Vec<u8>>) -> io::Result<Cow<[u8]>> {
+    match content {
+        Ok(bytes) => Ok(bytes.into()),
+        Err(err) => match err.raw_os_error() {
+            Some(e) => Err(io::Error::from_raw_os_error(e)),
+            None => Err(err.kind().into()),
+        },
+    }
+}
 
+/// Push a component to an id
+fn clone_and_push(id: &str, name: &str) -> Box<str> {
+    let mut id = id.to_string();
+    if !id.is_empty() {
+        id.push('.');
+    }
+    id.push_str(name);
+    id.into()
+}
+
+#[inline]
+fn extension_of(path: &Path) -> Option<&str> {
+    match path.extension() {
+        Some(ext) => ext.to_str(),
+        None => Some(""),
+    }
+}
+
+
+unsafe trait AnyAsset: Any + Send + Sync {
+    unsafe fn reload(self: Box<Self>, entry: &CacheEntry);
+    fn create(self: Box<Self>) -> CacheEntry;
+}
+
+unsafe impl<A: Asset> AnyAsset for A {
+    unsafe fn reload(self: Box<Self>, entry: &CacheEntry) {
+        entry.write::<A>(*self);
+    }
+
+    fn create(self: Box<Self>) -> CacheEntry {
+        CacheEntry::new::<A>(*self)
+    }
+}
+
+
+type LoadFn = fn(content: io::Result<Cow<[u8]>>, ext: &str, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>>;
+
+fn load<A: Asset>(content: io::Result<Cow<[u8]>>, ext: &str, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>> {
+    match A::Loader::load(content, ext) {
+        Ok(asset) => Some(Box::new(asset)),
+        Err(e) => {
+            log::warn!("Error reloading {:?} from {:?}: {}", id, path, e);
+            None
+        },
+    }
+}
+
+type Ext = &'static [&'static str];
+
+/// This struct is responsible of the safety of the whole module.
+///
+/// Its invariant is that the TypeId is the same as the one of the value
+/// returned by the LoadFn.
+pub struct Id(PathBuf, Box<str>, TypeId, LoadFn);
+
+/// A update to the list of watched paths
+#[non_exhaustive]
+pub enum UpdateMessage {
+    Clear,
+    Asset(Id),
+    Dir(Id, Ext),
+}
+
+impl UpdateMessage {
+    #[inline]
+    pub fn asset<A: Asset>(path: PathBuf, id: Box<str>) -> Self {
+        let asset = Id(path, id, TypeId::of::<A>(), load::<A>);
+        UpdateMessage::Asset(asset)
+    }
+
+    #[inline]
+    pub fn dir<A: Asset>(path: PathBuf, id: Box<str>) -> Self {
+        let dir = Id(path, id, TypeId::of::<A>(), load::<A>);
+        UpdateMessage::Dir(dir, A::EXTENSIONS)
+    }
+}
+
+/// A map type -> `T`
+///
+/// We could use a `HashMap` here, but the length of this `Vec` is unlikely to
+/// exceed 2 or 3. It would mean that the same file is used to load several
+/// assets types, which is uncommon but possible.
 struct Types<T>(Vec<(TypeId, T)>);
 
 impl<T> Types<T> {
@@ -42,100 +133,7 @@ impl<T> Types<T> {
     }
 }
 
-
-fn borrowed(content: &io::Result<Vec<u8>>) -> io::Result<Cow<[u8]>> {
-    match content {
-        Ok(bytes) => Ok(bytes.into()),
-        Err(err) => match err.raw_os_error() {
-            Some(e) => Err(io::Error::from_raw_os_error(e)),
-            None => Err(err.kind().into()),
-        },
-    }
-}
-
-fn clone_and_push(id: &str, name: &str) -> Box<str> {
-    let mut id = id.to_string();
-    if !id.is_empty() {
-        id.push('.');
-    }
-    id.push_str(name);
-    id.into()
-}
-
-#[inline]
-fn extension_of(path: &Path) -> Option<&str> {
-    match path.extension() {
-        Some(ext) => ext.to_str(),
-        None => Some(""),
-    }
-}
-
-
-trait AnyAsset: Any + Send + Sync {
-    unsafe fn reload(self: Box<Self>, entry: &CacheEntry);
-    fn create(self: Box<Self>) -> CacheEntry;
-}
-
-impl<A: Asset> AnyAsset for A {
-    unsafe fn reload(self: Box<Self>, entry: &CacheEntry) {
-        entry.write::<A>(*self);
-    }
-
-    fn create(self: Box<Self>) -> CacheEntry {
-        CacheEntry::new::<A>(*self)
-    }
-}
-
-
-type LoadFn = fn(content: io::Result<Cow<[u8]>>, ext: &str, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>>;
-
-fn load<A: Asset>(content: io::Result<Cow<[u8]>>, ext: &str, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>> {
-    match A::Loader::load(content, ext) {
-        Ok(asset) => Some(Box::new(asset)),
-        Err(e) => {
-            log::warn!("Error reloading {:?} from {:?}: {}", id, path, e);
-            None
-        },
-    }
-}
-
-type Ext = &'static [&'static str];
-
-enum Kind {
-    Asset,
-    Dir(Ext),
-}
-
-pub struct WatchedPaths {
-    added: Vec<(PathBuf, Box<str>, TypeId, LoadFn, Kind)>,
-    cleared: bool,
-}
-
-impl WatchedPaths {
-    pub fn new() -> Self {
-        Self {
-            added: Vec::new(),
-            cleared: false,
-        }
-    }
-
-    #[inline]
-    pub fn add_file<A: Asset>(&mut self, path: PathBuf, id: Box<str>) {
-        self.added.push((path, id, TypeId::of::<A>(), load::<A>, Kind::Asset));
-    }
-
-    #[inline]
-    pub fn add_dir<A: Asset>(&mut self, path: PathBuf, id: Box<str>) {
-        self.added.push((path, id, TypeId::of::<A>(), load::<A>, Kind::Dir(A::EXTENSIONS)));
-    }
-
-    #[inline]
-    pub fn clear(&mut self) {
-        self.added.clear();
-        self.cleared = true;
-    }
-}
-
+/// A list of types associated with an id
 struct WatchedPath<T> {
     id: Box<str>,
     types: Types<T>,
@@ -150,30 +148,133 @@ impl<T> WatchedPath<T> {
     }
 }
 
-enum Action {
-    Added,
-    Removed,
-}
-
-pub struct FileCache {
+/// The list of watched paths.
+///
+/// Each type is associated with the function to load an asset of this type.
+/// This is kept up to date by the matching `AssetCache`, which sends messages
+/// when an asset or a directory is added.
+pub struct AssetPaths {
     assets: HashMap<PathBuf, WatchedPath<LoadFn>>,
     dirs: HashMap<PathBuf, WatchedPath<(LoadFn, Ext)>>,
-
-    changed: HashMap<Key, Box<dyn AnyAsset>>,
-    changed_dirs: Vec<(Key, Box<str>, Action)>,
 }
 
-impl FileCache {
-    pub fn new() -> Self {
-        Self {
-            assets: HashMap::new(),
-            dirs: HashMap::new(),
+impl AssetPaths {
+    /// Update the list given a message
+    pub fn update(&mut self, msg: UpdateMessage) {
+        match msg {
+            UpdateMessage::Clear => {
+                self.assets.clear();
+                self.dirs.clear();
+            },
+            UpdateMessage::Asset(Id(path, id, type_id, load)) => {
+                let watched = self.assets.entry(path).or_insert_with(|| WatchedPath::new(id));
+                watched.types.insert(type_id, load);
+            },
+            UpdateMessage::Dir(Id(path, id, type_id, load), ext) => {
+                let watched = self.dirs.entry(path).or_insert_with(|| WatchedPath::new(id));
+                watched.types.insert(type_id, (load, ext));
+            },
+        }
+    }
+}
 
-            changed: HashMap::new(),
-            changed_dirs: Vec::new(),
+
+enum Action {
+    Add,
+    Remove,
+}
+
+/// Store assets until we can sync with the `AssetCache`.
+pub struct LocalCache {
+    changed: HashMap<OwnedKey, Box<dyn AnyAsset>>,
+    changed_dirs: Vec<(OwnedKey, Box<str>, Action)>,
+}
+
+enum CacheKind {
+    Local(LocalCache),
+    Static(&'static AssetCache),
+}
+
+impl CacheKind {
+    /// Reload an asset
+    ///
+    /// # Safety
+    ///
+    /// `key.type_id == asset.type_id()`
+    unsafe fn update(&mut self, key: &Key, asset: Box<dyn AnyAsset>) {
+        match self {
+            CacheKind::Static(cache) => {
+                log::info!("Reloading {:?}", key.id());
+
+                let assets = cache.assets.read();
+                if let Some(entry) = assets.get(key) {
+                    asset.reload(entry);
+                }
+            },
+            CacheKind::Local(cache) => {
+                cache.changed.insert(key.to_owned(), asset);
+            },
         }
     }
 
+    /// Add an asset to a directory
+    fn add(&mut self, dir_key: &Key, id: Box<str>) {
+        match self {
+            CacheKind::Static(cache) => {
+                log::info!("Adding {:?} to {:?}", id, dir_key.id());
+
+                let dirs = cache.dirs.read();
+                if let Some(dir) = dirs.get(dir_key) {
+                    dir.add(id);
+                }
+            },
+            CacheKind::Local(cache) => {
+                cache.changed_dirs.push((dir_key.to_owned(), id, Action::Add));
+            },
+        }
+    }
+
+    /// Remove an asset from a directory
+    fn remove(&mut self, dir_key: &Key, id: Box<str>) {
+        match self {
+            CacheKind::Static(cache) => {
+                log::info!("Removing {:?} from {:?}", id, dir_key.id());
+
+                let dirs = cache.dirs.read();
+                if let Some(dir) = dirs.get(dir_key) {
+                    dir.remove(&id);
+                }
+            },
+            CacheKind::Local(cache) => {
+                cache.changed_dirs.push((dir_key.to_owned(), id, Action::Remove));
+            },
+        }
+    }
+}
+
+pub struct HotReloadingData {
+    pub paths: AssetPaths,
+    cache: CacheKind,
+}
+
+impl HotReloadingData {
+    pub fn new() -> Self {
+        let cache = LocalCache {
+            changed: HashMap::new(),
+            changed_dirs: Vec::new(),
+        };
+
+        HotReloadingData {
+            paths: AssetPaths {
+                assets: HashMap::new(),
+                dirs: HashMap::new(),
+            },
+
+            cache: CacheKind::Local(cache),
+        }
+    }
+
+    /// A file was changed
     pub fn load(&mut self, path: PathBuf) -> Option<()> {
         let file_ext = extension_of(&path)?;
 
@@ -184,13 +285,15 @@ impl FileCache {
     }
 
     fn load_asset(&mut self, path: &Path, file_ext: &str) {
-        if let Some(path_infos) = self.assets.get(path) {
+        if let Some(path_infos) = self.paths.assets.get(path) {
             let content = fs::read(path);
 
             for (type_id, load) in &path_infos.types.0 {
                 if let Some(asset) = load(borrowed(&content), file_ext, &path_infos.id, path) {
-                    let key = Key::new_with(path_infos.id.clone(), *type_id);
-                    self.changed.insert(key, asset);
+                    unsafe {
+                        let key = Key::new_with(&path_infos.id, *type_id);
+                        self.cache.update(&key, asset);
+                    }
                 }
             }
         }
@@ -200,16 +303,16 @@ impl FileCache {
         let parent = path.parent()?;
         let file_stem = path.file_stem()?.to_str()?;
 
-        if let Some(path_infos) = self.dirs.get(parent) {
+        if let Some(path_infos) = self.paths.dirs.get(parent) {
             for &(type_id, (load, type_ext)) in &path_infos.types.0 {
                 if type_ext.contains(&file_ext) {
-                    let key = Key::new_with(path_infos.id.clone(), type_id);
                     let file_id = clone_and_push(&path_infos.id, file_stem);
 
-                    let watched = self.assets.entry(path.into()).or_insert_with(|| WatchedPath::new(file_id.clone()));
+                    let watched = self.paths.assets.entry(path.into()).or_insert_with(|| WatchedPath::new(file_id.clone()));
                     watched.types.insert(type_id, load);
 
-                    self.changed_dirs.push((key, file_id, Action::Added));
+                    let key = Key::new_with(&path_infos.id, type_id);
+                    self.cache.add(&key, file_id);
                 }
             }
         }
@@ -219,23 +322,45 @@ impl FileCache {
 
     pub fn remove(&mut self, path: PathBuf) -> Option<()> {
         let parent = path.parent()?;
-        let path_infos = self.dirs.get(parent)?;
+        let path_infos = self.paths.dirs.get(parent)?;
         let file_ext = extension_of(&path)?;
 
         let file_stem = path.file_stem()?.to_str()?;
 
         for &(type_id, (_, type_ext)) in &path_infos.types.0 {
             if type_ext.contains(&file_ext) {
-                let key = Key::new_with(path_infos.id.clone(), type_id);
+                let key = Key::new_with(&path_infos.id, type_id);
                 let id = clone_and_push(&path_infos.id, file_stem);
-                self.changed_dirs.push((key, id, Action::Removed));
+                self.cache.remove(&key, id);
             }
         }
 
         Some(())
     }
 
+    /// Drop the local cache and use the static reference we have on the
+    /// `AssetCache`.
+    pub fn use_static_ref(&mut self, asset_cache: &'static AssetCache) {
+        if let CacheKind::Local(cache) = &mut self.cache {
+            cache.update(asset_cache);
+            self.cache = CacheKind::Static(asset_cache);
+            log::trace!("Hot-reloading now use a 'static reference");
+        }
+    }
+
+    pub fn local_cache(&mut self) -> Option<&mut LocalCache> {
+        match &mut self.cache {
+            CacheKind::Local(cache) => Some(cache),
+            CacheKind::Static(_) => None,
+        }
+    }
+}
+
+impl LocalCache {
+    /// Update the `AssetCache` with data collected in the `LocalCache` since
+    /// the last reload.
     pub fn update(&mut self, cache: &AssetCache) {
+        // Update assets
         let mut assets = cache.assets.write();
 
         for (key, value) in self.changed.drain() {
@@ -244,17 +369,18 @@ impl FileCache {
             use std::collections::hash_map::Entry::*;
             match assets.entry(key) {
                 Occupied(entry) => unsafe { value.reload(entry.get()) },
-                Vacant(entry) =>  { entry.insert(value.create()); },
+                Vacant(entry) => { entry.insert(value.create()); },
             }
 
         }
         drop(assets);
 
+        // Update directories
         let dirs = cache.dirs.read();
 
         for (key, id, action) in self.changed_dirs.drain(..) {
             match action {
-                Action::Added => {
+                Action::Add => {
                     if let Some(dir) = dirs.get(&key) {
                         if !dir.contains(&id) {
                             log::info!("Adding {:?} to {:?}", id, key.id());
@@ -262,32 +388,12 @@ impl FileCache {
                         }
                     }
                 }
-                Action::Removed => {
+                Action::Remove => {
                     if let Some(dir) = dirs.get(&key) {
                         log::info!("Removing {:?} from {:?}", id, key.id());
                         dir.remove(&id);
                     }
                 }
-            }
-        }
-    }
-
-    pub fn get_watched(&mut self, watched: &mut WatchedPaths) {
-        if watched.cleared {
-            watched.cleared = false;
-            watched.added.clear();
-        }
-
-        for (path, id, type_id, load, kind) in watched.added.drain(..) {
-            match kind {
-                Kind::Asset => {
-                    let watched = self.assets.entry(path).or_insert_with(|| WatchedPath::new(id));
-                    watched.types.insert(type_id, load);
-                },
-                Kind::Dir(ext) => {
-                    let watched = self.dirs.entry(path).or_insert_with(|| WatchedPath::new(id));
-                    watched.types.insert(type_id, (load, ext));
-                },
             }
         }
     }

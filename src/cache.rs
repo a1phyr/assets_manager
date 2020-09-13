@@ -20,18 +20,18 @@ use std::{
 
 /// The key used to identify assets
 ///
-/// **Note**: This definition has to kept in sync with [`AccessKey`]'s one.
+/// **Note**: This definition has to kept in sync with [`Key`]'s one.
 ///
-/// [`AccessKey`]: struct.AccessKey.html
+/// [`Key`]: struct.Key.html
 #[derive(PartialEq, Eq, Hash)]
 #[repr(C)]
-pub(crate) struct Key {
+pub(crate) struct OwnedKey {
     id: Box<str>,
     type_id: TypeId,
 }
 
-impl Key {
-    /// Creates a Key with the given type and id.
+impl OwnedKey {
+    /// Creates a `OwnedKey` with the given type and id.
     #[inline]
     fn new<T: Asset>(id: Box<str>) -> Self {
         Self {
@@ -42,58 +42,76 @@ impl Key {
 
     #[cfg(feature = "hot-reloading")]
     #[inline]
-    pub fn new_with(id: Box<str>, type_id: TypeId) -> Self {
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+}
+
+/// A borrowed version of [`OwnedKey`]
+///
+/// [`OwnedKey`]: struct.OwnedKey.html
+#[derive(PartialEq, Eq, Hash)]
+#[repr(C)]
+pub(crate) struct Key<'a> {
+    id: &'a str,
+    type_id: TypeId,
+}
+
+impl<'a> Key<'a> {
+    /// Creates an Key for the given type and id.
+    #[inline]
+    pub fn new<T: Asset>(id: &'a str) -> Self {
+        Self {
+            id,
+            type_id: TypeId::of::<T>(),
+        }
+    }
+
+    #[inline]
+    #[cfg(feature = "hot-reloading")]
+    pub fn new_with(id: &'a str, type_id: TypeId) -> Self {
         Self { id, type_id }
     }
 
     #[cfg(feature = "hot-reloading")]
     #[inline]
     pub fn id(&self) -> &str {
-        &self.id
+        self.id
     }
 }
 
-/// A borrowed version of [`Key`]
-///
-/// [`Key`]: struct.Key.html
-#[derive(PartialEq, Eq, Hash)]
-#[repr(C)]
-pub(crate) struct AccessKey<'a> {
-    id: &'a str,
-    type_id: TypeId,
-}
-
-impl<'a> AccessKey<'a> {
-    /// Creates an AccessKey for the given type and id.
+impl<'a> Borrow<Key<'a>> for OwnedKey {
     #[inline]
-    fn new<T: Asset>(id: &'a str) -> Self {
-        Self {
-            id,
-            type_id: TypeId::of::<T>(),
-        }
-    }
-}
-
-impl<'a> Borrow<AccessKey<'a>> for Key {
-    #[inline]
-    fn borrow(&self) -> &AccessKey<'a> {
+    fn borrow(&self) -> &Key<'a> {
         unsafe {
-            let ptr = self as *const Key as *const AccessKey;
+            let ptr = self as *const OwnedKey as *const Key;
             &*ptr
         }
     }
 }
 
-impl fmt::Debug for Key {
+impl<'a> ToOwned for Key<'a> {
+    type Owned = OwnedKey;
+
+    #[inline]
+    fn to_owned(&self) -> OwnedKey {
+        OwnedKey {
+            id: self.id.into(),
+            type_id: self.type_id,
+        }
+    }
+}
+
+impl fmt::Debug for OwnedKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let key: &AccessKey = self.borrow();
+        let key: &Key = self.borrow();
         key.fmt(f)
     }
 }
 
-impl fmt::Debug for AccessKey<'_> {
+impl fmt::Debug for Key<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Key")
+        f.debug_struct("OwnedKey")
             .field("id", &self.id)
             .field("type_id", &self.type_id)
             .finish()
@@ -161,8 +179,8 @@ impl fmt::Debug for AccessKey<'_> {
 pub struct AssetCache<S=FileSystem> {
     source: S,
 
-    pub(crate) assets: RwLock<HashMap<Key, CacheEntry>>,
-    pub(crate) dirs: RwLock<HashMap<Key, CachedDir>>,
+    pub(crate) assets: RwLock<HashMap<OwnedKey, CacheEntry>>,
+    pub(crate) dirs: RwLock<HashMap<OwnedKey, CachedDir>>,
 }
 
 impl AssetCache<FileSystem> {
@@ -212,7 +230,7 @@ where
         // The cache entry is garantied to live long enough
         let asset = unsafe { entry.get_ref() };
 
-        let key = Key::new::<A>(id);
+        let key = OwnedKey::new::<A>(id);
         self.assets.write().insert(key, entry);
 
         Ok(asset)
@@ -225,7 +243,7 @@ where
         let dir = CachedDir::load::<A, S>(self, &id)?;
         let reader = unsafe { dir.read(self) };
 
-        let key = Key::new::<A>(id);
+        let key = OwnedKey::new::<A>(id);
         self.dirs.write().insert(key, dir);
 
         Ok(reader)
@@ -252,7 +270,7 @@ where
     /// This function does not attempt to load the asset from the filesystem if
     /// it is not found in the cache.
     pub fn load_cached<A: Asset>(&self, id: &str) -> Option<AssetRef<A>> {
-        let key = AccessKey::new::<A>(id);
+        let key = Key::new::<A>(id);
         let cache = self.assets.read();
         cache.get(&key).map(|asset| unsafe { asset.get_ref() })
     }
@@ -290,7 +308,7 @@ where
     /// [`load`]: fn.load.html
     pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetError<A>> {
         let cache = self.assets.read();
-        if let Some(cached) = cache.get(&AccessKey::new::<A>(id)) {
+        if let Some(cached) = cache.get(&Key::new::<A>(id)) {
             let asset = load_from_source(&self.source, id)?;
             return unsafe { Ok(cached.write(asset)) };
         }
@@ -312,7 +330,7 @@ where
     /// directory.
     pub fn load_dir<A: Asset>(&self, id: &str) -> io::Result<DirReader<A, S>> {
         let dirs = self.dirs.read();
-        match dirs.get(&AccessKey::new::<A>(id)) {
+        match dirs.get(&Key::new::<A>(id)) {
             Some(dir) => unsafe { Ok(dir.read(self)) },
             None => {
                 drop(dirs);
@@ -335,7 +353,7 @@ where
     /// The removed asset matches both the id and the type parameter.
     #[inline]
     pub fn remove<A: Asset>(&mut self, id: &str) {
-        let key = AccessKey::new::<A>(id);
+        let key = Key::new::<A>(id);
         let cache = self.assets.get_mut();
         cache.remove(&key);
     }
@@ -344,7 +362,7 @@ where
     ///
     /// The corresponding asset is removed from the cache.
     pub fn take<A: Asset>(&mut self, id: &str) -> Option<A> {
-        let key = AccessKey::new::<A>(id);
+        let key = Key::new::<A>(id);
         let cache = self.assets.get_mut();
         cache.remove(&key).map(|entry| unsafe { entry.into_inner() })
     }
@@ -382,7 +400,23 @@ impl AssetCache<FileSystem> {
     #[cfg(feature = "hot-reloading")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
     pub fn hot_reload(&self) {
-        self.source.reloader.lock().reload(self);
+        self.source.reloader.reload(self);
+    }
+
+    /// Enhance hot-reloading.
+    ///
+    /// Having a `'static` reference to the cache enables some optimisations,
+    /// which you can take advantage of with this function. If an `AssetCache`
+    /// is behind a `'static` reference, you should always prefer using this
+    /// function over [`hot_reload`](#method.hot_reload).
+    ///
+    /// You only have to call this function once to take effect. After calling
+    /// this function, subsequent calls to `hot_reload` and to this function
+    /// have no effect.
+    #[cfg(feature = "hot-reloading")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
+    pub fn enhance_hot_reloading(&'static self) {
+        self.source.reloader.send_static(self);
     }
 }
 

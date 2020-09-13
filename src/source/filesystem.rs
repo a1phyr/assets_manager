@@ -1,8 +1,7 @@
 #[cfg(feature = "hot-reloading")]
 use crate::{
     Asset,
-    hot_reloading::{HotReloader, WatchedPaths},
-    utils::Mutex,
+    hot_reloading::{HotReloader, UpdateMessage},
 };
 
 use std::{
@@ -44,9 +43,7 @@ pub struct FileSystem {
     path: PathBuf,
 
     #[cfg(feature = "hot-reloading")]
-    pub(crate) reloader: Mutex<HotReloader>,
-    #[cfg(feature = "hot-reloading")]
-    pub(crate) watched: Mutex<WatchedPaths>,
+    pub(crate) reloader: HotReloader,
 }
 
 impl FileSystem {
@@ -65,15 +62,13 @@ impl FileSystem {
         let _ = path.read_dir()?;
 
         #[cfg(feature = "hot-reloading")]
-        let reloader = Mutex::new(HotReloader::start(&path).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?);
+        let reloader = HotReloader::start(&path).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
 
         Ok(FileSystem {
             path,
 
             #[cfg(feature = "hot-reloading")]
             reloader,
-            #[cfg(feature = "hot-reloading")]
-            watched: Mutex::new(WatchedPaths::new()),
         })
     }
 
@@ -133,19 +128,21 @@ impl super::Source for FileSystem {
     fn __private_hr_add_asset<A: Asset>(&self, id: &str) {
         for ext in A::EXTENSIONS {
             let path = self.path_of(id, ext);
-            self.watched.lock().add_file::<A>(path, id.into());
+            let msg = UpdateMessage::asset::<A>(path, id.into());
+            self.reloader.send_update(msg);
         }
     }
 
     #[cfg(feature = "hot-reloading")]
     fn __private_hr_add_dir<A: Asset>(&self, id: &str) {
         let path = self.path_of(id, "");
-        self.watched.lock().add_dir::<A>(path, id.into());
+        let msg = UpdateMessage::dir::<A>(path, id.into());
+        self.reloader.send_update(msg);
     }
 
     #[cfg(feature = "hot-reloading")]
     fn __private_hr_clear(&mut self) {
-        self.watched.get_mut().clear();
+        self.reloader.send_update(UpdateMessage::Clear);
     }
 }
 

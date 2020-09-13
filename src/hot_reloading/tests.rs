@@ -60,3 +60,21 @@ fn dir_remove_and_add() -> Res {
 
     Ok(())
 }
+
+#[test]
+fn reload_static() -> Res {
+    let cache = AssetCache::new("assets")?;
+    let cache = Box::leak(Box::new(cache));
+    let asset = cache.load::<X>("test.hot_asset.b")?;
+    cache.enhance_hot_reloading();
+
+    assert_eq!(asset.read().0, 22);
+    File::create("assets/test/hot_asset/b.x")?.write_all(b"18")?;
+    sleep();
+    assert_eq!(asset.read().0, 18);
+    File::create("assets/test/hot_asset/b.x")?.write_all(b"22")?;
+    sleep();
+    assert_eq!(asset.read().0, 22);
+
+    Ok(())
+}

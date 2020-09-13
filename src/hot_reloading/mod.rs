@@ -3,121 +3,174 @@ mod paths;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use paths::WatchedPaths;
-use paths::FileCache;
+pub use paths::UpdateMessage;
+use paths::HotReloadingData;
+
+use crossbeam_channel::{self as channel, Receiver, Sender};
 
 use std::{
     fmt,
-    mem::ManuallyDrop,
     path::Path,
     ptr::NonNull,
-    sync::mpsc::{self, channel, Receiver, Sender},
+    sync::mpsc,
     thread,
     time::Duration,
 };
 
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
 
-use crate::{
-    AssetCache,
-};
+use crate::{AssetCache, utils::Mutex};
 
 
-struct SharedPtr<T>(NonNull<T>);
-unsafe impl<T: Sync> Send for SharedPtr<T> {}
+enum Message {
+    Ptr(NonNull<AssetCache>),
+    Static(&'static AssetCache),
+}
+unsafe impl Send for Message where AssetCache: Sync {}
 
 
-struct JoinOnDrop(ManuallyDrop<thread::JoinHandle<()>>);
+fn std_crossbeam_channel<T: Send + 'static>() -> (mpsc::Sender<T>, Receiver<T>) {
+    let (std_tx, std_rx) = mpsc::channel();
+    let (crossbeam_tx, crossbeam_rx) = channel::unbounded();
 
-impl Drop for JoinOnDrop {
-    fn drop(&mut self) {
-        unsafe {
-            let _ = ManuallyDrop::take(&mut self.0).join();
+    thread::spawn(move || {
+        while let Ok(msg) = std_rx.recv() {
+            if crossbeam_tx.send(msg).is_err() {
+                break;
+            }
         }
-    }
-}
+    });
 
-impl From<thread::JoinHandle<()>> for JoinOnDrop {
-    fn from(handle: thread::JoinHandle<()>) -> Self {
-        Self(ManuallyDrop::new(handle))
-    }
+    (std_tx, crossbeam_rx)
 }
 
 
-#[allow(unused)]
-pub struct HotReloader {
-    sender: Sender<SharedPtr<AssetCache>>,
+struct Client {
+    sender: Sender<Message>,
     receiver: Receiver<()>,
-
-    // The Watcher has to be dropped before the JoinHandle, so the spawned
-    // thread can be notified that it should end before we join on it
-    watcher: notify::RecommendedWatcher,
-    handle: JoinOnDrop,
 }
 
+pub struct HotReloader {
+    channel: Mutex<Option<Client>>,
+    updates: Sender<UpdateMessage>,
+}
 
 impl HotReloader {
     pub fn start(path: &Path) -> Result<Self, notify::Error> {
-        let (notify_tx, notify_rx) = channel();
+        let (notify_tx, notify_rx) = std_crossbeam_channel();
 
-        let (ptr_tx, ptr_rx) = channel();
-        let (answer_tx, answer_rx) = channel();
+        let (ptr_tx, ptr_rx) = channel::unbounded();
+        let (answer_tx, answer_rx) = channel::unbounded();
+        let (updates_tx, updates_rx) = channel::unbounded();
 
         let mut watcher = notify::watcher(notify_tx, Duration::from_millis(50))?;
         watcher.watch(path, RecursiveMode::Recursive)?;
 
-        let handle = thread::spawn(move || {
-            const TIMEOUT: Duration = Duration::from_millis(20);
-            let mut cache = FileCache::new();
+        thread::spawn(move || {
+            log::trace!("Starting hot-reloading");
+
+            // Keep the notify Watcher alive as long as the thread is running
+            let _watcher = watcher;
+
+            // At the beginning, we select over three channels:
+            // - One to notify that we can update the `AssetCache` or that we
+            //   can switch to using a 'static reference. We close this channel
+            //   in the latter case.
+            // - One to receive events from notify
+            // - One to update the watched paths list when the `AssetCache`
+            //   changes
+            let mut select = channel::Select::new();
+            select.recv(&ptr_rx);
+            select.recv(&notify_rx);
+            select.recv(&updates_rx);
+
+            let mut cache = HotReloadingData::new();
 
             loop {
-                match ptr_rx.recv_timeout(TIMEOUT) {
-                    Err(mpsc::RecvTimeoutError::Timeout) => (),
-                    Ok(SharedPtr(ptr)) => {
-                        {
-                            // Safety: The received pointer is guarantied to be
-                            // valid until we reply back
-                            let asset_cache = unsafe { ptr.as_ref() };
-                            cache.update(asset_cache);
-                            cache.get_watched(&mut asset_cache.source().watched.lock());
-                        }
-                        answer_tx.send(()).unwrap();
+                let ready = select.select();
+                match ready.index() {
+                    0 => match ready.recv(&ptr_rx) {
+                        Ok(Message::Ptr(ptr)) => {
+                            if let Some(cache) = cache.local_cache() {
+                                // Safety: The received pointer is guarantied to
+                                // be valid until we reply back
+                                cache.update(unsafe { ptr.as_ref() });
+                                answer_tx.send(()).unwrap();
+                            }
+                        },
+                        Ok(Message::Static(asset_cache)) => {
+                            cache.use_static_ref(asset_cache);
+                            select.remove(0);
+                        },
+                        Err(_) => (),
                     },
-                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
-                }
 
-                while let Ok(event) = notify_rx.try_recv() {
-                    match event {
-                        DebouncedEvent::Write(path)
-                        | DebouncedEvent::Chmod(path)
-                        | DebouncedEvent::Create(path) => {
-                            cache.load(path);
+                    1 => match ready.recv(&notify_rx) {
+                        Ok(event) => match event {
+                            DebouncedEvent::Write(path)
+                            | DebouncedEvent::Chmod(path)
+                            | DebouncedEvent::Create(path) => {
+                                cache.load(path);
+                            },
+                            DebouncedEvent::Remove(path) => {
+                                cache.remove(path);
+                            },
+                            DebouncedEvent::Rename(src, dst) => {
+                                cache.load(dst);
+                                cache.remove(src);
+                            },
+                            _ => (),
                         },
-                        DebouncedEvent::Remove(path) => {
-                            cache.remove(path);
+                        Err(_) => {
+                            log::error!("Notify panicked, hot-reloading stopped");
+                            break;
                         },
-                        DebouncedEvent::Rename(src, dst) => {
-                            cache.load(dst);
-                            cache.remove(src);
-                        },
-                        _ => (),
-                    }
+                    },
+
+                    2 => match ready.recv(&updates_rx) {
+                        Ok(msg) => cache.paths.update(msg),
+                        Err(_) => break,
+                    },
+
+                    _ => unreachable!(),
                 }
             }
-        }).into();
+        });
 
         Ok(HotReloader {
-            watcher,
-            handle,
+            updates: updates_tx,
 
-            sender: ptr_tx,
-            receiver: answer_rx,
+            channel: Mutex::new(Some(Client {
+                sender: ptr_tx,
+                receiver: answer_rx,
+            })),
         })
     }
 
+    // All theses methods ignore send/recv errors: the program can continue
+    // without hot-reloading if it stopped, and an error should have already
+    // been logged.
+
+    pub fn send_update(&self, msg: UpdateMessage) {
+        let _ = self.updates.send(msg);
+    }
+
     pub fn reload(&self, cache: &AssetCache) {
-        self.sender.send(SharedPtr(cache.into())).unwrap();
-        self.receiver.recv().unwrap();
+        let lock = self.channel.lock();
+
+        if let Some(Client { sender, receiver }) = &*lock {
+            let _ = sender.send(Message::Ptr(cache.into()));
+            let _ = receiver.recv();
+        }
+    }
+
+    pub fn send_static(&self, cache: &'static AssetCache) {
+        let mut lock = self.channel.lock();
+
+        if let Some(Client { sender, .. }) = &mut *lock {
+            let _ = sender.send(Message::Static(cache));
+            *lock = None;
+        }
     }
 }
 

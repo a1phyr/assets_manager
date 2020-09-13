@@ -17,7 +17,7 @@ keywords = ["asset", "assets", "cache", "resources"]
 [features]
 default = ["ahash"]
 
-hot-reloading = ["notify", "log"]
+hot-reloading = ["notify", "crossbeam-channel", "log"]
 embedded = ["assets_manager_macros"]
 
 bincode = ["serde_bincode", "serde"]
@@ -36,8 +36,9 @@ ahash = {version = "0.4", default-features = false, optional = true}
 
 parking_lot = {version = "0.11", optional = true}
 
-log = {version = "0.4", optional = true}
 notify = {version = "4.0", optional = true}
+crossbeam-channel = {version = "0.4", optional = true}
+log = {version = "0.4", optional = true}
 
 serde = {version = "1.0", optional = true}
 serde_bincode = {version = "1.2", package = "bincode", optional = true}

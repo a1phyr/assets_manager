@@ -70,11 +70,6 @@ impl<T: ?Sized> Mutex<T> {
     pub fn lock(&self) -> sync::MutexGuard<T> {
         wrap(self.0.lock())
     }
-
-    #[inline]
-    pub fn get_mut(&mut self) -> &mut T {
-        wrap(self.0.get_mut())
-    }
 }
 
 
