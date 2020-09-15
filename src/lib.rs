@@ -10,8 +10,10 @@
 //! ## Cargo features
 //!
 //! - `hot-reloading`: Add hot-reloading
+//! - `embedded`: Add embedded source
 //!
 //! ### Additionnal loaders
+//!
 //! - `bincode`: Bincode deserialization
 //! - `cbor`: CBOR deserialization
 //! - `json`: JSON deserialization

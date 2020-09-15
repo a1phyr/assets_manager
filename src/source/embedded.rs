@@ -28,6 +28,20 @@ pub struct RawEmbedded<'a> {
 /// A [`Source`](trait.Source.html) which is embedded in the binary. It is
 /// created using a [`RawEmbedded`](struct.RawEmbedded.html) struct.
 ///
+/// ## Pros and cons
+///
+/// Embedding assets enable to easily share a program as a single binary, which
+/// is especially useful for WebAssembly, where no filesystem is available.
+/// Moreover, you might experience performance gain, as no I/O is necessary to
+/// load an asset.
+///
+/// However, embedding assets comes with a great cost. It can really slow
+/// development speed, because it significantly increases compile time and it
+/// makes it hard to edit external files (you have to recompile the program
+/// each time you edit an asset). Hot-reloading is of course impossible. For
+/// these reasons, you should only use this source for release builds. It also
+/// create large binaries, which increases memory usage.
+///
 /// ## Usage
 ///
 /// ```no_run

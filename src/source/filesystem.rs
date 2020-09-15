@@ -37,8 +37,14 @@ fn has_extension(path: &Path, ext: &[&str]) -> bool {
 /// ## Hot-reloading
 ///
 /// This source supports hot-reloading: when a file is edited, the corresponding
-/// assets are reloaded when [`AssetCache::hot_reload`](../struct.AssetCache.html#method.hot_reload)
-/// is called.
+/// assets are reloaded when [`AssetCache::hot_reload`] is called.
+///
+/// [`AssetCache::hot_reload`]: ../struct.AssetCache.html#method.hot_reload
+///
+/// ## WebAssembly
+///
+/// This source does not work in WebAssembly, because there is no filesystem.
+/// When called, it always returns an error.
 pub struct FileSystem {
     path: PathBuf,
 
