@@ -35,6 +35,12 @@ This crates focuses on:
 - **Lightness**:\
   Pay for what you take, no dependency bloat.
 
+## Non-goals
+
+- **`#[no_std]` support**:\
+  Even tough this crate support WebAssembly, there is no plan for `#[no_std]` support,
+  as such applications are not the targets of this crate
+
 ## Example
 
 Suppose that you have a file `assets/common/position.ron` containing this:

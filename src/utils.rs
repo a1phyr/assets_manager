@@ -15,6 +15,7 @@ fn wrap<T>(param: T) -> T {
 #[cfg(not(feature = "parking_lot"))]
 #[inline]
 fn wrap<T>(param: sync::LockResult<T>) -> T {
+    // Just ignore poison errors
     param.unwrap_or_else(sync::PoisonError::into_inner)
 }
 

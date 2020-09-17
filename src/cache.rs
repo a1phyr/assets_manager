@@ -236,6 +236,7 @@ where
         Ok(asset)
     }
 
+    /// Adds a directory to the cache
     fn add_dir<A: Asset>(&self, id: Box<str>) -> Result<DirReader<A, S>, io::Error> {
         #[cfg(feature = "hot-reloading")]
         self.source.__private_hr_add_dir::<A>(&id);
@@ -251,13 +252,14 @@ where
 
     /// Loads an asset.
     ///
-    /// If the asset is not found in the cache, it is loaded from the filesystem.
+    /// If the asset is not found in the cache, it is loaded from the source.
     ///
     /// # Errors
     ///
     /// Errors can occur in several cases :
     /// - The asset could not be loaded from the filesystem
     /// - Loaded data could not not be converted properly
+    /// - The asset has no extension
     pub fn load<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetError<A>> {
         match self.load_cached(id) {
             Some(asset) => Ok(asset),
@@ -267,15 +269,15 @@ where
 
     /// Loads an asset from the cache.
     ///
-    /// This function does not attempt to load the asset from the filesystem if
-    /// it is not found in the cache.
+    /// This function does not attempt to load the asset from the source if it
+    /// is not found in the cache.
     pub fn load_cached<A: Asset>(&self, id: &str) -> Option<AssetRef<A>> {
         let key = Key::new::<A>(id);
         let cache = self.assets.read();
         cache.get(&key).map(|asset| unsafe { asset.get_ref() })
     }
 
-    /// Loads an asset given an id, from the filesystem or the cache.
+    /// Loads an asset and panic if an error happens.
     ///
     /// # Panics
     ///
@@ -290,14 +292,14 @@ where
         })
     }
 
-    /// Reloads an asset from the filesystem.
+    /// Reloads an asset from the source.
     ///
     /// It does not matter whether the asset has been loaded yet.
     ///
     /// **Note**: this function requires a write lock on the asset, and will block
-    /// until one is aquired, ie no read lock can exist at the same time. This
+    /// until one is acquired, ie no read lock can exist at the same time. This
     /// means that you **must not** call this method if you have an `AssetGuard`
-    /// on the same asset, or it may cause a deadlock.
+    /// on the same asset, or it may cause a deadlock or a panic.
     ///
     /// # Errors
     ///
@@ -317,14 +319,14 @@ where
         self.add_asset(id.into())
     }
 
-    /// Load all assets of a given type in a directory.
+    /// Loads all assets of a given type in a directory.
     ///
     /// The directory's id is constructed the same way as assets. To specify
     /// the cache's root, give the empty string (`""`) as id.
     ///
     /// The returned structure can be iterated on to get the loaded assets.
     ///
-    /// # Error
+    /// # Errors
     ///
     /// An error is returned if the given id does not match a valid readable
     /// directory.
@@ -339,18 +341,21 @@ where
         }
     }
 
-    /// Load an owned version of the asset
+    /// Loads an owned version of an asset
     ///
-    /// Note that it will not try to fetch it from the cache nor to cache it.
-    /// In addition, hot-reloading will not affect the returned value.
+    /// Note that the asset will not be fetched from the cache nor will it be
+    /// cached. In addition, hot-reloading does not affect the returned value.
+    ///
+    /// This can be useful if you need ownership on a non-clonable value.
     #[inline]
     pub fn load_owned<A: Asset>(&self, id: &str) -> Result<A, AssetError<A>> {
         load_from_source(&self.source, id)
     }
 
-    /// Remove an asset from the cache.
+    /// Removes an asset from the cache.
     ///
-    /// The removed asset matches both the id and the type parameter.
+    /// Note that you need a mutable reference to the cache, so you cannot have
+    /// any [`AssetRef`], [`AssetGuard`], etc when you call this function.
     #[inline]
     pub fn remove<A: Asset>(&mut self, id: &str) {
         let key = Key::new::<A>(id);
@@ -358,9 +363,12 @@ where
         cache.remove(&key);
     }
 
-    /// Take ownership on an asset.
+    /// Takes ownership on a cached asset.
     ///
-    /// The corresponding asset is removed from the cache.
+    /// The corresponding asset is removed from the cache. If you don't use the
+    /// return value, [`remove`] does the same but is more efficient.
+    ///
+    /// [`remove`]: #method.remove
     pub fn take<A: Asset>(&mut self, id: &str) -> Option<A> {
         let key = Key::new::<A>(id);
         let cache = self.assets.get_mut();
@@ -368,6 +376,8 @@ where
     }
 
     /// Clears the cache.
+    ///
+    /// Removes all cached assets and directories.
     #[inline]
     pub fn clear(&mut self) {
         self.assets.get_mut().clear();
@@ -403,16 +413,16 @@ impl AssetCache<FileSystem> {
         self.source.reloader.reload(self);
     }
 
-    /// Enhance hot-reloading.
+    /// Enhances hot-reloading.
     ///
     /// Having a `'static` reference to the cache enables some optimisations,
     /// which you can take advantage of with this function. If an `AssetCache`
     /// is behind a `'static` reference, you should always prefer using this
     /// function over [`hot_reload`](#method.hot_reload).
     ///
-    /// You only have to call this function once to take effect. After calling
-    /// this function, subsequent calls to `hot_reload` and to this function
-    /// have no effect.
+    /// You only have to call this function once for it to take effect. After
+    /// calling this function, subsequent calls to `hot_reload` and to this
+    /// function have no effect.
     #[cfg(feature = "hot-reloading")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
     pub fn enhance_hot_reloading(&'static self) {
