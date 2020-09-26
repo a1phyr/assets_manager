@@ -2,7 +2,6 @@ use std::{
     any::{Any, TypeId},
     borrow::Cow,
     fs,
-    io,
     path::{Path, PathBuf},
 };
 
@@ -15,16 +14,6 @@ use crate::{
     utils::HashMap,
 };
 
-
-fn borrowed(content: &io::Result<Vec<u8>>) -> io::Result<Cow<[u8]>> {
-    match content {
-        Ok(bytes) => Ok(bytes.into()),
-        Err(err) => match err.raw_os_error() {
-            Some(e) => Err(io::Error::from_raw_os_error(e)),
-            None => Err(err.kind().into()),
-        },
-    }
-}
 
 /// Push a component to an id
 fn clone_and_push(id: &str, name: &str) -> Box<str> {
@@ -60,14 +49,13 @@ unsafe impl<A: Asset> AnyAsset for A {
     }
 }
 
+type LoadFn = fn(content: Cow<[u8]>, ext: &str, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>>;
 
-type LoadFn = fn(content: io::Result<Cow<[u8]>>, ext: &str, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>>;
-
-fn load<A: Asset>(content: io::Result<Cow<[u8]>>, ext: &str, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>> {
+fn load<A: Asset>(content: Cow<[u8]>, ext: &str, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>> {
     match A::Loader::load(content, ext) {
         Ok(asset) => Some(Box::new(asset)),
-        Err(e) => {
-            log::warn!("Error reloading {:?} from {:?}: {}", id, path, e);
+        Err(err) => {
+            log::warn!("Error reloading {:?} from {:?}: {}", id, path, err);
             None
         },
     }
@@ -286,10 +274,16 @@ impl HotReloadingData {
 
     fn load_asset(&mut self, path: &Path, file_ext: &str) {
         if let Some(path_infos) = self.paths.assets.get(path) {
-            let content = fs::read(path);
+            let content = match fs::read(path) {
+                Ok(content) => content,
+                Err(err) => {
+                    log::warn!("Error reloading {:?} from {:?}: {}", path_infos.id, path, err);
+                    return;
+                }
+            };
 
             for (type_id, load) in &path_infos.types.0 {
-                if let Some(asset) = load(borrowed(&content), file_ext, &path_infos.id, path) {
+                if let Some(asset) = load(Cow::Borrowed(&content), file_ext, &path_infos.id, path) {
                     unsafe {
                         let key = Key::new_with(&path_infos.id, *type_id);
                         self.cache.update(&key, asset);

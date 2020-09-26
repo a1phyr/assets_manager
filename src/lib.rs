@@ -105,6 +105,9 @@ pub use cache::AssetCache;
 mod dirs;
 pub use dirs::{DirReader, ReadAllDir, ReadDir};
 
+mod error;
+pub use error::{BoxedError, Error};
+
 pub mod loader;
 
 mod entry;
@@ -119,6 +122,8 @@ mod utils;
 
 #[cfg(test)]
 mod tests;
+
+use std::sync::Arc;
 
 
 /// An asset is a type loadable from a file.
@@ -173,32 +178,19 @@ mod tests;
 pub trait Asset: Sized + Send + Sync + 'static {
     /// Use this field if your asset only uses one extension.
     ///
-    /// It is ignored if your set `EXTENSIONS` too.
+    /// This value is ignored if you set `EXTENSIONS` too.
     const EXTENSION: &'static str = "";
 
     /// This field enables you to specify multiple extension for an asset.
     ///
-    /// You must always provide at least one extension, ie this array cannot be
-    /// empty.
+    /// If `EXTENSION` is provided, you don't have to set this constant.
+    ///
+    /// If this array is empty, loading an asset of this type returns
+    /// [`Error::NoDefaultValue`] unless a default value is provided with the
+    /// `default_value` method.
+    ///
+    /// [`Error::NoDefaultValue`]: enum.Error.html#variant.NoDefaultValue
     const EXTENSIONS: &'static [&'static str] = &[Self::EXTENSION];
-
-    /// Compile-time assertion that `Self::EXTENSIONS` is not empty.
-    ///
-    /// ```compile_fail
-    /// use assets_manager::{Asset, AssetCache, loader::{LoadFrom, ParseLoader}};
-    ///
-    /// struct T;
-    /// impl From<i32> for T { fn from(_: i32) -> T { T } }
-    /// impl Asset for T {
-    ///     type Loader = LoadFrom<i32, ParseLoader>;
-    ///     const EXTENSIONS: &'static [&'static str] = &[];
-    /// }
-    ///
-    /// let cache = AssetCache::new(".").unwrap();
-    /// let _ = cache.load::<T>("");
-    /// ```
-    #[doc(hidden)]
-    const _AT_LEAST_ONE_EXTENSION_REQUIRED: &'static str = Self::EXTENSIONS[0];
 
     /// Specifies a way to to convert raw bytes into the asset.
     ///
@@ -206,6 +198,47 @@ pub trait Asset: Sized + Send + Sync + 'static {
     ///
     /// [`loader`]: loader/index.html
     type Loader: loader::Loader<Self>;
+
+    /// Specifies a eventual default value to use if an asset fails to load. If
+    /// this method returns `Ok`, the returned value is used as an asset. In
+    /// particular, if this method always returns `Ok`, all `AssetCache::load*`
+    /// (except `load_cached`) are guarantied not to fail.
+    ///
+    /// The `id` parameter is given to easily report the error.
+    ///
+    /// By default, this method always returns an error.
+    ///
+    /// # Example
+    ///
+    /// On error, log it and return a default value:
+    ///
+    /// ```no_run
+    /// # cfg_if::cfg_if! { if #[cfg(feature = "json")] {
+    /// use assets_manager::{Asset, Error, loader};
+    /// use serde::Deserialize;
+    ///
+    /// #[derive(Deserialize, Default)]
+    /// struct Item {
+    ///     name: String,
+    ///     kind: String,
+    /// }
+    ///
+    /// impl Asset for Item {
+    ///     const EXTENSION: &'static str = "json";
+    ///     type Loader = loader::JsonLoader;
+    ///
+    ///     fn default_value(id: &str, error: Error) -> Result<Item, Error> {
+    ///         eprintln!("Error loading {}: {}. Using default value", id, error);
+    ///         Ok(Item::default())
+    ///     }
+    /// }
+    /// # }}
+    /// ```
+    #[inline]
+    #[allow(unused_variables)]
+    fn default_value(id: &str, error: Error) -> Result<Self, Error> {
+        Err(error)
+    }
 }
 
 impl<A> Asset for Box<A>
@@ -214,15 +247,22 @@ where
 {
     const EXTENSIONS: &'static [&'static str] = A::EXTENSIONS;
     type Loader = loader::LoadFromAsset<A>;
+
+    #[inline]
+    fn default_value(id: &str, error: Error) -> Result<Box<A>, Error> {
+        A::default_value(id, error).map(Box::new)
+    }
 }
 
-impl<A> Asset for std::sync::Arc<A>
+impl<A> Asset for Arc<A>
 where
     A: Asset,
 {
     const EXTENSIONS: &'static [&'static str] = A::EXTENSIONS;
     type Loader = loader::LoadFromAsset<A>;
-}
 
-/// The error type when loading an asset.
-pub type AssetError<A> = <<A as Asset>::Loader as loader::Loader<A>>::Error;
+    #[inline]
+    fn default_value(id: &str, error: Error) -> Result<Arc<A>, Error> {
+        A::default_value(id, error).map(Arc::new)
+    }
+}

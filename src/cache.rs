@@ -1,13 +1,13 @@
 //! Definition of the cache
 use crate::{
-    Asset,
-    AssetError,
+    Asset, Error,
     dirs::{CachedDir, DirReader},
-    loader::Loader,
     entry::{CacheEntry, AssetRef},
+    loader::Loader,
     utils::{HashMap, RwLock},
     source::{FileSystem, Source},
 };
+
 
 use std::{
     any::TypeId,
@@ -218,7 +218,7 @@ where
     }
 
     /// Adds an asset to the cache
-    pub(crate) fn add_asset<A: Asset>(&self, id: Box<str>) -> Result<AssetRef<A>, AssetError<A>> {
+    pub(crate) fn add_asset<A: Asset>(&self, id: Box<str>) -> Result<AssetRef<A>, Error> {
         #[cfg(feature = "hot-reloading")]
         self.source.__private_hr_add_asset::<A>(&id);
 
@@ -260,7 +260,7 @@ where
     /// - The asset could not be loaded from the filesystem
     /// - Loaded data could not not be converted properly
     /// - The asset has no extension
-    pub fn load<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetError<A>> {
+    pub fn load<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, Error> {
         match self.load_cached(id) {
             Some(asset) => Ok(asset),
             None => self.add_asset(id.into()),
@@ -308,7 +308,7 @@ where
     /// If an error occurs, the asset is left unmodified.
     ///
     /// [`load`]: fn.load.html
-    pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, AssetError<A>> {
+    pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, Error> {
         let cache = self.assets.read();
         if let Some(cached) = cache.get(&Key::new::<A>(id)) {
             let asset = load_from_source(&self.source, id)?;
@@ -348,7 +348,7 @@ where
     ///
     /// This can be useful if you need ownership on a non-clonable value.
     #[inline]
-    pub fn load_owned<A: Asset>(&self, id: &str) -> Result<A, AssetError<A>> {
+    pub fn load_owned<A: Asset>(&self, id: &str) -> Result<A, Error> {
         load_from_source(&self.source, id)
     }
 
@@ -356,6 +356,9 @@ where
     ///
     /// Note that you need a mutable reference to the cache, so you cannot have
     /// any [`AssetRef`], [`AssetGuard`], etc when you call this function.
+    ///
+    /// [`AssetRef`]: struct.AssetRef.html
+    /// [`AssetGuard`]: struct.AssetGuard.html
     #[inline]
     pub fn remove<A: Asset>(&mut self, id: &str) {
         let key = Key::new::<A>(id);
@@ -443,21 +446,22 @@ where
     }
 }
 
-fn load_from_source<A: Asset, S: Source>(source: &S, id: &str) -> Result<A, AssetError<A>> {
-    // Compile-time assert that the asset type has at least one extension
-    let _ = <A as Asset>::_AT_LEAST_ONE_EXTENSION_REQUIRED;
+#[inline]
+fn load_single<A: Asset, S: Source>(source: &S, id: &str, ext: &str) -> Result<A, Error> {
+    let content = source.read(id, ext)?;
+    let asset = A::Loader::load(content, ext)?;
+    Ok(asset)
+}
 
-    let mut err = None;
+fn load_from_source<A: Asset, S: Source>(source: &S, id: &str) -> Result<A, Error> {
+    let mut error = Error::NoDefaultValue;
 
     for ext in A::EXTENSIONS {
-        let content = source.read(id, ext);
-
-        match A::Loader::load(content, ext) {
-            Err(e) => err = Some(e),
+        match load_single(source, id, ext) {
+            Err(err) => error = err.or(error),
             asset => return asset,
         }
     }
 
-    // The for loop is taken at least once, so unwrap never panics
-    Err(err.unwrap())
+    A::default_value(id, error)
 }

@@ -12,23 +12,14 @@
 //! [assets]: ../trait.Asset.html
 //! [`Loader`]: trait.Loader.html
 
-#[allow(unused_imports)]
+use crate::BoxedError;
+
 use std::{
     borrow::Cow,
-    convert::Infallible,
-    error::Error,
-    fmt::Display,
-    io,
     marker::PhantomData,
     str::{self, FromStr},
 };
 
-mod errors;
-pub use errors::{
-    ParseLoaderError,
-    SerdeLoaderError,
-    StringLoaderError,
-};
 
 #[cfg(test)]
 mod tests;
@@ -81,7 +72,7 @@ mod tests;
 /// ## Example
 ///
 /// ```
-/// use assets_manager::{Asset, loader::Loader};
+/// use assets_manager::{Asset, BoxedError, loader::Loader};
 /// use std::{borrow::Cow, error::Error, io, str};
 ///
 /// # #[derive(PartialEq, Eq, Debug)]
@@ -93,10 +84,8 @@ mod tests;
 ///
 /// struct FruitLoader;
 /// impl Loader<Fruit> for FruitLoader {
-///     type Error = Box<dyn Error>;
-///
-///     fn load(content: io::Result<Cow<[u8]>>, _: &str) -> Result<Fruit, Self::Error> {
-///         match str::from_utf8(&content?)?.trim() {
+///     fn load(content: Cow<[u8]>, _: &str) -> Result<Fruit, BoxedError> {
+///         match str::from_utf8(&content)?.trim() {
 ///             "apple" => Ok(Fruit::Apple),
 ///             "banana" => Ok(Fruit::Banana),
 ///             "pear" => Ok(Fruit::Pear),
@@ -110,57 +99,15 @@ mod tests;
 ///     type Loader = FruitLoader;
 /// }
 ///
-/// # let fruit = Ok(b" banana \n"[..].into());
+/// # let fruit = b" banana \n"[..].into();
 /// # assert_eq!(FruitLoader::load(fruit, "").unwrap(), Fruit::Banana);
 /// ```
 
 pub trait Loader<T> {
-    /// The associated error which can be returned from loading.
-    ///
-    /// For a quick implementation you can use `Box<dyn Error>`.
-    type Error: Display;
-
     /// Loads an asset from its raw bytes representation.
-    fn load(content: io::Result<Cow<[u8]>>, ext: &str) -> Result<T, Self::Error>;
+    fn load(content: Cow<[u8]>, ext: &str) -> Result<T, BoxedError>;
 }
 
-/// Returns the default value in case of failure.
-///
-/// If the inner loader returns an error, the default value of `T` will be
-/// provided instead.
-///
-/// # Example
-///
-/// ```
-/// # cfg_if::cfg_if! { if #[cfg(feature = "ron")] {
-/// use serde::Deserialize;
-/// use assets_manager::{Asset, loader::{RonLoader, LoadOrDefault}};
-///
-/// #[derive(Default, Deserialize)]
-/// struct Point {
-///     x: i32,
-///     y: i32,
-/// }
-///
-/// impl Asset for Point {
-///     const EXTENSION: &'static str = "ron";
-///     type Loader = LoadOrDefault<RonLoader>;
-/// }
-/// # }}
-/// ```
-#[derive(Debug)]
-pub struct LoadOrDefault<L>(PhantomData<L>);
-impl<T, L> Loader<T> for LoadOrDefault<L>
-where
-    T: Default,
-    L: Loader<T>,
-{
-    type Error = Infallible;
-
-    fn load(content: io::Result<Cow<[u8]>>, ext: &str) -> Result<T, Self::Error> {
-        L::load(content, ext).or_else(|_| Ok(T::default()))
-    }
-}
 
 /// Loads assets from another type.
 ///
@@ -193,9 +140,7 @@ where
     U: Into<T>,
     L: Loader<U>,
 {
-    type Error = L::Error;
-
-    fn load(content: io::Result<Cow<[u8]>>, ext: &str) -> Result<T, Self::Error> {
+    fn load(content: Cow<[u8]>, ext: &str) -> Result<T, BoxedError> {
         Ok(L::load(content, ext)?.into())
     }
 }
@@ -212,10 +157,8 @@ pub type LoadFromAsset<A> = LoadFrom<A, <A as crate::Asset>::Loader>;
 #[derive(Debug)]
 pub struct BytesLoader;
 impl Loader<Vec<u8>> for BytesLoader {
-    type Error = io::Error;
-
-    fn load(content: io::Result<Cow<[u8]>>, _: &str) -> Result<Vec<u8>, Self::Error> {
-        Ok(content?.into_owned())
+    fn load(content: Cow<[u8]>, _: &str) -> Result<Vec<u8>, BoxedError> {
+        Ok(content.into_owned())
     }
 }
 
@@ -230,10 +173,8 @@ impl Loader<Vec<u8>> for BytesLoader {
 #[derive(Debug)]
 pub struct StringLoader;
 impl Loader<String> for StringLoader {
-    type Error = StringLoaderError;
-
-    fn load(content: io::Result<Cow<[u8]>>, _: &str) -> Result<String, Self::Error> {
-        Ok(String::from_utf8(content?.into_owned())?)
+    fn load(content: Cow<[u8]>, _: &str) -> Result<String, BoxedError> {
+        Ok(String::from_utf8(content.into_owned())?)
     }
 }
 
@@ -254,12 +195,10 @@ pub struct ParseLoader;
 impl<T> Loader<T> for ParseLoader
 where
     T: FromStr,
-    <T as FromStr>::Err: Display,
+    BoxedError: From<<T as FromStr>::Err>
 {
-    type Error = ParseLoaderError<<T as FromStr>::Err>;
-
-    fn load(content: io::Result<Cow<[u8]>>, _: &str) -> Result<T, Self::Error> {
-        str::from_utf8(&content?)?.parse().map_err(ParseLoaderError::Parse)
+    fn load(content: Cow<[u8]>, _: &str) -> Result<T, BoxedError> {
+        Ok(str::from_utf8(&content)?.parse()?)
     }
 }
 
@@ -280,11 +219,9 @@ macro_rules! serde_loader {
         where
             T: for<'de> serde::Deserialize<'de>,
         {
-            type Error = SerdeLoaderError<$error>;
-
             #[inline]
-            fn load(content: io::Result<Cow<[u8]>>, _: &str) -> Result<T, Self::Error> {
-                Ok($fun(&*content?).map_err(SerdeLoaderError::Serde)?)
+            fn load(content: Cow<[u8]>, _: &str) -> Result<T, BoxedError> {
+                Ok($fun(&*content)?)
             }
         }
 

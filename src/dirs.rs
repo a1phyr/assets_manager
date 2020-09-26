@@ -1,8 +1,8 @@
 use crate::{
     Asset,
     AssetCache,
-    AssetError,
     AssetRef,
+    Error,
     source::Source,
     utils::{RwLock, RwLockReadGuard},
 };
@@ -287,7 +287,7 @@ where
     A: Asset,
     S: Source,
 {
-    type Item = (&'a str, Result<AssetRef<'a, A>, AssetError<A>>);
+    type Item = (&'a str, Result<AssetRef<'a, A>, Error>);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
