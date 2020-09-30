@@ -352,7 +352,8 @@ where
         load_from_source(&self.source, id)
     }
 
-    /// Removes an asset from the cache.
+    /// Removes an asset from the cache, and returns whether it was present in
+    /// the cache.
     ///
     /// Note that you need a mutable reference to the cache, so you cannot have
     /// any [`AssetRef`], [`AssetGuard`], etc when you call this function.
@@ -360,18 +361,15 @@ where
     /// [`AssetRef`]: struct.AssetRef.html
     /// [`AssetGuard`]: struct.AssetGuard.html
     #[inline]
-    pub fn remove<A: Asset>(&mut self, id: &str) {
+    pub fn remove<A: Asset>(&mut self, id: &str) -> bool {
         let key = Key::new::<A>(id);
         let cache = self.assets.get_mut();
-        cache.remove(&key);
+        cache.remove(&key).is_some()
     }
 
     /// Takes ownership on a cached asset.
     ///
-    /// The corresponding asset is removed from the cache. If you don't use the
-    /// return value, [`remove`] does the same but is more efficient.
-    ///
-    /// [`remove`]: #method.remove
+    /// The corresponding asset is removed from the cache.
     pub fn take<A: Asset>(&mut self, id: &str) -> Option<A> {
         let key = Key::new::<A>(id);
         let cache = self.assets.get_mut();
