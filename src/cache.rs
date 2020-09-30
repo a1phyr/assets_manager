@@ -224,14 +224,11 @@ where
 
         let asset: A = load_from_source(&self.source, &id)?;
 
-        let entry = CacheEntry::new(asset);
-        // Safety:
-        // We just created the asset with the good type
-        // The cache entry is garantied to live long enough
-        let asset = unsafe { entry.get_ref() };
-
         let key = OwnedKey::new::<A>(id);
-        self.assets.write().insert(key, entry);
+        let mut assets = self.assets.write();
+
+        let entry = assets.entry(key).or_insert_with(|| CacheEntry::new(asset));
+        let asset = unsafe { entry.get_ref() };
 
         Ok(asset)
     }
@@ -242,10 +239,13 @@ where
         self.source.__private_hr_add_dir::<A>(&id);
 
         let dir = CachedDir::load::<A, S>(self, &id)?;
-        let reader = unsafe { dir.read(self) };
 
         let key = OwnedKey::new::<A>(id);
-        self.dirs.write().insert(key, dir);
+        let mut dirs = self.dirs.write();
+
+        let dir = dirs.entry(key).or_insert(dir);
+        let reader = unsafe { dir.read(self) };
+
 
         Ok(reader)
     }
