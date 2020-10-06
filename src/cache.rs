@@ -224,13 +224,12 @@ where
 
         let asset: A = load_from_source(&self.source, &id)?;
 
-        let key = OwnedKey::new::<A>(id);
+        let key = OwnedKey::new::<A>(id.clone());
         let mut assets = self.assets.write();
 
-        let entry = assets.entry(key).or_insert_with(|| CacheEntry::new(asset));
-        let asset = unsafe { entry.get_ref() };
+        let entry = assets.entry(key).or_insert_with(|| CacheEntry::new(asset, id));
 
-        Ok(asset)
+        unsafe { Ok(entry.get_ref()) }
     }
 
     /// Adds a directory to the cache
@@ -244,10 +243,8 @@ where
         let mut dirs = self.dirs.write();
 
         let dir = dirs.entry(key).or_insert(dir);
-        let reader = unsafe { dir.read(self) };
 
-
-        Ok(reader)
+        unsafe { Ok(dir.read(self)) }
     }
 
     /// Loads an asset.

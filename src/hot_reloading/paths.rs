@@ -36,7 +36,7 @@ fn extension_of(path: &Path) -> Option<&str> {
 
 unsafe trait AnyAsset: Any + Send + Sync {
     unsafe fn reload(self: Box<Self>, entry: &CacheEntry);
-    fn create(self: Box<Self>) -> CacheEntry;
+    fn create(self: Box<Self>, id: Box<str>) -> CacheEntry;
 }
 
 unsafe impl<A: Asset> AnyAsset for A {
@@ -44,8 +44,8 @@ unsafe impl<A: Asset> AnyAsset for A {
         entry.write::<A>(*self);
     }
 
-    fn create(self: Box<Self>) -> CacheEntry {
-        CacheEntry::new::<A>(*self)
+    fn create(self: Box<Self>, id: Box<str>) -> CacheEntry {
+        CacheEntry::new::<A>(*self, id)
     }
 }
 
@@ -363,7 +363,10 @@ impl LocalCache {
             use std::collections::hash_map::Entry::*;
             match assets.entry(key) {
                 Occupied(entry) => unsafe { value.reload(entry.get()) },
-                Vacant(entry) => { entry.insert(value.create()); },
+                Vacant(entry) => {
+                    let id = entry.key().id().into();
+                    entry.insert(value.create(id));
+                },
             }
 
         }

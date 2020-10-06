@@ -12,14 +12,16 @@ use crate::utils::{RwLock, RwLockReadGuard};
 
 struct Inner<T> {
     lock: RwLock<T>,
+    id: Box<str>,
     reload: AtomicUsize,
 }
 
 impl<T> Inner<T> {
     #[inline]
-    fn new(value: T) -> Self {
+    fn new(value: T, id: Box<str>) -> Self {
         Self {
             lock: RwLock::new(value),
+            id,
             reload: AtomicUsize::new(0),
         }
     }
@@ -50,8 +52,8 @@ impl<'a> CacheEntry {
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new<T: Send + Sync + 'static>(asset: T) -> Self {
-        CacheEntry(Box::new(Inner::new(asset)))
+    pub fn new<T: Send + Sync + 'static>(asset: T, id: Box<str>) -> Self {
+        CacheEntry(Box::new(Inner::new(asset, id)))
     }
 
     /// Returns a reference to the underlying lock.
@@ -144,6 +146,12 @@ impl<'a, A> AssetRef<'a, A> {
         AssetGuard {
             guard: self.data.lock.read(),
         }
+    }
+
+    /// Returns the id of the asset
+    #[inline]
+    pub fn id(&self) -> &'a str {
+        &self.data.id
     }
 
     /// Returns `true` if the asset has been reloaded since last call to this

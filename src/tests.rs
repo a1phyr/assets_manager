@@ -143,8 +143,8 @@ mod cache_entry {
     fn drop_inner() {
         let count = DropCounter(Arc::new(Mutex::new(0)));
 
-        let entry_1 = CacheEntry::new(count.clone());
-        let entry_2 = CacheEntry::new(count.clone());
+        let entry_1 = CacheEntry::new(count.clone(), "".into());
+        let entry_2 = CacheEntry::new(count.clone(), "".into());
         assert_eq!(*count.0.lock().unwrap(), 0);
         drop(entry_1);
         assert_eq!(*count.0.lock().unwrap(), 1);
@@ -156,7 +156,7 @@ mod cache_entry {
     fn read() {
         let val = rand::random::<i32>();
 
-        let entry = CacheEntry::new(val);
+        let entry = CacheEntry::new(val, "".into());
         let guard = unsafe { entry.get_ref::<i32>() };
 
         assert_eq!(*guard.read(), val);
@@ -167,7 +167,7 @@ mod cache_entry {
         let x = rand::random::<i32>();
         let y = rand::random::<i32>();
 
-        let entry = CacheEntry::new(x);
+        let entry = CacheEntry::new(x, "".into());
         unsafe {
             let guard = entry.write(y);
             assert_eq!(*guard.read(), y);
@@ -180,7 +180,7 @@ mod cache_entry {
     fn into_inner() {
         let x = rand::random::<i32>();
 
-        let entry = CacheEntry::new(x);
+        let entry = CacheEntry::new(x, "".into());
         let y = unsafe { entry.into_inner::<i32>() };
 
         assert_eq!(x, y);
@@ -190,11 +190,20 @@ mod cache_entry {
     fn ptr_eq() {
         let x = rand::random::<i32>();
 
-        let entry = CacheEntry::new(x);
+        let entry = CacheEntry::new(x, "".into());
         unsafe {
             let ref_1 = entry.get_ref::<i32>();
             let ref_2 = entry.get_ref::<i32>();
             assert!(ref_1.ptr_eq(&ref_2));
         }
+    }
+
+    #[test]
+    fn id() {
+        let x = rand::random::<i32>();
+
+        let entry = CacheEntry::new(x, "test".into());
+        let guard = unsafe { entry.get_ref::<i32>() };
+        assert_eq!(guard.id(), "test");
     }
 }
