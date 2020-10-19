@@ -65,6 +65,10 @@ name = "hot_reloading"
 required-features = ["hot-reloading"]
 
 
+[workspace]
+members = [".", "macros"]
+
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
