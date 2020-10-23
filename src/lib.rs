@@ -24,11 +24,11 @@
 //!
 //! ### Internal features
 //!
-//! These features change inner data structures implementations.
+//! These features change inner data structures implementations. They usually
+//! increase performances, and are therefore enabled by default.
 //!
 //! - `parking_lot`: Use *parking_lot* crate's synchronisation primitives
-//! - `ahash`: Use ahash algorithm instead Sip1-3 used in `std`. This feature
-//!   is enabled by default.
+//! - `ahash`: Use ahash algorithm instead Sip1-3 used in `std`.
 //!
 //! ## Example
 //!
