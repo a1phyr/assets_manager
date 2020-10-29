@@ -61,17 +61,6 @@ mod asset_cache {
     }
 
     #[test]
-    fn reload_set_flag() {
-        let cache = AssetCache::new("assets").unwrap();
-
-        let mut asset = cache.load_expect::<X>("test.cache");
-        assert!(!asset.reloaded());
-        cache.force_reload::<X>("test.cache").unwrap();
-        assert!(asset.reloaded());
-        assert!(!asset.reloaded());
-    }
-
-    #[test]
     fn load_dir_ok() {
         let cache = AssetCache::new("assets").unwrap();
 
@@ -162,6 +151,7 @@ mod cache_entry {
         assert_eq!(*guard.read(), val);
     }
 
+    #[cfg(feature = "hot-reloading")]
     #[test]
     fn write() {
         let x = rand::random::<i32>();

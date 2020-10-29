@@ -289,33 +289,6 @@ where
         })
     }
 
-    /// Reloads an asset from the source.
-    ///
-    /// It does not matter whether the asset has been loaded yet.
-    ///
-    /// **Note**: this function requires a write lock on the asset, and will block
-    /// until one is acquired, ie no read lock can exist at the same time. This
-    /// means that you **must not** call this method if you have an `AssetGuard`
-    /// on the same asset, or it may cause a deadlock or a panic.
-    ///
-    /// # Errors
-    ///
-    /// Error cases are the same as [`load`].
-    ///
-    /// If an error occurs, the asset is left unmodified.
-    ///
-    /// [`load`]: fn.load.html
-    pub fn force_reload<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, Error> {
-        let cache = self.assets.read();
-        if let Some(cached) = cache.get(&Key::new::<A>(id)) {
-            let asset = load_from_source(&self.source, id)?;
-            return unsafe { Ok(cached.write(asset)) };
-        }
-        drop(cache);
-
-        self.add_asset(id.into())
-    }
-
     /// Loads all assets of a given type in a directory.
     ///
     /// The directory's id is constructed the same way as assets. To specify

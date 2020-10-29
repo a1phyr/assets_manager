@@ -27,6 +27,7 @@ impl<T> Inner<T> {
     }
 
     #[inline]
+    #[cfg(feature = "hot-reloading")]
     fn write(&self, value: T) {
         let mut data = self.lock.write();
         *data = value;
@@ -78,6 +79,7 @@ impl<'a> CacheEntry {
     /// # Safety
     ///
     /// See type-level documentation.
+    #[cfg(feature = "hot-reloading")]
     pub unsafe fn write<T: Send + Sync + 'static>(&self, asset: T) -> AssetRef<'a, T> {
         let lock = self.get_ref();
         lock.data.write(asset);
@@ -159,7 +161,8 @@ impl<'a, A> AssetRef<'a, A> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```no_run
+    /// # cfg_if::cfg_if! { if #[cfg(feature = "hot-reloading")] {
     /// use assets_manager::{Asset, AssetCache};
     /// # use assets_manager::loader::{LoadFrom, ParseLoader};
     ///
@@ -174,18 +177,24 @@ impl<'a, A> AssetRef<'a, A> {
     /// }
     ///
     /// let cache = AssetCache::new("assets")?;
+    /// let mut asset = cache.load::<Example>("example.reload")?;
     ///
-    /// let mut ref1 = cache.load::<Example>("example.reload")?;
-    /// let mut ref2 = cache.load::<Example>("example.reload")?;
+    /// // The AssetRef has just been created, so `reloaded` returns false
+    /// assert!(!asset.reloaded());
     ///
-    /// assert!(!ref1.reloaded());
+    /// loop {
+    ///     cache.hot_reload();
     ///
-    /// cache.force_reload::<Example>("example.reload")?;
+    ///     if asset.reloaded() {
+    ///         println!("The asset was reloaded !")
+    ///     }
     ///
-    /// assert!(ref1.reloaded());
-    /// assert!(!ref1.reloaded());
+    ///     // Calling `reloaded` once more returns false: the asset has not
+    ///     // been reloaded since last call to `reloaded`
+    ///     assert!(!asset.reloaded());
+    /// }
     ///
-    /// assert!(ref2.reloaded());
+    /// # }}
     /// # Ok::<_, Box<dyn std::error::Error>>(())
     /// ```
     pub fn reloaded(&mut self) -> bool {

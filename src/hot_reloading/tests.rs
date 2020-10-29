@@ -18,14 +18,18 @@ type Res = Result<(), Box<dyn std::error::Error>>;
 #[test]
 fn reload_asset() -> Res {
     let cache = AssetCache::new("assets")?;
-    let asset = cache.load::<X>("test.hot_asset.a")?;
+    let mut asset = cache.load::<X>("test.hot_asset.a")?;
+    let mut asset2 = cache.load::<X>("test.hot_asset.a")?;
     cache.hot_reload();
 
-    let reload_and_test = |n, bytes| {
+    let mut reload_and_test = |n, bytes| {
         File::create("assets/test/hot_asset/a.x")?.write_all(bytes)?;
         sleep();
         cache.hot_reload();
         assert_eq!(asset.read().0, n);
+        assert!(asset.reloaded());
+        assert!(!asset.reloaded());
+        assert!(asset2.reloaded());
         Ok(())
     };
 
