@@ -3,7 +3,6 @@
 use std::{
     any::Any,
     fmt,
-    hash,
     ops::Deref,
     sync::atomic::{AtomicUsize, Ordering},
 };
@@ -258,15 +257,6 @@ where
 }
 
 impl<A> Eq for AssetRef<'_, A> where A: Eq {}
-
-impl<A> hash::Hash for AssetRef<'_, A>
-where
-    A: hash::Hash,
-{
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.data.lock.read().hash(state);
-    }
-}
 
 impl<A> fmt::Debug for AssetRef<'_, A>
 where
