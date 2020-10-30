@@ -4,33 +4,64 @@ use std::{
     any::Any,
     fmt,
     ops::Deref,
-    sync::atomic::{AtomicUsize, Ordering},
 };
 
+#[cfg(feature = "hot-reloading")]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[cfg(feature = "hot-reloading")]
 use crate::utils::{RwLock, RwLockReadGuard};
 
+
+#[cfg(feature = "hot-reloading")]
 struct Inner<T> {
-    lock: RwLock<T>,
     id: Box<str>,
     reload: AtomicUsize,
+
+    value: RwLock<T>,
 }
 
+#[cfg(feature = "hot-reloading")]
 impl<T> Inner<T> {
     #[inline]
     fn new(value: T, id: Box<str>) -> Self {
         Self {
-            lock: RwLock::new(value),
             id,
             reload: AtomicUsize::new(0),
+
+            value: RwLock::new(value),
         }
     }
 
     #[inline]
-    #[cfg(feature = "hot-reloading")]
     fn write(&self, value: T) {
-        let mut data = self.lock.write();
+        let mut data = self.value.write();
         *data = value;
         self.reload.fetch_add(1, Ordering::Release);
+    }
+
+    #[inline]
+    fn into_inner(self) -> T {
+        self.value.into_inner()
+    }
+}
+
+#[cfg(not(feature = "hot-reloading"))]
+struct Inner<T> {
+    id: Box<str>,
+    value: T,
+}
+
+#[cfg(not(feature = "hot-reloading"))]
+impl<T> Inner<T> {
+    #[inline]
+    fn new(value: T, id: Box<str>) -> Self {
+        Self { id, value }
+    }
+
+    #[inline]
+    fn into_inner(self) -> T {
+        self.value
     }
 }
 
@@ -56,6 +87,14 @@ impl<'a> CacheEntry {
         CacheEntry(Box::new(Inner::new(asset, id)))
     }
 
+    #[inline]
+    unsafe fn inner<T: Send + Sync + 'static>(&self) -> &'a Inner<T> {
+        debug_assert!(self.0.is::<Inner<T>>());
+
+        let ptr = &*self.0 as *const dyn Any as *const Inner<T>;
+        &*ptr
+    }
+
     /// Returns a reference to the underlying lock.
     ///
     /// # Safety
@@ -63,14 +102,8 @@ impl<'a> CacheEntry {
     /// See type-level documentation.
     #[inline]
     pub unsafe fn get_ref<T: Send + Sync + 'static>(&self) -> AssetRef<'a, T> {
-        debug_assert!(self.0.is::<Inner<T>>());
-
-        let data = {
-            let ptr = &*self.0 as *const dyn Any as *const Inner<T>;
-            &*ptr
-        };
-
-        AssetRef::new(data)
+        let inner = self.inner::<T>();
+        AssetRef::new(inner)
     }
 
     /// Write a value and a get reference to the underlying lock
@@ -80,9 +113,9 @@ impl<'a> CacheEntry {
     /// See type-level documentation.
     #[cfg(feature = "hot-reloading")]
     pub unsafe fn write<T: Send + Sync + 'static>(&self, asset: T) -> AssetRef<'a, T> {
-        let lock = self.get_ref();
-        lock.data.write(asset);
-        lock
+        let inner = self.inner::<T>();
+        inner.write(asset);
+        AssetRef::new(inner)
     }
 
     /// Consumes the `CacheEntry` and returns its inner value.
@@ -95,7 +128,7 @@ impl<'a> CacheEntry {
         debug_assert!(self.0.is::<Inner<T>>());
 
         let inner = Box::from_raw(Box::into_raw(self.0) as *mut Inner<T>);
-        inner.lock.into_inner()
+        inner.into_inner()
     }
 }
 
@@ -127,6 +160,8 @@ impl fmt::Debug for CacheEntry {
 /// [leaking a `Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak
 pub struct AssetRef<'a, A> {
     data: &'a Inner<A>,
+
+    #[cfg(feature = "hot-reloading")]
     last_reload: usize,
 }
 
@@ -135,6 +170,8 @@ impl<'a, A> AssetRef<'a, A> {
     fn new(inner: &'a Inner<A>) -> Self {
         Self {
             data: inner,
+
+            #[cfg(feature = "hot-reloading")]
             last_reload: inner.reload.load(Ordering::Acquire),
         }
     }
@@ -145,7 +182,11 @@ impl<'a, A> AssetRef<'a, A> {
     #[inline]
     pub fn read(&self) -> AssetGuard<'a, A> {
         AssetGuard {
-            guard: self.data.lock.read(),
+            #[cfg(feature = "hot-reloading")]
+            asset: self.data.value.read(),
+
+            #[cfg(not(feature = "hot-reloading"))]
+            asset: &self.data.value,
         }
     }
 
@@ -196,15 +237,22 @@ impl<'a, A> AssetRef<'a, A> {
     /// # }}
     /// # Ok::<_, Box<dyn std::error::Error>>(())
     /// ```
+    #[inline]
     pub fn reloaded(&mut self) -> bool {
-        let last_reload = self.data.reload.load(Ordering::Acquire);
+        #[cfg(feature = "hot-reloading")]
+        {
+            let last_reload = self.data.reload.load(Ordering::Acquire);
 
-        if last_reload > self.last_reload {
-            self.last_reload = last_reload;
-            true
-        } else {
-            false
+            if last_reload > self.last_reload {
+                self.last_reload = last_reload;
+                true
+            } else {
+                false
+            }
         }
+
+        #[cfg(not(feature = "hot-reloading"))]
+        { false }
     }
 
     /// Checks if the two assets refer to the same cache entry.
@@ -224,7 +272,7 @@ where
     /// expensive operation is used (eg if a type is refactored).
     #[inline]
     pub fn copied(self) -> A {
-        *self.data.lock.read()
+        *self.read()
     }
 }
 
@@ -235,7 +283,7 @@ where
     /// Returns a clone of the inner asset.
     #[inline]
     pub fn cloned(self) -> A {
-        self.data.lock.read().clone()
+        self.read().clone()
     }
 }
 
@@ -252,7 +300,7 @@ where
     T: PartialEq<U>,
 {
     fn eq(&self, other: &AssetRef<U>) -> bool {
-        self.data.lock.read().eq(&other.data.lock.read())
+        self.read().eq(&other.read())
     }
 }
 
@@ -263,7 +311,7 @@ where
     A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AssetRef").field("data", &*self.data.lock.read()).finish()
+        f.debug_struct("AssetRef").field("data", &*self.read()).finish()
     }
 }
 
@@ -276,7 +324,11 @@ where
 ///
 /// [`AssetRef::read`]: struct.AssetRef.html#method.read
 pub struct AssetGuard<'a, A> {
-    guard: RwLockReadGuard<'a, A>,
+    #[cfg(feature = "hot-reloading")]
+    asset: RwLockReadGuard<'a, A>,
+
+    #[cfg(not(feature = "hot-reloading"))]
+    asset: &'a A,
 }
 
 impl<A> Deref for AssetGuard<'_, A> {
@@ -284,7 +336,7 @@ impl<A> Deref for AssetGuard<'_, A> {
 
     #[inline]
     fn deref(&self) -> &A {
-        &self.guard
+        &self.asset
     }
 }
 
