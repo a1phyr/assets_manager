@@ -91,12 +91,10 @@ impl HotReloader {
                 match ready.index() {
                     0 => match ready.recv(&ptr_rx) {
                         Ok(Message::Ptr(ptr)) => {
-                            if let Some(cache) = cache.local_cache() {
-                                // Safety: The received pointer is guarantied to
-                                // be valid until we reply back
-                                cache.update(unsafe { ptr.as_ref() });
-                                answer_tx.send(()).unwrap();
-                            }
+                            // Safety: The received pointer is guarantied to
+                            // be valid until we reply back
+                            cache.update_local(unsafe { ptr.as_ref() });
+                            answer_tx.send(()).unwrap();
                         },
                         Ok(Message::Static(asset_cache)) => {
                             cache.use_static_ref(asset_cache);

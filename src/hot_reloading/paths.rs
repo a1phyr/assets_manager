@@ -332,6 +332,13 @@ impl HotReloadingData {
         Some(())
     }
 
+    /// Update the cache if it is local
+    pub fn update_local(&mut self, asset_cache: &AssetCache) {
+        if let CacheKind::Local(cache) = &mut self.cache {
+            cache.update(asset_cache);
+        }
+    }
+
     /// Drop the local cache and use the static reference we have on the
     /// `AssetCache`.
     pub fn use_static_ref(&mut self, asset_cache: &'static AssetCache) {
@@ -339,13 +346,6 @@ impl HotReloadingData {
             cache.update(asset_cache);
             self.cache = CacheKind::Static(asset_cache);
             log::trace!("Hot-reloading now use a 'static reference");
-        }
-    }
-
-    pub fn local_cache(&mut self) -> Option<&mut LocalCache> {
-        match &mut self.cache {
-            CacheKind::Local(cache) => Some(cache),
-            CacheKind::Static(_) => None,
         }
     }
 }
