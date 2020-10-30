@@ -111,7 +111,7 @@ pub use error::{BoxedError, Error};
 pub mod loader;
 
 mod entry;
-pub use entry::{AssetRef, AssetGuard};
+pub use entry::{AssetHandle, AssetGuard};
 
 pub mod source;
 

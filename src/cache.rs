@@ -2,7 +2,7 @@
 use crate::{
     Asset, Error,
     dirs::{CachedDir, DirReader},
-    entry::{CacheEntry, AssetRef},
+    entry::{AssetHandle, CacheEntry},
     loader::Loader,
     utils::{HashMap, RwLock},
     source::{FileSystem, Source},
@@ -154,10 +154,10 @@ impl fmt::Debug for Key<'_> {
 /// let cache = AssetCache::new("assets")?;
 ///
 /// // Get an asset from the file `assets/common/position.ron`
-/// let point_lock = cache.load::<Point>("common.position")?;
+/// let point_handle = cache.load::<Point>("common.position")?;
 ///
 /// // Read it
-/// let point = point_lock.read();
+/// let point = point_handle.read();
 /// println!("Loaded position: {:?}", point);
 /// # assert_eq!(point.x, 5);
 /// # assert_eq!(point.y, -6);
@@ -167,7 +167,7 @@ impl fmt::Debug for Key<'_> {
 ///
 /// // Use hot-reloading
 /// loop {
-///     println!("Position: {:?}", point_lock.read());
+///     println!("Position: {:?}", point_handle.read());
 /// #   #[cfg(feature = "hot-reloading")]
 ///     cache.hot_reload();
 /// #   break;
@@ -218,7 +218,7 @@ where
     }
 
     /// Adds an asset to the cache
-    pub(crate) fn add_asset<A: Asset>(&self, id: Box<str>) -> Result<AssetRef<A>, Error> {
+    pub(crate) fn add_asset<A: Asset>(&self, id: Box<str>) -> Result<AssetHandle<A>, Error> {
         #[cfg(feature = "hot-reloading")]
         self.source.__private_hr_add_asset::<A>(&id);
 
@@ -257,7 +257,7 @@ where
     /// - The asset could not be loaded from the filesystem
     /// - Loaded data could not not be converted properly
     /// - The asset has no extension
-    pub fn load<A: Asset>(&self, id: &str) -> Result<AssetRef<A>, Error> {
+    pub fn load<A: Asset>(&self, id: &str) -> Result<AssetHandle<A>, Error> {
         match self.load_cached(id) {
             Some(asset) => Ok(asset),
             None => self.add_asset(id.into()),
@@ -268,7 +268,7 @@ where
     ///
     /// This function does not attempt to load the asset from the source if it
     /// is not found in the cache.
-    pub fn load_cached<A: Asset>(&self, id: &str) -> Option<AssetRef<A>> {
+    pub fn load_cached<A: Asset>(&self, id: &str) -> Option<AssetHandle<A>> {
         let key = Key::new::<A>(id);
         let cache = self.assets.read();
         cache.get(&key).map(|asset| unsafe { asset.get_ref() })
@@ -283,7 +283,7 @@ where
     /// [`load`]: fn.load.html
     #[inline]
     #[track_caller]
-    pub fn load_expect<A: Asset>(&self, id: &str) -> AssetRef<A> {
+    pub fn load_expect<A: Asset>(&self, id: &str) -> AssetHandle<A> {
         self.load(id).unwrap_or_else(|err| {
             panic!("Failed to load essential asset {:?}: {}", id, err)
         })
@@ -326,9 +326,9 @@ where
     /// the cache.
     ///
     /// Note that you need a mutable reference to the cache, so you cannot have
-    /// any [`AssetRef`], [`AssetGuard`], etc when you call this function.
+    /// any [`AssetHandle`], [`AssetGuard`], etc when you call this function.
     ///
-    /// [`AssetRef`]: struct.AssetRef.html
+    /// [`AssetHandle`]: struct.AssetHandle.html
     /// [`AssetGuard`]: struct.AssetGuard.html
     #[inline]
     pub fn remove<A: Asset>(&mut self, id: &str) -> bool {
@@ -371,11 +371,11 @@ impl AssetCache<FileSystem> {
     /// reloaded, but it does not perform any I/O. However, it needs to lock
     /// some assets for writing, so you **must not** have any [`AssetGuard`]
     /// from the given `AssetCache`, or you might experience deadlocks. You are
-    /// free to keep [`AssetRef`]s, though. The same restriction applies to
+    /// free to keep [`AssetHandle`]s, though. The same restriction applies to
     /// [`ReadDir`] and [`ReadAllDir`].
     ///
     /// [`AssetGuard`]: struct.AssetGuard.html
-    /// [`AssetRef`]: struct.AssetRef.html
+    /// [`AssetHandle`]: struct.AssetHandle.html
     /// [`ReadDir`]: struct.ReadDir.html
     /// [`ReadAllDir`]: struct.ReadAllDir.html
     #[cfg(feature = "hot-reloading")]

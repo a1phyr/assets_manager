@@ -72,7 +72,7 @@ impl<T> Inner<T> {
 ///
 /// - Methods that are generic over `T` can only be called with the same `T` used
 /// to create them.
-/// - When an `AssetRef<'a, T>` is returned, you have to ensure that `self`
+/// - When an `AssetHandle<'a, T>` is returned, you have to ensure that `self`
 /// outlives it. The `CacheEntry` can be moved but cannot be dropped.
 ///
 /// [`ContreteCacheEntry`]: struct.ContreteCacheEntry.html
@@ -101,9 +101,9 @@ impl<'a> CacheEntry {
     ///
     /// See type-level documentation.
     #[inline]
-    pub unsafe fn get_ref<T: Send + Sync + 'static>(&self) -> AssetRef<'a, T> {
+    pub unsafe fn get_ref<T: Send + Sync + 'static>(&self) -> AssetHandle<'a, T> {
         let inner = self.inner::<T>();
-        AssetRef::new(inner)
+        AssetHandle::new(inner)
     }
 
     /// Write a value and a get reference to the underlying lock
@@ -112,10 +112,10 @@ impl<'a> CacheEntry {
     ///
     /// See type-level documentation.
     #[cfg(feature = "hot-reloading")]
-    pub unsafe fn write<T: Send + Sync + 'static>(&self, asset: T) -> AssetRef<'a, T> {
+    pub unsafe fn write<T: Send + Sync + 'static>(&self, asset: T) -> AssetHandle<'a, T> {
         let inner = self.inner::<T>();
         inner.write(asset);
-        AssetRef::new(inner)
+        AssetHandle::new(inner)
     }
 
     /// Consumes the `CacheEntry` and returns its inner value.
@@ -139,13 +139,15 @@ impl fmt::Debug for CacheEntry {
 }
 
 
-/// A lock on an asset.
+/// A handle on an asset.
 ///
-/// The type parameter `A` represents type of the locked asset.
+/// Such an handle can be used to get an access on an asset of type `A`. It is
+/// generally obtained by call `AssetCache::load` and its variants.
 ///
-/// This structure wraps a RwLock, so assets can be written to be reloaded. As
-/// such, any number of read guard can exist at the same time, but none can
-/// exist while reloading an asset.
+/// If feature `hot-reloading` is used, this structure wraps a RwLock, so
+/// assets can be written to be reloaded. As such, any number of read guard can
+/// exist at the same time, but none can exist while reloading an asset (when
+/// calling `AssetCache::hot_reload`).
 ///
 /// This is the structure you want to use to store a reference to an asset.
 /// However, data shared between threads is usually required to be `'static`,
@@ -158,14 +160,14 @@ impl fmt::Debug for CacheEntry {
 /// `crossbeam-utils::scope`).
 ///
 /// [leaking a `Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak
-pub struct AssetRef<'a, A> {
+pub struct AssetHandle<'a, A> {
     data: &'a Inner<A>,
 
     #[cfg(feature = "hot-reloading")]
     last_reload: usize,
 }
 
-impl<'a, A> AssetRef<'a, A> {
+impl<'a, A> AssetHandle<'a, A> {
     #[inline]
     fn new(inner: &'a Inner<A>) -> Self {
         Self {
@@ -197,7 +199,7 @@ impl<'a, A> AssetRef<'a, A> {
     }
 
     /// Returns `true` if the asset has been reloaded since last call to this
-    /// method with this `AssetRef`.
+    /// method with the same handle.
     ///
     /// # Example
     ///
@@ -219,7 +221,7 @@ impl<'a, A> AssetRef<'a, A> {
     /// let cache = AssetCache::new("assets")?;
     /// let mut asset = cache.load::<Example>("example.reload")?;
     ///
-    /// // The AssetRef has just been created, so `reloaded` returns false
+    /// // The handle has just been created, so `reloaded` returns false
     /// assert!(!asset.reloaded());
     ///
     /// loop {
@@ -255,14 +257,14 @@ impl<'a, A> AssetRef<'a, A> {
         { false }
     }
 
-    /// Checks if the two assets refer to the same cache entry.
+    /// Checks if the two handles refer to the same asset.
     #[inline]
     pub fn ptr_eq(&self, other: &Self) -> bool {
         std::ptr::eq(self.data, other.data)
     }
 }
 
-impl<A> AssetRef<'_, A>
+impl<A> AssetHandle<'_, A>
 where
     A: Copy
 {
@@ -276,7 +278,7 @@ where
     }
 }
 
-impl<A> AssetRef<'_, A>
+impl<A> AssetHandle<'_, A>
 where
     A: Clone
 {
@@ -287,31 +289,31 @@ where
     }
 }
 
-impl<A> Clone for AssetRef<'_, A> {
+impl<A> Clone for AssetHandle<'_, A> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<A> Copy for AssetRef<'_, A> {}
+impl<A> Copy for AssetHandle<'_, A> {}
 
-impl<T, U> PartialEq<AssetRef<'_, U>> for AssetRef<'_, T>
+impl<T, U> PartialEq<AssetHandle<'_, U>> for AssetHandle<'_, T>
 where
     T: PartialEq<U>,
 {
-    fn eq(&self, other: &AssetRef<U>) -> bool {
+    fn eq(&self, other: &AssetHandle<U>) -> bool {
         self.read().eq(&other.read())
     }
 }
 
-impl<A> Eq for AssetRef<'_, A> where A: Eq {}
+impl<A> Eq for AssetHandle<'_, A> where A: Eq {}
 
-impl<A> fmt::Debug for AssetRef<'_, A>
+impl<A> fmt::Debug for AssetHandle<'_, A>
 where
     A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AssetRef").field("data", &*self.read()).finish()
+        f.debug_struct("AssetHandle").field("value", &*self.read()).finish()
     }
 }
 
@@ -320,9 +322,9 @@ where
 ///
 /// This type is a smart pointer to type `A`.
 ///
-/// It can be obtained by calling [`AssetRef::read`].
+/// It can be obtained by calling [`AssetHandle::read`].
 ///
-/// [`AssetRef::read`]: struct.AssetRef.html#method.read
+/// [`AssetHandle::read`]: struct.AssetHandle.html#method.read
 pub struct AssetGuard<'a, A> {
     #[cfg(feature = "hot-reloading")]
     asset: RwLockReadGuard<'a, A>,

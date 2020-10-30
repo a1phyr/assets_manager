@@ -78,36 +78,36 @@ impl Asset for Point {
 // Create a new cache to load assets under the "./assets" folder
 let cache = AssetCache::new("assets")?;
 
-// Get a lock on the asset
+// Get a handle on the asset
 // This will load the file `./assets/common/position.ron`
-let asset_lock = cache.load::<Point>("common.position")?;
+let handle = cache.load::<Point>("common.position")?;
 
 // Lock the asset for reading
 // Any number of read locks can exist at the same time,
 // but none can exist when the asset is reloaded
-let point = asset_lock.read();
+let point = handle.read();
 
 // The asset is now ready to be used
 assert_eq!(point.x, 5);
 assert_eq!(point.y, -6);
 
 // Loading the same asset retreives it from the cache
-let other_lock = cache.load("common.position")?;
-assert!(asset_lock.ptr_eq(&other_lock));
+let other_handle = cache.load("common.position")?;
+assert!(other_handle.ptr_eq(&handle));
 ```
 
 Hot-reloading is also very easy to use:
 
 ```rust
 let cache = AssetCache::new("assets")?;
-let asset_lock = cache.load::<Point>("common.position")?;
+let handle = cache.load::<Point>("common.position")?;
 
 loop {
     // Reload all cached files that changed
     cache.hot_reload();
 
     // Assets are updated without any further work
-    println!("Current value: {:?}", asset_lock.read());
+    println!("Current value: {:?}", handle.read());
 }
 ```
 
