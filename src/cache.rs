@@ -301,14 +301,20 @@ where
     /// An error is returned if the given id does not match a valid readable
     /// directory.
     pub fn load_dir<A: Asset>(&self, id: &str) -> io::Result<DirReader<A, S>> {
-        let dirs = self.dirs.read();
-        match dirs.get(&Key::new::<A>(id)) {
-            Some(dir) => unsafe { Ok(dir.read(self)) },
-            None => {
-                drop(dirs);
-                self.add_dir(id.into())
-            }
+        match self.load_cached_dir(id) {
+            Some(dir) => Ok(dir),
+            None => self.add_dir(id.into()),
         }
+    }
+
+    /// Loads an directory from the cache.
+    ///
+    /// This function does not attempt to load the asset from the source if it
+    /// is not found in the cache.
+    pub fn load_cached_dir<A: Asset>(&self, id: &str) -> Option<DirReader<A, S>> {
+        let key = Key::new::<A>(id);
+        let dirs = self.dirs.read();
+        dirs.get(&key).map(|dir| unsafe { dir.read(self) })
     }
 
     /// Loads an owned version of an asset
