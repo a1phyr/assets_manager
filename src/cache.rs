@@ -218,6 +218,7 @@ where
     }
 
     /// Adds an asset to the cache
+    #[cold]
     pub(crate) fn add_asset<A: Asset>(&self, id: Box<str>) -> Result<AssetHandle<A>, Error> {
         #[cfg(feature = "hot-reloading")]
         self.source.__private_hr_add_asset::<A>(&id);
@@ -233,6 +234,7 @@ where
     }
 
     /// Adds a directory to the cache
+    #[cold]
     fn add_dir<A: Asset>(&self, id: Box<str>) -> Result<DirReader<A, S>, io::Error> {
         #[cfg(feature = "hot-reloading")]
         self.source.__private_hr_add_dir::<A>(&id);
