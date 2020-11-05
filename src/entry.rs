@@ -150,14 +150,8 @@ impl fmt::Debug for CacheEntry {
 /// calling `AssetCache::hot_reload`).
 ///
 /// This is the structure you want to use to store a reference to an asset.
-/// However, data shared between threads is usually required to be `'static`,
-/// which is usually false for this structure. The preferred way to share assets
-/// is to share the `AssetCache` and to load assets from it whenever you need
-/// it: it is a very cheap operation. You can also create a `&'static AssetCache`
-/// (for example with `lazy_static` crate or by [leaking a `Box`]), but doing
-/// this prevents from removing assets from the cache. Another solution is to
-/// use crates that allow threads with non-static data (such as
-/// `crossbeam-utils::scope`).
+/// However it is generally easier to work with `'static` data. For more
+/// informations, see [top-level documentation](index.html#becoming-static).
 ///
 /// [leaking a `Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak
 pub struct AssetHandle<'a, A> {

@@ -68,25 +68,97 @@
 //! // Create a new cache to load assets under the "./assets" folder
 //! let cache = AssetCache::new("assets")?;
 //!
-//! // Get a lock on the asset
-//! let asset_lock = cache.load::<Point>("common.position")?;
+//! // Get a handle on the asset
+//! // This will load the file `./assets/common/position.ron`
+//! let handle = cache.load::<Point>("common.position")?;
 //!
 //! // Lock the asset for reading
 //! // Any number of read locks can exist at the same time,
 //! // but none can exist when the asset is reloaded
-//! let point = asset_lock.read();
+//! let point = handle.read();
 //!
 //! // The asset is now ready to be used
 //! assert_eq!(point.x, 5);
 //! assert_eq!(point.y, -6);
 //!
 //! // Loading the same asset retreives it from the cache
-//! let other_lock = cache.load("common.position")?;
-//! assert!(asset_lock.ptr_eq(&other_lock));
-//!
+//! let other_handle = cache.load("common.position")?;
+//! assert!(other_handle.ptr_eq(&handle));
 //! # }}
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
+//!
+//! ## Borrowship model
+//!
+//! You will notice that an [`AssetHandle`] is not `'static`: its lifetime is
+//! tied to that of the [`AssetCache`] from which it was loaded. This may be
+//! seen as a weakness, as `'static` data is generally easier to work with, but
+//! it is actually a clever use of Rust ownership system.
+//!
+//! As when you borrow an `&str` from a `String`, an `AssetHandle` guarantees
+//! that the underlying asset is stored in the cache. This is especially useful
+//! with hot-reloading: all `AssetHandle` are guarantied to be reloaded when
+//! possible, so two handles on the same asset always have the same value. This
+//! would not be possible if `AssetHandle`s were always `'static`.
+//!
+//! Note that this also means that you need a mutable reference on a cache to
+//! remove assets from it.
+//!
+//! [`AssetCache`]: struct.AssetCache.html
+//! [`AssetHandle`]: struct.AssetHandle.html
+//!
+//! ## Becoming `'static`
+//!
+//! Working with `'static` data is far easier: you don't have to care about
+//! lifetimes, they can easily be send in other threads, etc. So, how to get
+//! `'static` data from `AssetHandle`s ?
+//!
+//! Note that none of these proposals is compulsory to use this crate: you can
+//! work with non-`'static` data, or invent your own techniques.
+//!
+//! ### Getting a `&'static AssetCache`
+//!
+//! The lifetime of an `AssetHandle` being tied to that of the `&AssetCache`,
+//! this enables you to get `'static` `AssetHandle`s. Moreover, it enables you
+//! to call [`AssetCache::enhance_hot_reloading`], which is easier to work with
+//! and has better performances than the default solution.
+//!
+//! You get easily get a `&'static AssetCache`, with the [`lazy_static`] crate,
+//! but you can also do do by [leaking a `Box`].
+//!
+//! Note that using this technique prevents you from removing assets from the
+//! cache, so you have to keep them in memory for the duration of the program.
+//! This also creates global state, which you might want to avoid.
+//!
+//! [`AssetCache::enhance_hot_reloading`]: struct.AssetCache.html#method.enhance_hot_reloading
+//! [leaking a `Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak
+//!
+//! ### Cloning assets
+//!
+//! Assets being `'static` themselves, cloning them is a good way to opt-out of
+//! the lifetime of the cache. If cloning the asset itself is too expensive,
+//! you can take advantage of the fact that `Arc<A>` is an asset if `A` is too:
+//! cloning an `Arc` is a rather cheap operation (at least, when compared to
+//! allocating memory).
+//!
+//! However, by doing so, you explicitly opt-out hot-reloading, which is done
+//! via `AssetHandle`s. This can also be a benefit, if you need to ensure that
+//! your data does not change spuriously.
+//!
+//! ### Storing `String`s
+//!
+//! Strings are `'static` and easy to work with, and you can use them to load
+//! an asset from the cache, which is a cheap operation if the asset is already
+//! stored in it. If you want to ensure that no heavy operation is used, you
+//! can do so with [`AssetCache::load_cached`].
+//!
+//! If you have to clone them a lot, you may consider to change your `String`
+//! into an `Arc<str>` which is usually cheaper to clone.
+//!
+//! This is the technique internally used by `assets_manager` to store cached
+//! directories.
+//!
+//! [`AssetCache::load_cached`]: struct.AssetCache.html#method.load_cached
 
 #![doc(html_root_url = "https://docs.rs/assets_manager/0.3.2")]
 
