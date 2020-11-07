@@ -219,29 +219,29 @@ where
 
     /// Adds an asset to the cache
     #[cold]
-    pub(crate) fn add_asset<A: Asset>(&self, id: Box<str>) -> Result<AssetHandle<A>, Error> {
+    pub(crate) fn add_asset<A: Asset>(&self, id: &str) -> Result<AssetHandle<A>, Error> {
         #[cfg(feature = "hot-reloading")]
-        self.source.__private_hr_add_asset::<A>(&id);
+        self.source.__private_hr_add_asset::<A>(id);
 
-        let asset: A = load_from_source(&self.source, &id)?;
+        let asset: A = load_from_source(&self.source, id)?;
 
-        let key = OwnedKey::new::<A>(id.clone());
+        let key = OwnedKey::new::<A>(id.into());
         let mut assets = self.assets.write();
 
-        let entry = assets.entry(key).or_insert_with(|| CacheEntry::new(asset, id));
+        let entry = assets.entry(key).or_insert_with(|| CacheEntry::new(asset, id.into()));
 
         unsafe { Ok(entry.get_ref()) }
     }
 
     /// Adds a directory to the cache
     #[cold]
-    fn add_dir<A: Asset>(&self, id: Box<str>) -> Result<DirReader<A, S>, io::Error> {
+    fn add_dir<A: Asset>(&self, id: &str) -> Result<DirReader<A, S>, io::Error> {
         #[cfg(feature = "hot-reloading")]
-        self.source.__private_hr_add_dir::<A>(&id);
+        self.source.__private_hr_add_dir::<A>(id);
 
-        let dir = CachedDir::load::<A, S>(self, &id)?;
+        let dir = CachedDir::load::<A, S>(self, id)?;
 
-        let key = OwnedKey::new::<A>(id);
+        let key = OwnedKey::new::<A>(id.into());
         let mut dirs = self.dirs.write();
 
         let dir = dirs.entry(key).or_insert(dir);
@@ -259,10 +259,11 @@ where
     /// - The asset could not be loaded from the filesystem
     /// - Loaded data could not not be converted properly
     /// - The asset has no extension
+    #[inline]
     pub fn load<A: Asset>(&self, id: &str) -> Result<AssetHandle<A>, Error> {
         match self.load_cached(id) {
             Some(asset) => Ok(asset),
-            None => self.add_asset(id.into()),
+            None => self.add_asset(id),
         }
     }
 
@@ -270,6 +271,7 @@ where
     ///
     /// This function does not attempt to load the asset from the source if it
     /// is not found in the cache.
+    #[inline]
     pub fn load_cached<A: Asset>(&self, id: &str) -> Option<AssetHandle<A>> {
         let key = Key::new::<A>(id);
         let cache = self.assets.read();
@@ -302,10 +304,11 @@ where
     ///
     /// An error is returned if the given id does not match a valid readable
     /// directory.
+    #[inline]
     pub fn load_dir<A: Asset>(&self, id: &str) -> io::Result<DirReader<A, S>> {
         match self.load_cached_dir(id) {
             Some(dir) => Ok(dir),
-            None => self.add_dir(id.into()),
+            None => self.add_dir(id),
         }
     }
 
@@ -313,6 +316,7 @@ where
     ///
     /// This function does not attempt to load the asset from the source if it
     /// is not found in the cache.
+    #[inline]
     pub fn load_cached_dir<A: Asset>(&self, id: &str) -> Option<DirReader<A, S>> {
         let key = Key::new::<A>(id);
         let dirs = self.dirs.read();
