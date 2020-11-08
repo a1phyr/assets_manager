@@ -42,6 +42,7 @@ mod asset_cache {
         let cache = AssetCache::new("assets").unwrap();
 
         assert_eq!(*cache.load::<X>("test.cache").unwrap().read(), X(42));
+        assert!(cache.contains::<X>("test.cache"));
     }
 
     #[test]
@@ -49,6 +50,7 @@ mod asset_cache {
         let cache = AssetCache::new("assets").unwrap();
 
         assert_eq!(cache.load_owned::<X>("test.cache").unwrap(), X(42));
+        assert!(!cache.contains::<X>("test.cache"));
     }
 
     #[test]
@@ -64,8 +66,11 @@ mod asset_cache {
     fn load_dir_ok() {
         let cache = AssetCache::new("assets").unwrap();
 
+        assert!(!cache.contains_dir::<X>("test"));
         let mut loaded: Vec<_> = cache.load_dir::<X>("test").unwrap()
             .iter().map(|x| x.read().0).collect();
+        assert!(cache.contains_dir::<X>("test"));
+
         loaded.sort();
         assert_eq!(loaded, [-7, 42]);
     }
@@ -98,9 +103,9 @@ mod asset_cache {
         let mut cache = AssetCache::new("assets").unwrap();
 
         cache.load::<X>("test.cache").unwrap();
-        assert!(cache.load_cached::<X>("test.cache").is_some());
+        assert!(cache.contains::<X>("test.cache"));
         assert_eq!(cache.take("test.cache"), Some(X(42)));
-        assert!(cache.load_cached::<X>("test.cache").is_none());
+        assert!(!cache.contains::<X>("test.cache"));
     }
 
     #[test]
@@ -108,9 +113,9 @@ mod asset_cache {
         let mut cache = AssetCache::new("assets").unwrap();
 
         cache.load::<X>("test.cache").unwrap();
-        assert!(cache.load_cached::<X>("test.cache").is_some());
+        assert!(cache.contains::<X>("test.cache"));
         cache.remove::<X>("test.cache");
-        assert!(cache.load_cached::<X>("test.cache").is_none());
+        assert!(!cache.contains::<X>("test.cache"));
     }
 }
 

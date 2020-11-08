@@ -278,6 +278,14 @@ where
         cache.get(&key).map(|asset| unsafe { asset.get_ref() })
     }
 
+    /// Returns `true` if the cache contains the specified asset.
+    #[inline]
+    pub fn contains<A: Asset>(&self, id: &str) -> bool {
+        let key = Key::new::<A>(id);
+        let cache = self.assets.read();
+        cache.contains_key(&key)
+    }
+
     /// Loads an asset and panic if an error happens.
     ///
     /// # Panics
@@ -321,6 +329,14 @@ where
         let key = Key::new::<A>(id);
         let dirs = self.dirs.read();
         dirs.get(&key).map(|dir| unsafe { dir.read(self) })
+    }
+
+    /// Returns `true` if the cache contains the specified directory.
+    #[inline]
+    pub fn contains_dir<A: Asset>(&self, id: &str) -> bool {
+        let key = Key::new::<A>(id);
+        let dirs = self.dirs.read();
+        dirs.contains_key(&key)
     }
 
     /// Loads an owned version of an asset
