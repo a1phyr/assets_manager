@@ -64,18 +64,22 @@ impl FileSystem {
     /// An error can occur if `path` is not a valid readable directory or if
     /// hot-reloading fails to start (if feature `hot-reloading` is used).
     pub fn new<P: AsRef<Path>>(path: P) -> io::Result<FileSystem> {
-        let path = path.as_ref().canonicalize()?;
-        let _ = path.read_dir()?;
-
-        #[cfg(feature = "hot-reloading")]
-        let reloader = HotReloader::start(&path).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
-
-        Ok(FileSystem {
-            path,
+        fn inner(path: &Path) -> io::Result<FileSystem> {
+            let path = path.canonicalize()?;
+            let _ = path.read_dir()?;
 
             #[cfg(feature = "hot-reloading")]
-            reloader,
-        })
+            let reloader = HotReloader::start(&path).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+
+            Ok(FileSystem {
+                path,
+
+                #[cfg(feature = "hot-reloading")]
+                reloader,
+            })
+        }
+
+        inner(path.as_ref())
     }
 
     /// Gets the path of the source's root.
