@@ -336,6 +336,16 @@ impl<A> Deref for AssetGuard<'_, A> {
     }
 }
 
+impl<A, U> AsRef<U> for AssetGuard<'_, A>
+where
+    A: AsRef<U>
+{
+    #[inline]
+    fn as_ref(&self) -> &U {
+        self.asset.as_ref()
+    }
+}
+
 impl<A> fmt::Display for AssetGuard<'_, A>
 where
     A: fmt::Display,
