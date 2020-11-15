@@ -148,7 +148,7 @@ where
 /// Loads assets from another asset.
 pub type LoadFromAsset<A> = LoadFrom<A, <A as crate::Asset>::Loader>;
 
-/// Loads assets as a `Vec<u8>`.
+/// Loads assets as raw bytes.
 ///
 /// This Loader cannot be used to implement the Asset trait, but can be used by
 /// [`LoadFrom`].
@@ -159,6 +159,11 @@ pub struct BytesLoader;
 impl Loader<Vec<u8>> for BytesLoader {
     fn load(content: Cow<[u8]>, _: &str) -> Result<Vec<u8>, BoxedError> {
         Ok(content.into_owned())
+    }
+}
+impl Loader<Box<[u8]>> for BytesLoader {
+    fn load(content: Cow<[u8]>, _: &str) -> Result<Box<[u8]>, BoxedError> {
+        Ok(content.into())
     }
 }
 
@@ -175,6 +180,11 @@ pub struct StringLoader;
 impl Loader<String> for StringLoader {
     fn load(content: Cow<[u8]>, _: &str) -> Result<String, BoxedError> {
         Ok(String::from_utf8(content.into_owned())?)
+    }
+}
+impl Loader<Box<str>> for StringLoader {
+    fn load(content: Cow<[u8]>, ext: &str) -> Result<Box<str>, BoxedError> {
+        StringLoader::load(content, ext).map(String::into_boxed_str)
     }
 }
 

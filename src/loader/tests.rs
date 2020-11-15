@@ -10,23 +10,30 @@ fn raw(s: &str) -> Cow<[u8]> {
 #[test]
 fn string_loader_ok() {
     let raw = raw("Hello World!");
-    let loaded = StringLoader::load(raw, "").unwrap();
 
+    let loaded: String = StringLoader::load(raw.clone(), "").unwrap();
     assert_eq!(loaded, "Hello World!");
+
+    let loaded: Box<str> = StringLoader::load(raw, "").unwrap();
+    assert_eq!(&*loaded, "Hello World!");
 }
 
 #[test]
 fn string_loader_utf8_err() {
     let raw = b"e\xa2"[..].into();
-    assert!(StringLoader::load(raw, "").is_err());
+    let result: Result<String, _> = StringLoader::load(raw, "");
+    assert!(result.is_err());
 }
 
 #[test]
 fn bytes_loader_ok() {
-    let raw = b"Hello World!"[..].into();
-    let loaded = BytesLoader::load(raw, "").unwrap();
+    let raw = raw("Hello World!");
 
+    let loaded: Vec<u8> = BytesLoader::load(raw.clone(), "").unwrap();
     assert_eq!(loaded, b"Hello World!");
+
+    let loaded: Box<[u8]> = BytesLoader::load(raw, "").unwrap();
+    assert_eq!(&*loaded, b"Hello World!");
 }
 
 #[test]
