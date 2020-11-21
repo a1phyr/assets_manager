@@ -1,6 +1,6 @@
 //! Definition of the cache
 use crate::{
-    Asset, Error,
+    Asset, Error, Compound,
     dirs::{CachedDir, DirReader},
     entry::{AssetHandle, CacheEntry},
     loader::Loader,
@@ -17,13 +17,33 @@ use std::{
     path::Path,
 };
 
+#[cfg(feature = "hot-reloading")]
+use crate::utils::HashSet;
+
+#[cfg(feature = "hot-reloading")]
+use std::{
+    cell::Cell,
+    ptr::NonNull,
+};
+
+
+#[cfg(feature = "hot-reloading")]
+struct Record {
+    cache: usize,
+    records: HashSet<OwnedKey>,
+}
+
+#[cfg(feature = "hot-reloading")]
+thread_local! {
+    static RECORDING: Cell<Option<NonNull<Record>>> = Cell::new(None);
+}
 
 /// The key used to identify assets
 ///
 /// **Note**: This definition has to kept in sync with [`Key`]'s one.
 ///
 /// [`Key`]: struct.Key.html
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub(crate) struct OwnedKey {
     id: Box<str>,
@@ -33,7 +53,7 @@ pub(crate) struct OwnedKey {
 impl OwnedKey {
     /// Creates a `OwnedKey` with the given type and id.
     #[inline]
-    fn new<T: Asset>(id: Box<str>) -> Self {
+    pub fn new<T: Compound>(id: Box<str>) -> Self {
         Self {
             id,
             type_id: TypeId::of::<T>(),
@@ -60,7 +80,7 @@ pub(crate) struct Key<'a> {
 impl<'a> Key<'a> {
     /// Creates an Key for the given type and id.
     #[inline]
-    pub fn new<T: Asset>(id: &'a str) -> Self {
+    pub fn new<T: Compound>(id: &'a str) -> Self {
         Self {
             id,
             type_id: TypeId::of::<T>(),
@@ -217,13 +237,61 @@ where
         &self.source
     }
 
+    #[cfg(feature = "hot-reloading")]
+    pub(crate) fn record_load<A: Compound>(&self, id: &str) -> Result<(A, HashSet<OwnedKey>), Error> {
+        let mut record = Record {
+            cache: self as *const Self as usize,
+            records: HashSet::new(),
+        };
+
+        let asset = RECORDING.with(|rec| {
+            let old_rec = rec.replace(Some(NonNull::from(&mut record)));
+            let result = A::load(self, id);
+            rec.set(old_rec);
+            result
+        })?;
+
+        Ok((asset, record.records))
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    pub(crate) fn add_record(&self, key: &Key) {
+        RECORDING.with(|rec| {
+            if let Some(mut recorder) = rec.get() {
+                let recorder = unsafe { recorder.as_mut() };
+                if recorder.cache == self as *const Self as usize {
+                    recorder.records.insert(key.to_owned());
+                }
+            }
+        });
+    }
+
+    #[inline]
+    pub(crate) fn no_record<T, F: FnOnce() -> T>(&self, f: F) -> T {
+        #[cfg(feature = "hot-reloading")]
+        {
+            RECORDING.with(|rec| {
+                let old_rec = rec.replace(None);
+                let result = f();
+                rec.set(old_rec);
+                result
+            })
+        }
+
+        #[cfg(not(feature = "hot-reloading"))]
+        { f() }
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    pub(crate) fn is_recording(&self) -> bool {
+        RECORDING.with(|rec| rec.get().is_some())
+    }
+
     /// Adds an asset to the cache
     #[cold]
-    pub(crate) fn add_asset<A: Asset>(&self, id: &str) -> Result<AssetHandle<A>, Error> {
-        #[cfg(feature = "hot-reloading")]
-        self.source.__private_hr_add_asset::<A>(id);
-
-        let asset: A = load_from_source(&self.source, id)?;
+    fn add_asset<A: Compound>(&self, id: &str) -> Result<AssetHandle<A>, Error> {
+        let asset = A::__private_load(self, id)?;
 
         let key = OwnedKey::new::<A>(id.into());
         let mut assets = self.assets.write();
@@ -260,7 +328,7 @@ where
     /// - Loaded data could not not be converted properly
     /// - The asset has no extension
     #[inline]
-    pub fn load<A: Asset>(&self, id: &str) -> Result<AssetHandle<A>, Error> {
+    pub fn load<A: Compound>(&self, id: &str) -> Result<AssetHandle<A>, Error> {
         match self.load_cached(id) {
             Some(asset) => Ok(asset),
             None => self.add_asset(id),
@@ -272,15 +340,19 @@ where
     /// This function does not attempt to load the asset from the source if it
     /// is not found in the cache.
     #[inline]
-    pub fn load_cached<A: Asset>(&self, id: &str) -> Option<AssetHandle<A>> {
+    pub fn load_cached<A: Compound>(&self, id: &str) -> Option<AssetHandle<A>> {
         let key = Key::new::<A>(id);
+
+        #[cfg(feature = "hot-reloading")]
+        self.add_record(&key);
+
         let cache = self.assets.read();
         cache.get(&key).map(|asset| unsafe { asset.get_ref() })
     }
 
     /// Returns `true` if the cache contains the specified asset.
     #[inline]
-    pub fn contains<A: Asset>(&self, id: &str) -> bool {
+    pub fn contains<A: Compound>(&self, id: &str) -> bool {
         let key = Key::new::<A>(id);
         let cache = self.assets.read();
         cache.contains_key(&key)
@@ -295,7 +367,7 @@ where
     /// [`load`]: fn.load.html
     #[inline]
     #[track_caller]
-    pub fn load_expect<A: Asset>(&self, id: &str) -> AssetHandle<A> {
+    pub fn load_expect<A: Compound>(&self, id: &str) -> AssetHandle<A> {
         self.load(id).unwrap_or_else(|err| {
             panic!("Failed to load essential asset {:?}: {}", id, err)
         })
@@ -346,8 +418,15 @@ where
     ///
     /// This can be useful if you need ownership on a non-clonable value.
     #[inline]
-    pub fn load_owned<A: Asset>(&self, id: &str) -> Result<A, Error> {
-        load_from_source(&self.source, id)
+    pub fn load_owned<A: Compound>(&self, id: &str) -> Result<A, Error> {
+        #[cfg(feature = "hot-reloading")]
+        if self.is_recording() {
+            let key = Key::new::<A>(id);
+            self.add_record(&key);
+            return A::__private_load(self, id)
+        }
+
+        A::load(self, id)
     }
 
     /// Removes an asset from the cache, and returns whether it was present in
@@ -359,7 +438,7 @@ where
     /// [`AssetHandle`]: struct.AssetHandle.html
     /// [`AssetGuard`]: struct.AssetGuard.html
     #[inline]
-    pub fn remove<A: Asset>(&mut self, id: &str) -> bool {
+    pub fn remove<A: Compound>(&mut self, id: &str) -> bool {
         let key = Key::new::<A>(id);
         let cache = self.assets.get_mut();
         cache.remove(&key).is_some()
@@ -368,7 +447,7 @@ where
     /// Takes ownership on a cached asset.
     ///
     /// The corresponding asset is removed from the cache.
-    pub fn take<A: Asset>(&mut self, id: &str) -> Option<A> {
+    pub fn take<A: Compound>(&mut self, id: &str) -> Option<A> {
         let key = Key::new::<A>(id);
         let cache = self.assets.get_mut();
         cache.remove(&key).map(|entry| unsafe { entry.into_inner() })
@@ -449,7 +528,7 @@ fn load_single<A: Asset, S: Source>(source: &S, id: &str, ext: &str) -> Result<A
     Ok(asset)
 }
 
-fn load_from_source<A: Asset, S: Source>(source: &S, id: &str) -> Result<A, Error> {
+pub(crate) fn load_from_source<A: Asset, S: Source>(source: &S, id: &str) -> Result<A, Error> {
     let mut error = Error::NoDefaultValue;
 
     for ext in A::EXTENSIONS {

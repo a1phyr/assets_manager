@@ -14,7 +14,7 @@ use crate::utils::{RwLock, RwLockReadGuard};
 
 
 #[cfg(feature = "hot-reloading")]
-struct Inner<T> {
+pub struct Inner<T> {
     id: Box<str>,
     reload: AtomicUsize,
 
@@ -34,7 +34,7 @@ impl<T> Inner<T> {
     }
 
     #[inline]
-    fn write(&self, value: T) {
+    pub fn write(&self, value: T) {
         let mut data = self.value.write();
         *data = value;
         self.reload.fetch_add(1, Ordering::Release);
@@ -47,7 +47,7 @@ impl<T> Inner<T> {
 }
 
 #[cfg(not(feature = "hot-reloading"))]
-struct Inner<T> {
+pub struct Inner<T> {
     id: Box<str>,
     value: T,
 }
@@ -76,7 +76,7 @@ impl<T> Inner<T> {
 /// outlives it. The `CacheEntry` can be moved but cannot be dropped.
 ///
 /// [`ContreteCacheEntry`]: struct.ContreteCacheEntry.html
-pub(crate) struct CacheEntry(Box<dyn Any + Send + Sync>);
+pub(crate) struct CacheEntry(pub Box<dyn Any + Send + Sync>);
 
 impl<'a> CacheEntry {
     /// Creates a new `CacheEntry` containing an asset of type `T`.
@@ -88,7 +88,7 @@ impl<'a> CacheEntry {
     }
 
     #[inline]
-    unsafe fn inner<T: Send + Sync + 'static>(&self) -> &'a Inner<T> {
+    pub unsafe fn inner<T: Send + Sync + 'static>(&self) -> &'a Inner<T> {
         debug_assert!(self.0.is::<Inner<T>>());
 
         let ptr = &*self.0 as *const dyn Any as *const Inner<T>;

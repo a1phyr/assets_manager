@@ -1,4 +1,4 @@
-use crate::{Asset, loader};
+use crate::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct X(pub i32);
@@ -12,6 +12,22 @@ impl From<i32> for X {
 impl Asset for X {
     type Loader = loader::LoadFrom<i32, loader::ParseLoader>;
     const EXTENSION: &'static str = "x";
+}
+
+pub struct Y(pub i32);
+
+impl Compound for Y {
+    fn load<S: source::Source>(cache: &AssetCache<S>, id: &str) -> Result<Y, Error> {
+        Ok(Y(cache.load::<X>(id)?.read().0))
+    }
+}
+
+pub struct Z(pub i32);
+
+impl Compound for Z {
+    fn load<S: source::Source>(cache: &AssetCache<S>, id: &str) -> Result<Z, Error> {
+        Ok(Z(cache.load::<Y>(id)?.read().0))
+    }
 }
 
 

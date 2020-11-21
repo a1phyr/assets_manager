@@ -1,7 +1,12 @@
 #[cfg(feature = "hot-reloading")]
 use crate::{
-    Asset,
-    hot_reloading::{HotReloader, UpdateMessage},
+    Asset, Compound,
+    hot_reloading::{
+        AssetReloadInfos,
+        CompoundReloadInfos,
+        HotReloader,
+        UpdateMessage,
+    },
 };
 
 use std::{
@@ -138,7 +143,7 @@ impl super::Source for FileSystem {
     fn __private_hr_add_asset<A: Asset>(&self, id: &str) {
         for ext in A::EXTENSIONS {
             let path = self.path_of(id, ext);
-            let msg = UpdateMessage::asset::<A>(path, id.into());
+            let msg = UpdateMessage::AddAsset(AssetReloadInfos::of::<A>(path, id.into()));
             self.reloader.send_update(msg);
         }
     }
@@ -146,13 +151,18 @@ impl super::Source for FileSystem {
     #[cfg(feature = "hot-reloading")]
     fn __private_hr_add_dir<A: Asset>(&self, id: &str) {
         let path = self.path_of(id, "");
-        let msg = UpdateMessage::dir::<A>(path, id.into());
+        let msg = UpdateMessage::AddDir(AssetReloadInfos::of::<A>(path, id.into()), A::EXTENSIONS);
         self.reloader.send_update(msg);
     }
 
     #[cfg(feature = "hot-reloading")]
     fn __private_hr_clear(&mut self) {
         self.reloader.send_update(UpdateMessage::Clear);
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    fn __private_hr_add_compound<A: Compound>(&self, id: &str, deps: crate::utils::DepsRecord) {
+        self.reloader.send_update(UpdateMessage::AddCompound(CompoundReloadInfos::of::<A>(id.into(), deps.0)))
     }
 }
 

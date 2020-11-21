@@ -75,8 +75,12 @@ impl<T: ?Sized> Mutex<T> {
 }
 
 
+#[allow(unused_imports)]
 use std::{
-    collections::HashMap as StdHashMap,
+    collections::{
+        HashMap as StdHashMap,
+        HashSet as StdHashSet,
+    },
     fmt,
     ops::{Deref, DerefMut},
 };
@@ -121,3 +125,48 @@ where
         self.0.fmt(f)
     }
 }
+
+#[cfg(feature = "hot-reloading")]
+pub(crate) struct HashSet<T>(StdHashSet<T, RandomState>);
+
+#[cfg(feature = "hot-reloading")]
+impl<T> HashSet<T> {
+    #[inline]
+    pub fn new() -> Self {
+        Self(StdHashSet::with_hasher(RandomState::new()))
+    }
+}
+
+#[cfg(feature = "hot-reloading")]
+impl<T> Deref for HashSet<T> {
+    type Target = StdHashSet<T, RandomState>;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[cfg(feature = "hot-reloading")]
+impl<T> DerefMut for HashSet<T> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[cfg(feature = "hot-reloading")]
+impl<T> fmt::Debug for HashSet<T>
+where
+    StdHashSet<T, RandomState>: fmt::Debug,
+{
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+
+#[cfg(feature = "hot-reloading")]
+#[derive(Debug)]
+pub struct DepsRecord(pub(crate) HashSet<crate::cache::OwnedKey>);

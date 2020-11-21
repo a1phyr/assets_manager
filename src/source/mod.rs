@@ -110,6 +110,10 @@ pub trait Source {
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
     fn __private_hr_clear(&mut self) where Self: Sized {}
+
+    #[cfg(feature = "hot-reloading")]
+    #[doc(hidden)]
+    fn __private_hr_add_compound<A: crate::Compound>(&self, _: &str, _: crate::utils::DepsRecord) where Self: Sized {}
 }
 
 impl<S> Source for Box<S>

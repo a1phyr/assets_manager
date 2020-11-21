@@ -1,9 +1,11 @@
 mod paths;
 
+pub mod dependencies;
+
 #[cfg(test)]
 mod tests;
 
-pub use paths::UpdateMessage;
+pub(crate) use paths::{UpdateMessage, AssetReloadInfos, CompoundReloadInfos};
 use paths::HotReloadingData;
 
 use crossbeam_channel::{self as channel, Receiver, Sender};
@@ -22,11 +24,11 @@ use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use crate::{AssetCache, utils::Mutex};
 
 
-enum Message {
+enum CacheMessage {
     Ptr(NonNull<AssetCache>),
     Static(&'static AssetCache),
 }
-unsafe impl Send for Message where AssetCache: Sync {}
+unsafe impl Send for CacheMessage where AssetCache: Sync {}
 
 
 fn std_crossbeam_channel<T: Send + 'static>() -> (mpsc::Sender<T>, Receiver<T>) {
@@ -46,11 +48,11 @@ fn std_crossbeam_channel<T: Send + 'static>() -> (mpsc::Sender<T>, Receiver<T>) 
 
 
 struct Client {
-    sender: Sender<Message>,
+    sender: Sender<CacheMessage>,
     receiver: Receiver<()>,
 }
 
-pub struct HotReloader {
+pub(crate) struct HotReloader {
     channel: Mutex<Option<Client>>,
     updates: Sender<UpdateMessage>,
 }
@@ -90,13 +92,13 @@ impl HotReloader {
                 let ready = select.select();
                 match ready.index() {
                     0 => match ready.recv(&ptr_rx) {
-                        Ok(Message::Ptr(ptr)) => {
+                        Ok(CacheMessage::Ptr(ptr)) => {
                             // Safety: The received pointer is guarantied to
                             // be valid until we reply back
-                            cache.update_local(unsafe { ptr.as_ref() });
+                            cache.update_if_local(unsafe { ptr.as_ref() });
                             answer_tx.send(()).unwrap();
                         },
-                        Ok(Message::Static(asset_cache)) => {
+                        Ok(CacheMessage::Static(asset_cache)) => {
                             cache.use_static_ref(asset_cache);
                             select.remove(0);
                         },
@@ -126,7 +128,7 @@ impl HotReloader {
                     },
 
                     2 => match ready.recv(&updates_rx) {
-                        Ok(msg) => cache.paths.update(msg),
+                        Ok(msg) => cache.recv_update(msg),
                         Err(_) => break,
                     },
 
@@ -157,7 +159,7 @@ impl HotReloader {
         let lock = self.channel.lock();
 
         if let Some(Client { sender, receiver }) = &*lock {
-            let _ = sender.send(Message::Ptr(cache.into()));
+            let _ = sender.send(CacheMessage::Ptr(cache.into()));
             let _ = receiver.recv();
         }
     }
@@ -166,7 +168,7 @@ impl HotReloader {
         let mut lock = self.channel.lock();
 
         if let Some(Client { sender, .. }) = &mut *lock {
-            let _ = sender.send(Message::Static(cache));
+            let _ = sender.send(CacheMessage::Static(cache));
             *lock = None;
         }
     }

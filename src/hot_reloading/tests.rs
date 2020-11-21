@@ -1,41 +1,128 @@
 use crate::{
     AssetCache,
-    tests::X,
+    tests::{X, Y, Z},
 };
 use std::{
     fs::{self, File},
+    io,
     io::Write,
-    thread,
-    time::Duration,
+    path::Path,
+    sync::Arc,
 };
 
 fn sleep() {
-    thread::sleep(Duration::from_millis(100));
+    std::thread::sleep(std::time::Duration::from_millis(100));
 }
 
 type Res = Result<(), Box<dyn std::error::Error>>;
 
-#[test]
-fn reload_asset() -> Res {
-    let cache = AssetCache::new("assets")?;
-    let mut asset = cache.load::<X>("test.hot_asset.a")?;
-    let mut asset2 = cache.load::<X>("test.hot_asset.a")?;
-    cache.hot_reload();
 
-    let mut reload_and_test = |n, bytes| {
-        File::create("assets/test/hot_asset/a.x")?.write_all(bytes)?;
-        sleep();
-        cache.hot_reload();
-        assert_eq!(asset.read().0, n);
-        assert!(asset.reloaded());
-        assert!(!asset.reloaded());
-        assert!(asset2.reloaded());
-        Ok(())
-    };
-
-    reload_and_test(17, b"17")?;
-    reload_and_test(42, b"42")
+fn write_i32(path: &Path, n: i32) -> io::Result<()> {
+    let mut file = File::create(path)?;
+    write!(file, "{}", n)
 }
+
+macro_rules! test_scenario {
+    (@leak $cache:ident true) => { let $cache = Box::leak(Box::new($cache)); };
+    (@leak $cache:ident false) => {};
+
+    (@enhance $cache:ident true) => { $cache.enhance_hot_reloading(); };
+    (@enhance $cache:ident false) => {};
+
+    (@reload $cache:ident true) => {};
+    (@reload $cache:ident false) => { $cache.hot_reload(); };
+
+    (
+        name: $name:ident,
+        is_static: $is_static:tt,
+        type: $load:ty,
+        id: $id:literal,
+        start_value: $n:literal,
+        $(not_loaded: $not_loaded:ty,)?
+    ) => {
+        #[test]
+        fn $name() -> Res {
+            let id = concat!("test.hot_asset.", $id);
+            let cache = AssetCache::new("assets")?;
+
+            test_scenario!(@leak cache $is_static);
+
+            let path = cache.source().path_of(id, "x");
+            write_i32(&path, $n)?;
+
+            test_scenario!(@enhance cache $is_static);
+
+            let asset = cache.load::<$load>(id)?;
+            assert_eq!(asset.read().0, $n);
+            test_scenario!(@reload cache $is_static);
+
+            let n = rand::random();
+            write_i32(&path, n)?;
+            sleep();
+            test_scenario!(@reload cache $is_static);
+            assert_eq!(asset.read().0, n);
+            $( assert!(!cache.contains::<$not_loaded>(id)); )?
+
+            write_i32(&path, $n)?;
+            sleep();
+            test_scenario!(@reload cache $is_static);
+            assert_eq!(asset.read().0, $n);
+            $( assert!(!cache.contains::<$not_loaded>(id)); )?
+
+            Ok(())
+        }
+    };
+}
+
+test_scenario! {
+    name: reload_asset,
+    is_static: false,
+    type: X,
+    id: "a",
+    start_value: 42,
+}
+
+test_scenario! {
+    name: reload_asset_static,
+    is_static: true,
+    type: X,
+    id: "b",
+    start_value: 22,
+}
+
+test_scenario! {
+    name: reload_compound,
+    is_static: false,
+    type: Y,
+    id: "c",
+    start_value: -7,
+}
+
+test_scenario! {
+    name: reload_compound_static,
+    is_static: true,
+    type: Y,
+    id: "d",
+    start_value: 0,
+}
+
+test_scenario! {
+    name: reload_compound_compound,
+    is_static: false,
+    type: Z,
+    id: "e",
+    start_value: 0,
+}
+
+test_scenario! {
+    name: reload_arc_compound,
+    is_static: false,
+    type: Arc<Y>,
+    id: "f",
+    start_value: -5,
+    not_loaded: Y,
+}
+
 
 #[test]
 fn dir_remove_and_add() -> Res {
@@ -56,29 +143,11 @@ fn dir_remove_and_add() -> Res {
 
     assert_value(&[]);
 
-    File::create("assets/test/hot_dir/a.x")?.write_all(b"61")?;
+    write_i32("assets/test/hot_dir/a.x".as_ref(), 61)?;
     sleep();
     cache.hot_reload();
 
     assert_value(&[61]);
-
-    Ok(())
-}
-
-#[test]
-fn reload_static() -> Res {
-    let cache = AssetCache::new("assets")?;
-    let cache = Box::leak(Box::new(cache));
-    let asset = cache.load::<X>("test.hot_asset.b")?;
-    cache.enhance_hot_reloading();
-
-    assert_eq!(asset.read().0, 22);
-    File::create("assets/test/hot_asset/b.x")?.write_all(b"18")?;
-    sleep();
-    assert_eq!(asset.read().0, 18);
-    File::create("assets/test/hot_asset/b.x")?.write_all(b"22")?;
-    sleep();
-    assert_eq!(asset.read().0, 22);
 
     Ok(())
 }
