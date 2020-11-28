@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Load an asset with type `Vec<MonsterStats>`
     // The result is a lock on the stats
-    let goblin = cache.load::<Monster>("example.goblin")?;
+    let goblin = cache.load::<Monster>("example.monsters.goblin")?;
 
     // Lock the asset for reading. This is necessary because we might want to
     // reload it from disk (eg with hot-reloading)

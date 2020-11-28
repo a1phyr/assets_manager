@@ -89,7 +89,7 @@ pub trait Source {
     /// // "goblin.ron", and other files that do not have "ron" extension.
     ///
     /// let fs = FileSystem::new("assets")?;
-    /// let mut dir_content = fs.read_dir("example", &["ron"])?;
+    /// let mut dir_content = fs.read_dir("example.monsters", &["ron"])?;
     ///
     /// // Order is important for equality comparison
     /// dir_content.sort();
