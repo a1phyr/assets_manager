@@ -46,29 +46,25 @@ impl Dependencies {
             entry.rdeps.insert(asset_key.clone());
         }
 
-        let removed = match self.0.entry(asset_key) {
+        match self.0.entry(asset_key.clone()) {
             Entry::Vacant(e) => {
                 let entry = AssetDeps::new(reload, deps);
                 e.insert(entry);
-                None
             },
             Entry::Occupied(e) => {
                 let entry = e.into_mut();
                 let removed: Vec<_> = entry.deps.difference(&deps).cloned().collect();
                 entry.deps = deps;
                 entry.reload = reload;
-                Some(removed)
-            },
-        };
 
-        if let Some(removed) = removed {
-            for key in removed {
-                // The None case is not supposed to happen, but we can safely
-                // ignore it
-                if let Some(entry) = self.0.get_mut(&key) {
-                    entry.rdeps.remove(&key);
+                for key in removed {
+                    // The None case is not supposed to happen, but we can safely
+                    // ignore it
+                    if let Some(entry) = self.0.get_mut(&key) {
+                        entry.rdeps.remove(&asset_key);
+                    }
                 }
-            }
+            },
         }
     }
 }
@@ -120,7 +116,11 @@ impl AssetDepGraph {
         for key in self.0.iter().rev() {
             if let Some(entry) = deps.0.get_mut(key) {
                 if let Some(reload) = entry.reload {
-                    reload(cache, key.id());
+                    let new_deps = reload(cache, key.id());
+
+                    if let Some(new_deps) = new_deps {
+                        deps.insert(key.clone(), new_deps, Some(reload));
+                    }
                 }
             }
         }
