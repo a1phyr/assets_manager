@@ -1,7 +1,6 @@
-//! In this example, we load a custom image format made for terminal.
+//! In this example, we define a custom asset type and load it from a cache.
 //!
-//! The image is encoded in Bincode format, and in the file `assets/example/demo.img`
-//! (the current directory is supposed to be the root of the crate).
+//! The asset is stored in RON, in the file `assets/example/monsters/goblin.ron`.
 
 use assets_manager::{Asset, AssetCache, loader};
 use serde::Deserialize;
