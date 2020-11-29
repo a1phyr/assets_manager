@@ -414,7 +414,9 @@ where
     /// Loads an owned version of an asset
     ///
     /// Note that the asset will not be fetched from the cache nor will it be
-    /// cached. In addition, hot-reloading does not affect the returned value.
+    /// cached. In addition, hot-reloading does not affect the returned value
+    /// (if used during [`Compound::load`], it will still be registered as a
+    /// dependency).
     ///
     /// This can be useful if you need ownership on a non-clonable value.
     #[inline]

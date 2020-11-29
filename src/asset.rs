@@ -13,6 +13,9 @@ use std::sync::Arc;
 ///
 /// `Asset`s can loaded and retreived by an [`AssetCache`].
 ///
+/// This trait should only perform a conversion from raw bytes to the concrete
+/// type. If you need to load other assets, please use the [`Compound`] trait.
+///
 /// # Extension
 ///
 /// You can provide several extensions that will be used to search and load
@@ -137,11 +140,25 @@ where
     }
 }
 
-/// TODO
+/// An asset type that can load other kinds of assets.
+///
+/// `Compound`s can loaded and retreived by an [`AssetCache`].
+///
+/// # Hot-reloading
+///
+/// Any asset loaded from the given cache is registered as a dependency of the
+/// Compound. When the former is reloaded, the latter will be reloaded too.
+///
+/// Note that directories are not considered as dependencies at the moment, but
+/// this will come in a future (breaking) release.
 pub trait Compound: Sized + Send + Sync + 'static {
-    /// TODO
+    /// Loads an asset from the cache.
+    ///
+    /// This function should not perform any kind of I/O: such concern shoud be
+    /// delegated to [`Asset`]s.
     fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error>;
 
+    /// Loads an asset and does register it for hot-reloading if necessary.
     #[doc(hidden)]
     #[cfg_attr(not(feature = "hot-reloading"), inline)]
     fn __private_load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
@@ -160,7 +177,10 @@ pub trait Compound: Sized + Send + Sync + 'static {
 }
 
 
-impl<A: Asset> Compound for A {
+impl<A> Compound for A
+where
+    A: Asset,
+{
     #[inline]
     fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
         load_from_source(cache.source(), id)
