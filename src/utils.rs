@@ -75,6 +75,15 @@ impl<T: ?Sized> Mutex<T> {
 }
 
 
+mod private {
+    pub trait PrivateMarker {}
+    pub(crate) enum Private {}
+    impl PrivateMarker for Private {}
+}
+
+pub(crate) use private::{Private, PrivateMarker};
+
+
 #[allow(unused_imports)]
 use std::{
     collections::{

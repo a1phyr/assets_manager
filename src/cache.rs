@@ -4,7 +4,7 @@ use crate::{
     dirs::{CachedDir, DirReader},
     entry::CacheEntry,
     loader::Loader,
-    utils::{HashMap, RwLock},
+    utils::{HashMap, RwLock, Private},
     source::{FileSystem, Source},
 };
 
@@ -289,7 +289,7 @@ where
     /// Adds an asset to the cache.
     #[cold]
     fn add_asset<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
-        let asset = A::__private_load(self, id)?;
+        let asset = A::_load::<S, Private>(self, id)?;
 
         let key = OwnedKey::new::<A>(id.into());
         let mut assets = self.assets.write();
@@ -303,7 +303,7 @@ where
     #[cold]
     fn add_dir<A: Asset>(&self, id: &str) -> Result<DirReader<A, S>, io::Error> {
         #[cfg(feature = "hot-reloading")]
-        self.source.__private_hr_add_dir::<A>(id);
+        self.source._add_dir::<A, Private>(id);
 
         let dir = self.no_record(|| CachedDir::load::<A, S>(self, id))?;
 
@@ -423,7 +423,7 @@ where
         if self.is_recording() {
             let key = Key::new::<A>(id);
             self.add_record(&key);
-            return A::__private_load(self, id)
+            return A::_load::<S, Private>(self, id)
         }
 
         A::load(self, id)
@@ -459,7 +459,7 @@ where
         self.dirs.get_mut().clear();
 
         #[cfg(feature = "hot-reloading")]
-        self.source.__private_hr_clear();
+        self.source._clear::<Private>();
     }
 }
 

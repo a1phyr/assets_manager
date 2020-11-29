@@ -7,6 +7,7 @@ use crate::{
         HotReloader,
         UpdateMessage,
     },
+    utils::PrivateMarker,
 };
 
 #[cfg(doc)]
@@ -142,7 +143,7 @@ impl Source for FileSystem {
     }
 
     #[cfg(feature = "hot-reloading")]
-    fn __private_hr_add_asset<A: Asset>(&self, id: &str) {
+    fn _add_asset<A: Asset, P: PrivateMarker>(&self, id: &str) {
         for ext in A::EXTENSIONS {
             let path = self.path_of(id, ext);
             let msg = UpdateMessage::AddAsset(AssetReloadInfos::of::<A>(path, id.into()));
@@ -151,19 +152,19 @@ impl Source for FileSystem {
     }
 
     #[cfg(feature = "hot-reloading")]
-    fn __private_hr_add_dir<A: Asset>(&self, id: &str) {
+    fn _add_dir<A: Asset, P: PrivateMarker>(&self, id: &str) {
         let path = self.path_of(id, "");
         let msg = UpdateMessage::AddDir(AssetReloadInfos::of::<A>(path, id.into()), A::EXTENSIONS);
         self.reloader.send_update(msg);
     }
 
     #[cfg(feature = "hot-reloading")]
-    fn __private_hr_clear(&mut self) {
+    fn _clear<P: PrivateMarker>(&mut self) {
         self.reloader.send_update(UpdateMessage::Clear);
     }
 
     #[cfg(feature = "hot-reloading")]
-    fn __private_hr_add_compound<A: Compound>(&self, id: &str, deps: crate::utils::DepsRecord) {
+    fn _add_compound<A: Compound, P: PrivateMarker>(&self, id: &str, deps: crate::utils::DepsRecord) {
         self.reloader.send_update(UpdateMessage::AddCompound(CompoundReloadInfos::of::<A>(id.into(), deps.0)))
     }
 }

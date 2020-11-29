@@ -2,8 +2,9 @@ use crate::{
     AssetCache,
     Error,
     loader,
-    source::Source,
     cache::load_from_source,
+    source::Source,
+    utils::PrivateMarker,
 };
 
 use std::sync::Arc;
@@ -156,13 +157,13 @@ pub trait Compound: Sized + Send + Sync + 'static {
     /// Loads an asset and does register it for hot-reloading if necessary.
     #[doc(hidden)]
     #[cfg_attr(not(feature = "hot-reloading"), inline)]
-    fn __private_load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
+    fn _load<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
         #[cfg(feature = "hot-reloading")]
         {
             use crate::utils::DepsRecord;
 
             let (asset, deps) = cache.record_load(id)?;
-            cache.source().__private_hr_add_compound::<Self>(id, DepsRecord(deps));
+            cache.source()._add_compound::<Self, P>(id, DepsRecord(deps));
             Ok(asset)
         }
 
@@ -182,11 +183,11 @@ where
     }
 
     #[cfg_attr(not(feature = "hot-reloading"), inline)]
-    fn __private_load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
+    fn _load<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
         let asset = cache.no_record(|| Self::load(cache, id))?;
 
         #[cfg(feature = "hot-reloading")]
-        cache.source().__private_hr_add_asset::<A>(id);
+        cache.source()._add_asset::<A, P>(id);
 
         Ok(asset)
     }

@@ -7,6 +7,9 @@
 //! This module also contains two built-in sources: [`FileSystem`] and
 //! [`Embedded`].
 
+#[cfg(feature = "hot-reloading")]
+use crate::utils::PrivateMarker;
+
 use std::{borrow::Cow, io};
 
 #[cfg(doc)]
@@ -102,19 +105,19 @@ pub trait Source {
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn __private_hr_add_asset<A: crate::Asset>(&self, _: &str) where Self: Sized {}
+    fn _add_asset<A: crate::Asset, P: PrivateMarker>(&self, _: &str) where Self: Sized {}
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn __private_hr_add_dir<A: crate::Asset>(&self, _: &str) where Self: Sized {}
+    fn _add_dir<A: crate::Asset, P: PrivateMarker>(&self, _: &str) where Self: Sized {}
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn __private_hr_clear(&mut self) where Self: Sized {}
+    fn _clear<P: PrivateMarker>(&mut self) where Self: Sized {}
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn __private_hr_add_compound<A: crate::Compound>(&self, _: &str, _: crate::utils::DepsRecord) where Self: Sized {}
+    fn _add_compound<A: crate::Compound, P: PrivateMarker>(&self, _: &str, _: crate::utils::DepsRecord) where Self: Sized {}
 }
 
 impl<S> Source for Box<S>
