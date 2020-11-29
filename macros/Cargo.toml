@@ -1,8 +1,15 @@
 [package]
 name = "assets_manager_macros"
 version = "0.1.0"
-authors = ["Benoît du Garreau <bdgdlm@outlook.com>"]
+authors = ["Benoît du Garreau"]
 edition = "2018"
+license = "MIT OR Apache-2.0"
+readme = "../README.md"
+description= "Procedural macros for assets_manager"
+
+repository = "https://github.com/a1phyr/assets_manager"
+documentation = "https://docs.rs/assets_manager"
+
 
 [lib]
 proc-macro = true

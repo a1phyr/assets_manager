@@ -152,7 +152,7 @@
 //! This is the technique internally used by `assets_manager` to store cached
 //! directories.
 
-#![doc(html_root_url = "https://docs.rs/assets_manager/0.3.2")]
+#![doc(html_root_url = "https://docs.rs/assets_manager/0.4.0")]
 
 #![warn(
     missing_docs,
