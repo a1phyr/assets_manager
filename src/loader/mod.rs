@@ -9,8 +9,7 @@
 //!
 //! See trait [`Loader`] for more informations.
 //!
-//! [assets]: ../trait.Asset.html
-//! [`Loader`]: trait.Loader.html
+//! [assets]: `crate::Asset`
 
 use crate::BoxedError;
 
@@ -152,8 +151,6 @@ pub type LoadFromAsset<A> = LoadFrom<A, <A as crate::Asset>::Loader>;
 ///
 /// This Loader cannot be used to implement the Asset trait, but can be used by
 /// [`LoadFrom`].
-///
-/// [`LoadFrom`]: struct.LoadFrom.html
 #[derive(Debug)]
 pub struct BytesLoader;
 impl Loader<Vec<u8>> for BytesLoader {
@@ -173,8 +170,6 @@ impl Loader<Box<[u8]>> for BytesLoader {
 ///
 /// This Loader cannot be used to implement the Asset trait, but can be used by
 /// [`LoadFrom`].
-///
-/// [`LoadFrom`]: struct.LoadFrom.html
 #[derive(Debug)]
 pub struct StringLoader;
 impl Loader<String> for StringLoader {
@@ -194,12 +189,9 @@ impl Loader<Box<str>> for StringLoader {
 /// which is more efficient.
 ///
 /// If you want your custom type to work with this loader, make sure that
-/// `FromStr::Error` meets the requirement.
+/// `FromStr::Err` meets the requirement.
 ///
 /// See trait [`Loader`] for more informations.
-///
-/// [`StringLoader`]: struct.StringLoader.html
-/// [`Loader`]: trait.Loader.html
 #[derive(Debug)]
 pub struct ParseLoader;
 impl<T> Loader<T> for ParseLoader
@@ -217,8 +209,6 @@ macro_rules! serde_loader {
         #[doc = $doc]
         ///
         /// See trait [`Loader`] for more informations.
-        ///
-        /// [`Loader`]: trait.Loader.html
         #[cfg(feature = $feature)]
         #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
         #[derive(Debug)]

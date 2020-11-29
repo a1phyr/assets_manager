@@ -5,8 +5,6 @@
 //!
 //! The structure [`AssetCache`] is the entry point of the crate.
 //!
-//! [`AssetCache`]: struct.AssetCache.html
-//!
 //! ## Cargo features
 //!
 //! - `hot-reloading`: Add hot-reloading
@@ -104,9 +102,6 @@
 //! Note that this also means that you need a mutable reference on a cache to
 //! remove assets from it.
 //!
-//! [`AssetCache`]: struct.AssetCache.html
-//! [`AssetHandle`]: struct.AssetHandle.html
-//!
 //! ## Becoming `'static`
 //!
 //! Working with `'static` data is far easier: you don't have to care about
@@ -123,14 +118,13 @@
 //! to call [`AssetCache::enhance_hot_reloading`], which is easier to work with
 //! and has better performances than the default solution.
 //!
-//! You get easily get a `&'static AssetCache`, with the [`lazy_static`] crate,
+//! You get easily get a `&'static AssetCache`, with the `lazy_static` crate,
 //! but you can also do do by [leaking a `Box`].
 //!
 //! Note that using this technique prevents you from removing assets from the
 //! cache, so you have to keep them in memory for the duration of the program.
 //! This also creates global state, which you might want to avoid.
 //!
-//! [`AssetCache::enhance_hot_reloading`]: struct.AssetCache.html#method.enhance_hot_reloading
 //! [leaking a `Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak
 //!
 //! ### Cloning assets
@@ -157,8 +151,6 @@
 //!
 //! This is the technique internally used by `assets_manager` to store cached
 //! directories.
-//!
-//! [`AssetCache::load_cached`]: struct.AssetCache.html#method.load_cached
 
 #![doc(html_root_url = "https://docs.rs/assets_manager/0.3.2")]
 
@@ -245,8 +237,6 @@ use std::sync::Arc;
 ///     type Loader = loader::BincodeLoader;
 /// }
 /// # }}
-/// ```
-/// [`AssetCache`]: struct.AssetCache.html
 pub trait Asset: Sized + Send + Sync + 'static {
     /// Use this field if your asset only uses one extension.
     ///
@@ -260,15 +250,11 @@ pub trait Asset: Sized + Send + Sync + 'static {
     /// If this array is empty, loading an asset of this type returns
     /// [`Error::NoDefaultValue`] unless a default value is provided with the
     /// `default_value` method.
-    ///
-    /// [`Error::NoDefaultValue`]: enum.Error.html#variant.NoDefaultValue
     const EXTENSIONS: &'static [&'static str] = &[Self::EXTENSION];
 
     /// Specifies a way to to convert raw bytes into the asset.
     ///
     /// See module [`loader`] for implementations of common conversions.
-    ///
-    /// [`loader`]: loader/index.html
     type Loader: loader::Loader<Self>;
 
     /// Specifies a eventual default value to use if an asset fails to load. If

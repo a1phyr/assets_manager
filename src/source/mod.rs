@@ -1,14 +1,16 @@
 //! Bytes sources to load assets from.
 //!
-//! This module contains the trait [`Source`](trait.Source.html), which allows
-//! to specify how the files containing the assets are loaded. The struct
-//! [`AssetCache`](../struct.AssetCache.html) is notably generic over a `Source`.
+//! This module contains the trait [`Source`], which allows to specify how the
+//! files containing the assets are loaded. The struct [`AssetCache`] is
+//! notably generic over a `Source`.
 //!
-//! This module also contains two built-in sources: [`FileSystem`](struct.FileSystem.html)
-//! and [`Embedded`](struct.Embedded.html).
+//! This module also contains two built-in sources: [`FileSystem`] and
+//! [`Embedded`].
 
 use std::{borrow::Cow, io};
 
+#[cfg(doc)]
+use crate::AssetCache;
 
 mod filesystem;
 pub use filesystem::FileSystem;
@@ -22,8 +24,8 @@ pub use embedded::{Embedded, RawEmbedded};
 /// Embed a directory in the binary
 ///
 /// This macro takes as parameter the path of the directory to embed, and
-/// returns a [`RawEmbedded`](struct.RawEmbedded.html), which can be used to
-/// create an [`Embedded`](struct.Embedded.html) source.
+/// returns a [`RawEmbedded`], which can be used to create an [`Embedded`]
+/// source.
 ///
 /// ## Example
 ///
@@ -39,16 +41,15 @@ pub use embedded::{Embedded, RawEmbedded};
 #[cfg_attr(docsrs, doc(cfg(feature = "embedded")))]
 pub use assets_manager_macros::embed;
 
-
 #[cfg(test)]
 mod tests;
-
 
 /// Bytes sources to load assets from.
 ///
 /// # Usage
 ///
-/// This trait's main usage is through an [`AssetCache`](../struct.AssetCache.html). You create a value which is `Source` and give it to `AssetCache`.
+/// This trait's main usage is through an [`AssetCache`]. You create a value
+/// which is `Source` and give it to `AssetCache`.
 ///
 /// ## Example
 ///

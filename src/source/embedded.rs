@@ -4,10 +4,12 @@ use std::{
     io,
 };
 
+use super::Source;
+
 
 /// The raw represention of embedded files. The common way to create one is the
-/// [`embed!`](macro.embed.html) macro, and it is used to create an
-/// [`Embedded`](struct.Embedded.html) source.
+/// [`embed!`](`super::embed`) macro, and it is used to create an
+/// [`Embedded`](`super::Embedded`) source.
 ///
 /// Most of the time you will want a `'static` one, but it can also borrow data
 /// from the current context;
@@ -25,8 +27,8 @@ pub struct RawEmbedded<'a> {
     pub dirs: &'a [(&'a str, &'a [(&'a str, &'a str)])],
 }
 
-/// A [`Source`](trait.Source.html) which is embedded in the binary. It is
-/// created using a [`RawEmbedded`](struct.RawEmbedded.html) struct.
+/// A [`Source`] which is embedded in the binary. It is created using a
+/// [`RawEmbedded`] struct.
 ///
 /// ## Pros and cons
 ///
@@ -66,7 +68,7 @@ impl<'a> From<RawEmbedded<'a>> for Embedded<'a> {
     }
 }
 
-impl<'a> super::Source for Embedded<'a> {
+impl<'a> Source for Embedded<'a> {
     fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
         match self.files.get(&(id, ext)) {
             Some(content) => Ok(Cow::Borrowed(content)),

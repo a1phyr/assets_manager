@@ -8,6 +8,8 @@ use crate::{
     source::{FileSystem, Source},
 };
 
+#[cfg(doc)]
+use crate::{AssetGuard, ReadDir, ReadAllDir};
 
 use std::{
     any::TypeId,
@@ -21,8 +23,6 @@ use std::{
 /// The key used to identify assets
 ///
 /// **Note**: This definition has to kept in sync with [`Key`]'s one.
-///
-/// [`Key`]: struct.Key.html
 #[derive(PartialEq, Eq, Hash)]
 #[repr(C)]
 pub(crate) struct OwnedKey {
@@ -48,8 +48,6 @@ impl OwnedKey {
 }
 
 /// A borrowed version of [`OwnedKey`]
-///
-/// [`OwnedKey`]: struct.OwnedKey.html
 #[derive(PartialEq, Eq, Hash)]
 #[repr(C)]
 pub(crate) struct Key<'a> {
@@ -211,13 +209,13 @@ where
         }
     }
 
-    /// Returns a reference to the cache's [`Source`](source/trait.Source.html)
+    /// Returns a reference to the cache's [`Source`].
     #[inline]
     pub fn source(&self) -> &S {
         &self.source
     }
 
-    /// Adds an asset to the cache
+    /// Adds an asset to the cache.
     #[cold]
     pub(crate) fn add_asset<A: Asset>(&self, id: &str) -> Result<AssetHandle<A>, Error> {
         #[cfg(feature = "hot-reloading")]
@@ -233,7 +231,7 @@ where
         unsafe { Ok(entry.get_ref()) }
     }
 
-    /// Adds a directory to the cache
+    /// Adds a directory to the cache.
     #[cold]
     fn add_dir<A: Asset>(&self, id: &str) -> Result<DirReader<A, S>, io::Error> {
         #[cfg(feature = "hot-reloading")]
@@ -292,7 +290,7 @@ where
     ///
     /// Panics if an error happens while loading the asset (see [`load`]).
     ///
-    /// [`load`]: fn.load.html
+    /// [`load`]: `Self::load`
     #[inline]
     #[track_caller]
     pub fn load_expect<A: Asset>(&self, id: &str) -> AssetHandle<A> {
@@ -355,9 +353,6 @@ where
     ///
     /// Note that you need a mutable reference to the cache, so you cannot have
     /// any [`AssetHandle`], [`AssetGuard`], etc when you call this function.
-    ///
-    /// [`AssetHandle`]: struct.AssetHandle.html
-    /// [`AssetGuard`]: struct.AssetGuard.html
     #[inline]
     pub fn remove<A: Asset>(&mut self, id: &str) -> bool {
         let key = Key::new::<A>(id);
@@ -401,11 +396,6 @@ impl AssetCache<FileSystem> {
     /// from the given `AssetCache`, or you might experience deadlocks. You are
     /// free to keep [`AssetHandle`]s, though. The same restriction applies to
     /// [`ReadDir`] and [`ReadAllDir`].
-    ///
-    /// [`AssetGuard`]: struct.AssetGuard.html
-    /// [`AssetHandle`]: struct.AssetHandle.html
-    /// [`ReadDir`]: struct.ReadDir.html
-    /// [`ReadAllDir`]: struct.ReadAllDir.html
     #[cfg(feature = "hot-reloading")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
     pub fn hot_reload(&self) {
@@ -417,7 +407,7 @@ impl AssetCache<FileSystem> {
     /// Having a `'static` reference to the cache enables some optimisations,
     /// which you can take advantage of with this function. If an `AssetCache`
     /// is behind a `'static` reference, you should always prefer using this
-    /// function over [`hot_reload`](#method.hot_reload).
+    /// function over [`hot_reload`](`Self::hot_reload`).
     ///
     /// You only have to call this function once for it to take effect. After
     /// calling this function, subsequent calls to `hot_reload` and to this

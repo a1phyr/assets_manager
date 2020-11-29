@@ -4,6 +4,9 @@ use crate::{
     hot_reloading::{HotReloader, UpdateMessage},
 };
 
+#[cfg(doc)]
+use crate::AssetCache;
+
 use std::{
     borrow::Cow,
     fmt,
@@ -11,6 +14,8 @@ use std::{
     io,
     path::{Path, PathBuf},
 };
+
+use super::Source;
 
 
 #[inline]
@@ -29,17 +34,14 @@ fn has_extension(path: &Path, ext: &[&str]) -> bool {
     }
 }
 
-/// A [`Source`](trait.Source.html) to load assets from a directory in the
-/// filesystem.
+/// A [`Source`] to load assets from a directory in the filesystem.
 ///
-/// This is the default `Source` of [`AssetCache`](../struct.AssetCache.html).
+/// This is the default `Source` of [`AssetCache`].
 ///
 /// ## Hot-reloading
 ///
 /// This source supports hot-reloading: when a file is edited, the corresponding
 /// assets are reloaded when [`AssetCache::hot_reload`] is called.
-///
-/// [`AssetCache::hot_reload`]: ../struct.AssetCache.html#method.hot_reload
 ///
 /// ## WebAssembly
 ///
@@ -56,8 +58,8 @@ impl FileSystem {
     /// Creates a new `FileSystem` from a directory.
     ///
     /// Generally you do not need to call this function directly, as the
-    /// [`AssetCache::new`](../struct.AssetCache.html#method.new) method provides
-    /// a shortcut to create a cache reading from the filesystem.
+    /// [`AssetCache::new`] method provides a shortcut to create a cache
+    /// reading from the filesystem.
     ///
     /// # Errors
     ///
@@ -100,7 +102,7 @@ impl FileSystem {
     }
 }
 
-impl super::Source for FileSystem {
+impl Source for FileSystem {
     fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
         let path = self.path_of(id, ext);
         fs::read(path).map(Into::into)

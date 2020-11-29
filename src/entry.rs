@@ -74,8 +74,6 @@ impl<T> Inner<T> {
 /// to create them.
 /// - When an `AssetHandle<'a, T>` is returned, you have to ensure that `self`
 /// outlives it. The `CacheEntry` can be moved but cannot be dropped.
-///
-/// [`ContreteCacheEntry`]: struct.ContreteCacheEntry.html
 pub(crate) struct CacheEntry(Box<dyn Any + Send + Sync>);
 
 impl<'a> CacheEntry {
@@ -152,8 +150,6 @@ impl fmt::Debug for CacheEntry {
 /// This is the structure you want to use to store a reference to an asset.
 /// However it is generally easier to work with `'static` data. For more
 /// informations, see [top-level documentation](index.html#becoming-static).
-///
-/// [leaking a `Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak
 pub struct AssetHandle<'a, A> {
     data: &'a Inner<A>,
 
@@ -317,8 +313,6 @@ where
 /// This type is a smart pointer to type `A`.
 ///
 /// It can be obtained by calling [`AssetHandle::read`].
-///
-/// [`AssetHandle::read`]: struct.AssetHandle.html#method.read
 pub struct AssetGuard<'a, A> {
     #[cfg(feature = "hot-reloading")]
     asset: RwLockReadGuard<'a, A>,

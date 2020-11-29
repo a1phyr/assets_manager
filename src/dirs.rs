@@ -157,8 +157,7 @@ impl fmt::Debug for CachedDir {
 ///
 /// This structure can be obtained by calling [`AssetCache::load_dir`].
 ///
-/// [`AssetCache::load_dir`]: struct.AssetCache.html#method.load_dir
-/// [hot-reloading]: struct.AssetCache.html#method.hot_reload
+/// [hot-reloading]: `AssetCache::hot_reload`
 pub struct DirReader<'a, A, S> {
     cache: &'a AssetCache<S>,
     assets: &'a StringList,
@@ -184,7 +183,7 @@ impl<'a, A: Asset, S> DirReader<'a, A, S> {
     /// Note that if an asset is [removed from the cache], it won't be returned
     /// by this iterator until it is cached again.
     ///
-    /// [removed from the cache]: struct.AssetCache.html#method.remove
+    /// [removed from the cache]: `AssetCache::remove`
     #[inline]
     pub fn iter(&self) -> ReadDir<'a, A, S> {
         ReadDir {
@@ -230,8 +229,6 @@ where
 /// This iterator yields each asset that was successfully loaded.
 ///
 /// It can be obtained by calling [`DirReader::iter`].
-///
-/// [`DirReader::iter`]: struct.DirReader.html#method.iter
 pub struct ReadDir<'a, A, S> {
     cache: &'a AssetCache<S>,
     iter: StringIter<'a>,
@@ -274,8 +271,6 @@ where
 /// result of its loading from the cache.
 ///
 /// It can be obtained by calling [`DirReader::iter_all`].
-///
-/// [`DirReader::iter_all`]: struct.DirReader.html#method.iter_all
 pub struct ReadAllDir<'a, A, S> {
     cache: &'a AssetCache<S>,
     iter: StringIter<'a>,
