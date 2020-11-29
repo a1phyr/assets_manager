@@ -8,11 +8,14 @@ use std::{
 use crate::{
     Asset,
     AssetCache,
+    Compound,
     cache::{Key, OwnedKey},
     loader::Loader,
     entry::CacheEntry,
-    utils::HashMap,
+    utils::{HashMap, HashSet},
 };
+
+use super::dependencies::Dependencies;
 
 
 /// Push a component to an id
@@ -61,34 +64,58 @@ fn load<A: Asset>(content: Cow<[u8]>, ext: &str, id: &str, path: &Path) -> Optio
     }
 }
 
+pub(crate) type ReloadFn = fn(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>>;
+
+fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>> {
+    let key = Key::new::<T>(id);
+    let inner = unsafe { cache.assets.read().get(&key)?.inner::<T>() };
+
+    match cache.record_load::<T>(id) {
+        Ok((asset, deps)) => {
+            inner.write(asset);
+            log::info!("Reloading {:?}", id);
+            Some(deps)
+        }
+        Err(err) => {
+            log::warn!("Error reloading {:?}: {}", id, err);
+            None
+        }
+    }
+}
+
+
 type Ext = &'static [&'static str];
 
 /// This struct is responsible of the safety of the whole module.
 ///
 /// Its invariant is that the TypeId is the same as the one of the value
 /// returned by the LoadFn.
-pub struct Id(PathBuf, Box<str>, TypeId, LoadFn);
+pub(crate) struct AssetReloadInfos(PathBuf, Box<str>, TypeId, LoadFn);
+
+impl AssetReloadInfos {
+    #[inline]
+    pub fn of<A: Asset>(path: PathBuf, id: Box<str>) -> Self {
+        AssetReloadInfos(path, id, TypeId::of::<A>(), load::<A>)
+    }
+}
+
+pub(crate) struct CompoundReloadInfos(OwnedKey, HashSet<OwnedKey>, ReloadFn);
+
+impl CompoundReloadInfos {
+    #[inline]
+    pub fn of<A: Compound>(id: Box<str>, deps: HashSet<OwnedKey>) -> Self {
+        let key = OwnedKey::new::<A>(id);
+        CompoundReloadInfos(key, deps, reload::<A>)
+    }
+}
 
 /// A update to the list of watched paths
 #[non_exhaustive]
-pub enum UpdateMessage {
+pub(crate) enum UpdateMessage {
     Clear,
-    Asset(Id),
-    Dir(Id, Ext),
-}
-
-impl UpdateMessage {
-    #[inline]
-    pub fn asset<A: Asset>(path: PathBuf, id: Box<str>) -> Self {
-        let asset = Id(path, id, TypeId::of::<A>(), load::<A>);
-        UpdateMessage::Asset(asset)
-    }
-
-    #[inline]
-    pub fn dir<A: Asset>(path: PathBuf, id: Box<str>) -> Self {
-        let dir = Id(path, id, TypeId::of::<A>(), load::<A>);
-        UpdateMessage::Dir(dir, A::EXTENSIONS)
-    }
+    AddAsset(AssetReloadInfos),
+    AddDir(AssetReloadInfos, Ext),
+    AddCompound(CompoundReloadInfos),
 }
 
 /// A map type -> `T`
@@ -147,22 +174,21 @@ pub struct AssetPaths {
 }
 
 impl AssetPaths {
-    /// Update the list given a message
-    pub fn update(&mut self, msg: UpdateMessage) {
-        match msg {
-            UpdateMessage::Clear => {
-                self.assets.clear();
-                self.dirs.clear();
-            },
-            UpdateMessage::Asset(Id(path, id, type_id, load)) => {
-                let watched = self.assets.entry(path).or_insert_with(|| WatchedPath::new(id));
-                watched.types.insert(type_id, load);
-            },
-            UpdateMessage::Dir(Id(path, id, type_id, load), ext) => {
-                let watched = self.dirs.entry(path).or_insert_with(|| WatchedPath::new(id));
-                watched.types.insert(type_id, (load, ext));
-            },
-        }
+    fn clear(&mut self) {
+        self.assets.clear();
+        self.dirs.clear();
+    }
+
+    fn add_asset(&mut self, id: AssetReloadInfos) {
+        let AssetReloadInfos(path, id, type_id, load) = id;
+        let watched = self.assets.entry(path).or_insert_with(|| WatchedPath::new(id));
+        watched.types.insert(type_id, load);
+    }
+
+    fn add_dir(&mut self, id: AssetReloadInfos, ext: Ext) {
+        let AssetReloadInfos(path, id, type_id, load) = id;
+        let watched = self.dirs.entry(path).or_insert_with(|| WatchedPath::new(id));
+        watched.types.insert(type_id, (load, ext));
     }
 }
 
@@ -178,9 +204,16 @@ pub struct LocalCache {
     changed_dirs: Vec<(OwnedKey, Box<str>, Action)>,
 }
 
+impl LocalCache {
+    fn clear(&mut self) {
+        self.changed.clear();
+        self.changed_dirs.clear();
+    }
+}
+
 enum CacheKind {
     Local(LocalCache),
-    Static(&'static AssetCache),
+    Static(&'static AssetCache, Vec<OwnedKey>),
 }
 
 impl CacheKind {
@@ -191,12 +224,13 @@ impl CacheKind {
     /// `key.type_id == asset.type_id()`
     unsafe fn update(&mut self, key: &Key, asset: Box<dyn AnyAsset>) {
         match self {
-            CacheKind::Static(cache) => {
+            CacheKind::Static(cache, to_reload) => {
                 log::info!("Reloading {:?}", key.id());
 
                 let assets = cache.assets.read();
                 if let Some(entry) = assets.get(key) {
                     asset.reload(entry);
+                    to_reload.push(key.to_owned());
                 }
             },
             CacheKind::Local(cache) => {
@@ -208,7 +242,7 @@ impl CacheKind {
     /// Add an asset to a directory
     fn add(&mut self, dir_key: &Key, id: Box<str>) {
         match self {
-            CacheKind::Static(cache) => {
+            CacheKind::Static(cache, _) => {
                 log::info!("Adding {:?} to {:?}", id, dir_key.id());
 
                 let dirs = cache.dirs.read();
@@ -225,7 +259,7 @@ impl CacheKind {
     /// Remove an asset from a directory
     fn remove(&mut self, dir_key: &Key, id: Box<str>) {
         match self {
-            CacheKind::Static(cache) => {
+            CacheKind::Static(cache, _) => {
                 log::info!("Removing {:?} from {:?}", id, dir_key.id());
 
                 let dirs = cache.dirs.read();
@@ -240,9 +274,10 @@ impl CacheKind {
     }
 }
 
-pub struct HotReloadingData {
-    pub paths: AssetPaths,
+pub(crate) struct HotReloadingData {
+    paths: AssetPaths,
     cache: CacheKind,
+    deps: Dependencies,
 }
 
 impl HotReloadingData {
@@ -259,6 +294,7 @@ impl HotReloadingData {
             },
 
             cache: CacheKind::Local(cache),
+            deps: Dependencies::new(),
         }
     }
 
@@ -268,6 +304,8 @@ impl HotReloadingData {
 
         self.load_dir(&path, file_ext)?;
         self.load_asset(&path, file_ext);
+
+        self.update_if_static();
 
         Some(())
     }
@@ -332,10 +370,17 @@ impl HotReloadingData {
         Some(())
     }
 
-    /// Update the cache if it is local
-    pub fn update_local(&mut self, asset_cache: &AssetCache) {
-        if let CacheKind::Local(cache) = &mut self.cache {
-            cache.update(asset_cache);
+    pub fn update_if_local(&mut self, cache: &AssetCache) {
+        if let CacheKind::Local(local_cache) = &mut self.cache {
+            local_cache.update(&mut self.deps, cache);
+        }
+    }
+
+    fn update_if_static(&mut self) {
+        if let CacheKind::Static(cache, to_reload) = &mut self.cache {
+            let to_update = super::dependencies::AssetDepGraph::new(&self.deps, to_reload.iter());
+            to_update.update(&mut self.deps, cache);
+            to_reload.clear();
         }
     }
 
@@ -343,9 +388,26 @@ impl HotReloadingData {
     /// `AssetCache`.
     pub fn use_static_ref(&mut self, asset_cache: &'static AssetCache) {
         if let CacheKind::Local(cache) = &mut self.cache {
-            cache.update(asset_cache);
-            self.cache = CacheKind::Static(asset_cache);
+            cache.update(&mut self.deps, asset_cache);
+            self.cache = CacheKind::Static(asset_cache, Vec::new());
             log::trace!("Hot-reloading now use a 'static reference");
+        }
+    }
+
+    pub fn recv_update(&mut self, message: UpdateMessage) {
+        match message {
+            UpdateMessage::Clear => {
+                self.paths.clear();
+                if let CacheKind::Local(cache) = &mut self.cache {
+                    cache.clear();
+                }
+            },
+            UpdateMessage::AddAsset(infos) => self.paths.add_asset(infos),
+            UpdateMessage::AddDir(infos, ext) => self.paths.add_dir(infos, ext),
+            UpdateMessage::AddCompound(infos) => {
+                let CompoundReloadInfos(key, new_deps, reload) = infos;
+                self.deps.insert(key, new_deps, Some(reload));
+            },
         }
     }
 }
@@ -353,7 +415,9 @@ impl HotReloadingData {
 impl LocalCache {
     /// Update the `AssetCache` with data collected in the `LocalCache` since
     /// the last reload.
-    pub fn update(&mut self, cache: &AssetCache) {
+    fn update(&mut self, deps: &mut Dependencies, cache: &AssetCache) {
+        let to_update = super::dependencies::AssetDepGraph::new(&deps, self.changed.iter().map(|(k,_)| k));
+
         // Update assets
         let mut assets = cache.assets.write();
 
@@ -393,5 +457,7 @@ impl LocalCache {
                 }
             }
         }
+
+        to_update.update(deps, cache);
     }
 }

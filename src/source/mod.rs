@@ -90,7 +90,7 @@ pub trait Source {
     /// // "goblin.ron", and other files that do not have "ron" extension.
     ///
     /// let fs = FileSystem::new("assets")?;
-    /// let mut dir_content = fs.read_dir("example", &["ron"])?;
+    /// let mut dir_content = fs.read_dir("example.monsters", &["ron"])?;
     ///
     /// // Order is important for equality comparison
     /// dir_content.sort();
@@ -111,6 +111,10 @@ pub trait Source {
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
     fn __private_hr_clear(&mut self) where Self: Sized {}
+
+    #[cfg(feature = "hot-reloading")]
+    #[doc(hidden)]
+    fn __private_hr_add_compound<A: crate::Compound>(&self, _: &str, _: crate::utils::DepsRecord) where Self: Sized {}
 }
 
 impl<S> Source for Box<S>

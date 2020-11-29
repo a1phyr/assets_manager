@@ -1,0 +1,7 @@
+(
+    name: "Forest",
+    spawn_table: [
+        ("example.monsters.giant_bat", 15),
+        ("example.monsters.goblin", 10),
+    ],
+)
