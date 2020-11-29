@@ -152,7 +152,7 @@ pub type LoadFromAsset<A> = LoadFrom<A, <A as crate::Asset>::Loader>;
 /// This Loader cannot be used to implement the Asset trait, but can be used by
 /// [`LoadFrom`].
 #[derive(Debug)]
-pub struct BytesLoader;
+pub struct BytesLoader(());
 impl Loader<Vec<u8>> for BytesLoader {
     fn load(content: Cow<[u8]>, _: &str) -> Result<Vec<u8>, BoxedError> {
         Ok(content.into_owned())
@@ -171,7 +171,7 @@ impl Loader<Box<[u8]>> for BytesLoader {
 /// This Loader cannot be used to implement the Asset trait, but can be used by
 /// [`LoadFrom`].
 #[derive(Debug)]
-pub struct StringLoader;
+pub struct StringLoader(());
 impl Loader<String> for StringLoader {
     fn load(content: Cow<[u8]>, _: &str) -> Result<String, BoxedError> {
         Ok(String::from_utf8(content.into_owned())?)
@@ -193,7 +193,7 @@ impl Loader<Box<str>> for StringLoader {
 ///
 /// See trait [`Loader`] for more informations.
 #[derive(Debug)]
-pub struct ParseLoader;
+pub struct ParseLoader(());
 impl<T> Loader<T> for ParseLoader
 where
     T: FromStr,
@@ -212,7 +212,7 @@ macro_rules! serde_loader {
         #[cfg(feature = $feature)]
         #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
         #[derive(Debug)]
-        pub struct $name;
+        pub struct $name(());
 
         #[cfg(feature = $feature)]
         impl<T> Loader<T> for $name
