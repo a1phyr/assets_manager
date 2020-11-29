@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 /// An asset is a type loadable from a file.
 ///
-/// `Asset`s can loaded and retreived by an [`AssetCache`].
+/// `Asset`s can be loaded and retrieved by an [`AssetCache`].
 ///
 /// This trait should only perform a conversion from raw bytes to the concrete
 /// type. If you need to load other assets, please use the [`Compound`] trait.
@@ -21,7 +21,7 @@ use std::sync::Arc;
 ///
 /// You can provide several extensions that will be used to search and load
 /// assets. When loaded, each extension is tried in order until a file is
-/// correctly loaded or no extension remain. The empty string `""` means a file
+/// correctly loaded or no extension remains. The empty string `""` means a file
 /// without extension. You cannot use character `.`.
 ///
 /// The `EXTENSION` field is a convenient shortcut if your asset uses only one
@@ -34,8 +34,8 @@ use std::sync::Arc;
 ///
 /// # Example
 ///
-/// Suppose you make a physics simulutation, and you store positions and speeds
-/// in a Bincode-encoded files, with extension ".data".
+/// Suppose you make a physics simulation, and you store positions and speeds
+/// in a Bincode-encoded file, with extension ".data".
 ///
 /// ```no_run
 /// # cfg_if::cfg_if! { if #[cfg(feature = "bincode")] {
@@ -76,7 +76,7 @@ pub trait Asset: Sized + Send + Sync + 'static {
     /// `default_value` method.
     const EXTENSIONS: &'static [&'static str] = &[Self::EXTENSION];
 
-    /// Specifies a way to to convert raw bytes into the asset.
+    /// Specifies a way to convert raw bytes into the asset.
     ///
     /// See module [`loader`] for implementations of common conversions.
     type Loader: loader::Loader<Self>;
@@ -84,7 +84,7 @@ pub trait Asset: Sized + Send + Sync + 'static {
     /// Specifies a eventual default value to use if an asset fails to load. If
     /// this method returns `Ok`, the returned value is used as an asset. In
     /// particular, if this method always returns `Ok`, all `AssetCache::load*`
-    /// (except `load_cached`) are guarantied not to fail.
+    /// (except `load_cached`) are guaranteed not to fail.
     ///
     /// The `id` parameter is given to easily report the error.
     ///
@@ -138,21 +138,21 @@ where
 
 /// An asset type that can load other kinds of assets.
 ///
-/// `Compound`s can loaded and retreived by an [`AssetCache`].
+/// `Compound`s can be loaded and retrieved by an [`AssetCache`].
 ///
 /// # Hot-reloading
 ///
 /// Any asset loaded from the given cache is registered as a dependency of the
 /// Compound. When the former is reloaded, the latter will be reloaded too.
 ///
-/// To opt-out of depencencies recording, use `AssetCache::no_record`.
+/// To opt out of dependencies recording, use `AssetCache::no_record`.
 ///
 /// Note that directories are not considered as dependencies at the moment, but
 /// this will come in a future (breaking) release.
 pub trait Compound: Sized + Send + Sync + 'static {
     /// Loads an asset from the cache.
     ///
-    /// This function should not perform any kind of I/O: such concern shoud be
+    /// This function should not perform any kind of I/O: such concern should be
     /// delegated to [`Asset`]s.
     fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error>;
 

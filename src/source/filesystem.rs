@@ -40,7 +40,7 @@ fn has_extension(path: &Path, ext: &[&str]) -> bool {
     }
 }
 
-/// A [`Source`] to load assets from a directory in the filesystem.
+/// A [`Source`] to load assets from a directory in the file system.
 ///
 /// This is the default `Source` of [`AssetCache`].
 ///
@@ -51,7 +51,7 @@ fn has_extension(path: &Path, ext: &[&str]) -> bool {
 ///
 /// ## WebAssembly
 ///
-/// This source does not work in WebAssembly, because there is no filesystem.
+/// This source does not work in WebAssembly, because there is no file system.
 /// When called, it always returns an error.
 pub struct FileSystem {
     path: PathBuf,

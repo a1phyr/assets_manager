@@ -1,13 +1,13 @@
 //! Generic asset loading definition
 //!
 //! This module defines a trait [`Loader`], to specify how [assets] are loaded
-//! from the filesystem.
+//! from the file system.
 
 //! It also defines loaders, ie types that implement [`Loader`], so in most
 //! cases you don't have to implement this trait yourself. These loaders work
 //! with standard traits and `serde`.
 //!
-//! See trait [`Loader`] for more informations.
+//! See trait [`Loader`] for more information.
 //!
 //! [assets]: `crate::Asset`
 
@@ -58,11 +58,9 @@ mod tests;
 ///
 /// # Implementing `Loader`
 ///
-/// This trait is a little complex, but it makes it quite powerful.
-///
 /// Function `load` does the conversion between raw bytes and the concrete Rust
 /// value. It takes the result of the file loading as parameter, so it is up to
-/// the loader to handle an eventual I/O error. If no I/O error happen, bytes
+/// the loader to handle an eventual I/O error. If no I/O error happens, bytes
 /// are given as a `Cow<[u8]>` to avoid unnecessary clones.
 ///
 /// The extension used to load the asset is also passed as parameter, which can

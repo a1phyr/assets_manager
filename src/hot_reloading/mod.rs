@@ -93,7 +93,7 @@ impl HotReloader {
                 match ready.index() {
                     0 => match ready.recv(&ptr_rx) {
                         Ok(CacheMessage::Ptr(ptr)) => {
-                            // Safety: The received pointer is guarantied to
+                            // Safety: The received pointer is guaranteed to
                             // be valid until we reply back
                             cache.update_if_local(unsafe { ptr.as_ref() });
                             answer_tx.send(()).unwrap();

@@ -1,7 +1,7 @@
 //! Conveniently load, store and cache external resources.
 //!
 //! This crate aims at providing a filesystem abstraction to easily load external resources.
-//! It was originally thought for games, but can of course be used in other contexts.
+//! It was originally thought for games, but can, of course, be used in other contexts.
 //!
 //! The structure [`AssetCache`] is the entry point of the crate.
 //!
@@ -10,7 +10,7 @@
 //! - `hot-reloading`: Add hot-reloading
 //! - `embedded`: Add embedded source
 //!
-//! ### Additionnal loaders
+//! ### Additional loaders
 //!
 //! - `bincode`: Bincode deserialization
 //! - `cbor`: CBOR deserialization
@@ -25,7 +25,7 @@
 //! These features change inner data structures implementations. They usually
 //! increase performances, and are therefore enabled by default.
 //!
-//! - `parking_lot`: Use *parking_lot* crate's synchronisation primitives
+//! - `parking_lot`: Use *parking_lot* crate's synchronization primitives
 //! - `ahash`: Use ahash algorithm instead Sip1-3 used in `std`.
 //!
 //! ## Example
@@ -95,7 +95,7 @@
 //!
 //! As when you borrow an `&str` from a `String`, an `Handle` guarantees
 //! that the underlying asset is stored in the cache. This is especially useful
-//! with hot-reloading: all `Handle` are guarantied to be reloaded when
+//! with hot-reloading: all `Handle` are guaranteed to be reloaded when
 //! possible, so two handles on the same asset always have the same value. This
 //! would not be possible if `Handle`s were always `'static`.
 //!
@@ -105,7 +105,7 @@
 //! ## Becoming `'static`
 //!
 //! Working with `'static` data is far easier: you don't have to care about
-//! lifetimes, they can easily be send in other threads, etc. So, how to get
+//! lifetimes, they can easily be sent in other threads, etc. So, how to get
 //! `'static` data from `Handle`s ?
 //!
 //! Note that none of these proposals is compulsory to use this crate: you can
@@ -119,7 +119,7 @@
 //! and has better performances than the default solution.
 //!
 //! You get easily get a `&'static AssetCache`, with the `lazy_static` crate,
-//! but you can also do do by [leaking a `Box`].
+//! but you can also do it by [leaking a `Box`].
 //!
 //! Note that using this technique prevents you from removing assets from the
 //! cache, so you have to keep them in memory for the duration of the program.
@@ -129,15 +129,15 @@
 //!
 //! ### Cloning assets
 //!
-//! Assets being `'static` themselves, cloning them is a good way to opt-out of
+//! Assets being `'static` themselves, cloning them is a good way to opt out of
 //! the lifetime of the cache. If cloning the asset itself is too expensive,
 //! you can take advantage of the fact that `Arc<A>` is an asset if `A` is too:
 //! cloning an `Arc` is a rather cheap operation (at least, when compared to
 //! allocating memory).
 //!
 //! However, by doing so, you explicitly opt-out hot-reloading, which is done
-//! via `Handle`s. This can also be a benefit, if you need to ensure that
-//! your data does not change spuriously.
+//! via `Handle`s. This can also be a benefit if you need to ensure that your
+//! data does not change spuriously.
 //!
 //! ### Storing `String`s
 //!
@@ -146,7 +146,7 @@
 //! stored in it. If you want to ensure that no heavy operation is used, you
 //! can do so with [`AssetCache::load_cached`].
 //!
-//! If you have to clone them a lot, you may consider to change your `String`
+//! If you have to clone them a lot, you may consider changing your `String`
 //! into an `Arc<str>` which is usually cheaper to clone.
 //!
 //! This is the technique internally used by `assets_manager` to store cached

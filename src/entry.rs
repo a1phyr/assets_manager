@@ -139,7 +139,7 @@ impl fmt::Debug for CacheEntry {
 
 /// A handle on an asset.
 ///
-/// Such an handle can be used to get an access on an asset of type `A`. It is
+/// Such a handle can be used to get access to an asset of type `A`. It is
 /// generally obtained by call `AssetCache::load` and its variants.
 ///
 /// If feature `hot-reloading` is used, this structure wraps a RwLock, so
@@ -149,7 +149,7 @@ impl fmt::Debug for CacheEntry {
 ///
 /// This is the structure you want to use to store a reference to an asset.
 /// However it is generally easier to work with `'static` data. For more
-/// informations, see [top-level documentation](index.html#becoming-static).
+/// information, see [top-level documentation](index.html#becoming-static).
 pub struct Handle<'a, A> {
     data: &'a Inner<A>,
 
@@ -260,7 +260,7 @@ where
 {
     /// Returns a copy of the inner asset.
     ///
-    /// This is fonctionnally equivalent to `cloned`, but it ensures that no
+    /// This is functionnally equivalent to `cloned`, but it ensures that no
     /// expensive operation is used (eg if a type is refactored).
     #[inline]
     pub fn copied(self) -> A {

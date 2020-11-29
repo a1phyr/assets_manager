@@ -56,7 +56,7 @@ mod tests;
 ///
 /// ## Example
 ///
-/// Read assets from the filesystem or embed them in the binary depending on we
+/// Read assets from the file system or embed them in the binary depending on we
 /// are building for WebAssembly:
 ///
 /// ```no_run
@@ -74,13 +74,13 @@ mod tests;
 pub trait Source {
     /// Try reading the source given an id and an extension.
     ///
-    /// If no error occur, this function returns an `Cow`, which can be useful
+    /// If no error occurs, this function returns an `Cow`, which can be useful
     /// to avoid allocations.
     fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>>;
 
     /// Reads a directory given its id and an extension list.
     ///
-    /// If no error occur, this function should return a list of file stems
+    /// If no error occurs, this function should return a list of file stems
     /// (without extension nor dir prefix) from files that have at least one of
     /// the given extensions.
     ///

@@ -7,7 +7,7 @@ use std::{
 use super::Source;
 
 
-/// The raw represention of embedded files. The common way to create one is the
+/// The raw representation of embedded files. The common way to create one is the
 /// [`embed!`](`super::embed`) macro, and it is used to create an
 /// [`Embedded`](`super::Embedded`) source.
 ///
@@ -30,10 +30,10 @@ pub struct RawEmbedded<'a> {
 /// A [`Source`] which is embedded in the binary. It is created using a
 /// [`RawEmbedded`] struct.
 ///
-/// ## Pros and cons
+/// ## Pros and Cons
 ///
-/// Embedding assets enable to easily share a program as a single binary, which
-/// is especially useful for WebAssembly, where no filesystem is available.
+/// Embedding assets enables to easily share a program as a single binary, which
+/// is especially useful for WebAssembly, where no file system is available.
 /// Moreover, you might experience performance gain, as no I/O is necessary to
 /// load an asset.
 ///
@@ -42,7 +42,7 @@ pub struct RawEmbedded<'a> {
 /// makes it hard to edit external files (you have to recompile the program
 /// each time you edit an asset). Hot-reloading is of course impossible. For
 /// these reasons, you should only use this source for release builds. It also
-/// create large binaries, which increases memory usage.
+/// tends to creates large binarie, which increases memory usage.
 ///
 /// ## Usage
 ///

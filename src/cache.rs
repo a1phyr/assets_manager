@@ -142,12 +142,12 @@ impl fmt::Debug for Key<'_> {
 /// requiring a mutable reference, but one is required to remove an asset.
 ///
 /// Within the cache, assets are identified with their type and a string. This
-/// string is constructed from the asset path, remplacing `/` by `.` and removing
+/// string is constructed from the asset path, replacing `/` by `.` and removing
 /// the extension. Given that, you cannot use `.` in your file names except for
 /// the extension.
 ///
 /// **Note**: Using symbolic or hard links within the cached directory can lead
-/// to surprising behaviour (especially with hot-reloading), and thus should be
+/// to surprising behavior (especially with hot-reloading), and thus should be
 /// avoided.
 ///
 /// # Example
@@ -332,7 +332,7 @@ where
     ///
     /// Errors can occur in several cases :
     /// - The asset could not be loaded from the filesystem
-    /// - Loaded data could not not be converted properly
+    /// - Loaded data could not be converted properly
     /// - The asset has no extension
     #[inline]
     pub fn load<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
@@ -494,7 +494,7 @@ impl AssetCache<FileSystem> {
 
     /// Enhances hot-reloading.
     ///
-    /// Having a `'static` reference to the cache enables some optimisations,
+    /// Having a `'static` reference to the cache enables some optimizations,
     /// which you can take advantage of with this function. If an `AssetCache`
     /// is behind a `'static` reference, you should always prefer using this
     /// function over [`hot_reload`](`Self::hot_reload`).
