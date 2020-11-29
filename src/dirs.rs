@@ -1,8 +1,8 @@
 use crate::{
     Asset,
     AssetCache,
-    AssetHandle,
     Error,
+    Handle,
     source::Source,
     utils::{RwLock, RwLockReadGuard},
 };
@@ -214,7 +214,7 @@ where
     A: Asset,
     S: Source,
 {
-    type Item = AssetHandle<'a, A>;
+    type Item = Handle<'a, A>;
     type IntoIter = ReadDir<'a, A, S>;
 
     /// Equivalent to [`iter`](#method.iter).
@@ -240,7 +240,7 @@ where
     A: Asset,
     S: Source,
 {
-    type Item = AssetHandle<'a, A>;
+    type Item = Handle<'a, A>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -282,7 +282,7 @@ where
     A: Asset,
     S: Source,
 {
-    type Item = (&'a str, Result<AssetHandle<'a, A>, Error>);
+    type Item = (&'a str, Result<Handle<'a, A>, Error>);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {

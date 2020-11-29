@@ -1,8 +1,8 @@
 //! Definition of the cache
 use crate::{
-    Asset, Error, Compound,
+    Asset, Error, Compound, Handle,
     dirs::{CachedDir, DirReader},
-    entry::{AssetHandle, CacheEntry},
+    entry::CacheEntry,
     loader::Loader,
     utils::{HashMap, RwLock},
     source::{FileSystem, Source},
@@ -288,7 +288,7 @@ where
 
     /// Adds an asset to the cache.
     #[cold]
-    fn add_asset<A: Compound>(&self, id: &str) -> Result<AssetHandle<A>, Error> {
+    fn add_asset<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
         let asset = A::__private_load(self, id)?;
 
         let key = OwnedKey::new::<A>(id.into());
@@ -326,7 +326,7 @@ where
     /// - Loaded data could not not be converted properly
     /// - The asset has no extension
     #[inline]
-    pub fn load<A: Compound>(&self, id: &str) -> Result<AssetHandle<A>, Error> {
+    pub fn load<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
         match self.load_cached(id) {
             Some(asset) => Ok(asset),
             None => self.add_asset(id),
@@ -338,7 +338,7 @@ where
     /// This function does not attempt to load the asset from the source if it
     /// is not found in the cache.
     #[inline]
-    pub fn load_cached<A: Compound>(&self, id: &str) -> Option<AssetHandle<A>> {
+    pub fn load_cached<A: Compound>(&self, id: &str) -> Option<Handle<A>> {
         let key = Key::new::<A>(id);
 
         #[cfg(feature = "hot-reloading")]
@@ -365,7 +365,7 @@ where
     /// [`load`]: `Self::load`
     #[inline]
     #[track_caller]
-    pub fn load_expect<A: Compound>(&self, id: &str) -> AssetHandle<A> {
+    pub fn load_expect<A: Compound>(&self, id: &str) -> Handle<A> {
         self.load(id).unwrap_or_else(|err| {
             panic!("Failed to load essential asset {:?}: {}", id, err)
         })
@@ -433,7 +433,7 @@ where
     /// the cache.
     ///
     /// Note that you need a mutable reference to the cache, so you cannot have
-    /// any [`AssetHandle`], [`AssetGuard`], etc when you call this function.
+    /// any [`Handle`], [`AssetGuard`], etc when you call this function.
     #[inline]
     pub fn remove<A: Compound>(&mut self, id: &str) -> bool {
         let key = Key::new::<A>(id);
@@ -475,7 +475,7 @@ impl AssetCache<FileSystem> {
     /// reloaded, but it does not perform any I/O. However, it needs to lock
     /// some assets for writing, so you **must not** have any [`AssetGuard`]
     /// from the given `AssetCache`, or you might experience deadlocks. You are
-    /// free to keep [`AssetHandle`]s, though. The same restriction applies to
+    /// free to keep [`Handle`]s, though. The same restriction applies to
     /// [`ReadDir`] and [`ReadAllDir`].
     #[cfg(feature = "hot-reloading")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]

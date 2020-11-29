@@ -88,16 +88,16 @@
 //!
 //! ## Borrowship model
 //!
-//! You will notice that an [`AssetHandle`] is not `'static`: its lifetime is
+//! You will notice that an [`Handle`] is not `'static`: its lifetime is
 //! tied to that of the [`AssetCache`] from which it was loaded. This may be
 //! seen as a weakness, as `'static` data is generally easier to work with, but
 //! it is actually a clever use of Rust ownership system.
 //!
-//! As when you borrow an `&str` from a `String`, an `AssetHandle` guarantees
+//! As when you borrow an `&str` from a `String`, an `Handle` guarantees
 //! that the underlying asset is stored in the cache. This is especially useful
-//! with hot-reloading: all `AssetHandle` are guarantied to be reloaded when
+//! with hot-reloading: all `Handle` are guarantied to be reloaded when
 //! possible, so two handles on the same asset always have the same value. This
-//! would not be possible if `AssetHandle`s were always `'static`.
+//! would not be possible if `Handle`s were always `'static`.
 //!
 //! Note that this also means that you need a mutable reference on a cache to
 //! remove assets from it.
@@ -106,15 +106,15 @@
 //!
 //! Working with `'static` data is far easier: you don't have to care about
 //! lifetimes, they can easily be send in other threads, etc. So, how to get
-//! `'static` data from `AssetHandle`s ?
+//! `'static` data from `Handle`s ?
 //!
 //! Note that none of these proposals is compulsory to use this crate: you can
 //! work with non-`'static` data, or invent your own techniques.
 //!
 //! ### Getting a `&'static AssetCache`
 //!
-//! The lifetime of an `AssetHandle` being tied to that of the `&AssetCache`,
-//! this enables you to get `'static` `AssetHandle`s. Moreover, it enables you
+//! The lifetime of an `Handle` being tied to that of the `&AssetCache`,
+//! this enables you to get `'static` `Handle`s. Moreover, it enables you
 //! to call [`AssetCache::enhance_hot_reloading`], which is easier to work with
 //! and has better performances than the default solution.
 //!
@@ -136,7 +136,7 @@
 //! allocating memory).
 //!
 //! However, by doing so, you explicitly opt-out hot-reloading, which is done
-//! via `AssetHandle`s. This can also be a benefit, if you need to ensure that
+//! via `Handle`s. This can also be a benefit, if you need to ensure that
 //! your data does not change spuriously.
 //!
 //! ### Storing `String`s
@@ -178,7 +178,7 @@ pub use error::{BoxedError, Error};
 pub mod loader;
 
 mod entry;
-pub use entry::{AssetHandle, AssetGuard};
+pub use entry::{AssetGuard, Handle};
 
 pub mod source;
 

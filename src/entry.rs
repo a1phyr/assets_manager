@@ -72,7 +72,7 @@ impl<T> Inner<T> {
 ///
 /// - Methods that are generic over `T` can only be called with the same `T` used
 /// to create them.
-/// - When an `AssetHandle<'a, T>` is returned, you have to ensure that `self`
+/// - When an `Handle<'a, T>` is returned, you have to ensure that `self`
 /// outlives it. The `CacheEntry` can be moved but cannot be dropped.
 pub(crate) struct CacheEntry(pub Box<dyn Any + Send + Sync>);
 
@@ -99,9 +99,9 @@ impl<'a> CacheEntry {
     ///
     /// See type-level documentation.
     #[inline]
-    pub unsafe fn get_ref<T: Send + Sync + 'static>(&self) -> AssetHandle<'a, T> {
+    pub unsafe fn get_ref<T: Send + Sync + 'static>(&self) -> Handle<'a, T> {
         let inner = self.inner::<T>();
-        AssetHandle::new(inner)
+        Handle::new(inner)
     }
 
     /// Write a value and a get reference to the underlying lock
@@ -110,10 +110,10 @@ impl<'a> CacheEntry {
     ///
     /// See type-level documentation.
     #[cfg(feature = "hot-reloading")]
-    pub unsafe fn write<T: Send + Sync + 'static>(&self, asset: T) -> AssetHandle<'a, T> {
+    pub unsafe fn write<T: Send + Sync + 'static>(&self, asset: T) -> Handle<'a, T> {
         let inner = self.inner::<T>();
         inner.write(asset);
-        AssetHandle::new(inner)
+        Handle::new(inner)
     }
 
     /// Consumes the `CacheEntry` and returns its inner value.
@@ -150,14 +150,14 @@ impl fmt::Debug for CacheEntry {
 /// This is the structure you want to use to store a reference to an asset.
 /// However it is generally easier to work with `'static` data. For more
 /// informations, see [top-level documentation](index.html#becoming-static).
-pub struct AssetHandle<'a, A> {
+pub struct Handle<'a, A> {
     data: &'a Inner<A>,
 
     #[cfg(feature = "hot-reloading")]
     last_reload: usize,
 }
 
-impl<'a, A> AssetHandle<'a, A> {
+impl<'a, A> Handle<'a, A> {
     #[inline]
     fn new(inner: &'a Inner<A>) -> Self {
         Self {
@@ -254,7 +254,7 @@ impl<'a, A> AssetHandle<'a, A> {
     }
 }
 
-impl<A> AssetHandle<'_, A>
+impl<A> Handle<'_, A>
 where
     A: Copy
 {
@@ -268,7 +268,7 @@ where
     }
 }
 
-impl<A> AssetHandle<'_, A>
+impl<A> Handle<'_, A>
 where
     A: Clone
 {
@@ -279,31 +279,31 @@ where
     }
 }
 
-impl<A> Clone for AssetHandle<'_, A> {
+impl<A> Clone for Handle<'_, A> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<A> Copy for AssetHandle<'_, A> {}
+impl<A> Copy for Handle<'_, A> {}
 
-impl<T, U> PartialEq<AssetHandle<'_, U>> for AssetHandle<'_, T>
+impl<T, U> PartialEq<Handle<'_, U>> for Handle<'_, T>
 where
     T: PartialEq<U>,
 {
-    fn eq(&self, other: &AssetHandle<U>) -> bool {
+    fn eq(&self, other: &Handle<U>) -> bool {
         self.read().eq(&other.read())
     }
 }
 
-impl<A> Eq for AssetHandle<'_, A> where A: Eq {}
+impl<A> Eq for Handle<'_, A> where A: Eq {}
 
-impl<A> fmt::Debug for AssetHandle<'_, A>
+impl<A> fmt::Debug for Handle<'_, A>
 where
     A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AssetHandle").field("value", &*self.read()).finish()
+        f.debug_struct("Handle").field("value", &*self.read()).finish()
     }
 }
 
@@ -312,7 +312,7 @@ where
 ///
 /// This type is a smart pointer to type `A`.
 ///
-/// It can be obtained by calling [`AssetHandle::read`].
+/// It can be obtained by calling [`Handle::read`].
 pub struct AssetGuard<'a, A> {
     #[cfg(feature = "hot-reloading")]
     asset: RwLockReadGuard<'a, A>,
