@@ -305,7 +305,7 @@ where
         #[cfg(feature = "hot-reloading")]
         self.source.__private_hr_add_dir::<A>(id);
 
-        let dir = CachedDir::load::<A, S>(self, id)?;
+        let dir = self.no_record(|| CachedDir::load::<A, S>(self, id))?;
 
         let key = OwnedKey::new::<A>(id.into());
         let mut dirs = self.dirs.write();
