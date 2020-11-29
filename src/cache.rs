@@ -264,8 +264,17 @@ where
         });
     }
 
+    /// Temporarily disable dependencies recording.
+    ///
+    /// This function enables to explicitly disable dependencies recording in
+    /// [`Compound::load`]. Assets loaded during the given closure will not be
+    /// recorded as dependencies and the currently loading asset will not be
+    /// reloaded when they are.
+    ///
+    /// When hot-reloading is disabled, this function only returns the result
+    /// of the closure given as parameter.
     #[inline]
-    pub(crate) fn no_record<T, F: FnOnce() -> T>(&self, f: F) -> T {
+    pub fn no_record<T, F: FnOnce() -> T>(&self, f: F) -> T {
         #[cfg(feature = "hot-reloading")]
         {
             RECORDING.with(|rec| {

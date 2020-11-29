@@ -145,6 +145,8 @@ where
 /// Any asset loaded from the given cache is registered as a dependency of the
 /// Compound. When the former is reloaded, the latter will be reloaded too.
 ///
+/// To opt-out of depencencies recording, use `AssetCache::no_record`.
+///
 /// Note that directories are not considered as dependencies at the moment, but
 /// this will come in a future (breaking) release.
 pub trait Compound: Sized + Send + Sync + 'static {
