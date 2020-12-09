@@ -202,34 +202,63 @@ where
     }
 }
 
-macro_rules! serde_loader {
-    ($feature:literal, $doc:literal, $name:ident, $fun:path, $error:ty) => {
-        #[doc = $doc]
-        ///
-        /// See trait [`Loader`] for more informations.
-        #[cfg(feature = $feature)]
-        #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
-        #[derive(Debug)]
-        pub struct $name(());
+macro_rules! serde_loaders {
+    (
+        $(
+            #[doc = $doc:literal]
+            #[cfg(feature = $feature:literal)]
+            struct $name:ident => $fun:path;
+        )*
+    ) => {
+        $(
+            #[doc = $doc]
+            ///
+            /// See trait [`Loader`] for more informations.
+            #[cfg(feature = $feature)]
+            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
+            #[derive(Debug)]
+            pub struct $name(());
 
-        #[cfg(feature = $feature)]
-        impl<T> Loader<T> for $name
-        where
-            T: for<'de> serde::Deserialize<'de>,
-        {
-            #[inline]
-            fn load(content: Cow<[u8]>, _: &str) -> Result<T, BoxedError> {
-                Ok($fun(&*content)?)
+            #[cfg(feature = $feature)]
+            impl<T> Loader<T> for $name
+            where
+                T: for<'de> serde::Deserialize<'de>,
+            {
+                #[inline]
+                fn load(content: Cow<[u8]>, _: &str) -> Result<T, BoxedError> {
+                    Ok($fun(&*content)?)
+                }
             }
-        }
-
+        )*
     }
 }
 
-serde_loader!("bincode", "Loads assets from Bincode encoded files.", BincodeLoader, serde_bincode::deserialize, serde_bincode::Error);
-serde_loader!("cbor", "Loads assets from CBOR encoded files.", CborLoader, serde_cbor::from_slice, serde_cbor::Error);
-serde_loader!("json", "Loads assets from JSON files.", JsonLoader, serde_json::from_slice, serde_json::Error);
-serde_loader!("msgpack", "Loads assets from MessagePack files.", MessagePackLoader, serde_msgpack::decode::from_read, serde_msgpack::decode::Error);
-serde_loader!("ron", "Loads assets from RON files.", RonLoader, serde_ron::de::from_bytes, serde_ron::de::Error);
-serde_loader!("toml", "Loads assets from TOML files.", TomlLoader, serde_toml::de::from_slice, serde_toml::de::Error);
-serde_loader!("yaml", "Loads assets from YAML files.", YamlLoader, serde_yaml::from_slice, serde_yaml::Error);
+serde_loaders! {
+    /// Loads assets from Bincode encoded files.
+    #[cfg(feature = "bincode")]
+    struct BincodeLoader => serde_bincode::deserialize;
+
+    /// Loads assets from CBOR encoded files.
+    #[cfg(feature = "cbor")]
+    struct CborLoader => serde_cbor::from_slice;
+
+    /// Loads assets from JSON files.
+    #[cfg(feature = "json")]
+    struct JsonLoader => serde_json::from_slice;
+
+    /// Loads assets from MessagePack files.
+    #[cfg(feature = "msgpack")]
+    struct MessagePackLoader => serde_msgpack::decode::from_read;
+
+    /// Loads assets from RON files.
+    #[cfg(feature = "ron")]
+    struct RonLoader => serde_ron::de::from_bytes;
+
+    /// Loads assets from TOML files.
+    #[cfg(feature = "toml")]
+    struct TomlLoader => serde_toml::de::from_slice;
+
+    /// Loads assets from YAML files.
+    #[cfg(feature = "yaml")]
+    struct YamlLoader => serde_yaml::from_slice;
+}
