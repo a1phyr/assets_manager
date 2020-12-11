@@ -58,7 +58,7 @@ fn load<A: Asset>(content: Cow<[u8]>, ext: &str, id: &str, path: &Path) -> Optio
     match A::Loader::load(content, ext) {
         Ok(asset) => Some(Box::new(asset)),
         Err(err) => {
-            log::warn!("Error reloading {:?} from {:?}: {}", id, path, err);
+            log::warn!("Error reloading \"{}\" from \"{}\": {}", id, path.display(), err);
             None
         },
     }
@@ -73,11 +73,11 @@ fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>
     match cache.record_load::<T>(id) {
         Ok((asset, deps)) => {
             inner.write(asset);
-            log::info!("Reloading {:?}", id);
+            log::info!("Reloading \"{}\"", id);
             Some(deps)
         }
         Err(err) => {
-            log::warn!("Error reloading {:?}: {}", id, err);
+            log::warn!("Error reloading \"{}\": {}", id, err);
             None
         }
     }
@@ -225,7 +225,7 @@ impl CacheKind {
     unsafe fn update(&mut self, key: BorrowedKey, asset: Box<dyn AnyAsset>) {
         match self {
             CacheKind::Static(cache, to_reload) => {
-                log::info!("Reloading {:?}", key.id());
+                log::info!("Reloading \"{}\"", key.id());
 
                 let dyn_key: &dyn Key = &key;
                 let assets = cache.assets.read();
@@ -244,7 +244,7 @@ impl CacheKind {
     fn add(&mut self, dir_key: BorrowedKey, id: Arc<str>) {
         match self {
             CacheKind::Static(cache, _) => {
-                log::info!("Adding {:?} to {:?}", id, dir_key.id());
+                log::info!("Adding \"{}\" to \"{}\"", id, dir_key.id());
 
                 let dir_key: &dyn Key = &dir_key;
                 let dirs = cache.dirs.read();
@@ -262,7 +262,7 @@ impl CacheKind {
     fn remove(&mut self, dir_key: BorrowedKey, id: Arc<str>) {
         match self {
             CacheKind::Static(cache, _) => {
-                log::info!("Removing {:?} from {:?}", id, dir_key.id());
+                log::info!("Removing \"{}\" from \"{}\"", id, dir_key.id());
 
                 let dir_key: &dyn Key = &dir_key;
                 let dirs = cache.dirs.read();
@@ -318,7 +318,7 @@ impl HotReloadingData {
             let content = match fs::read(path) {
                 Ok(content) => content,
                 Err(err) => {
-                    log::warn!("Error reloading {:?} from {:?}: {}", path_infos.id, path, err);
+                    log::warn!("Error reloading \"{}\" from \"{}\": {}", path_infos.id, path.display(), err);
                     return;
                 }
             };
@@ -425,7 +425,7 @@ impl LocalCache {
         let mut assets = cache.assets.write();
 
         for (key, value) in self.changed.drain() {
-            log::info!("Reloading {:?}", key.id());
+            log::info!("Reloading \"{}\"", key.id());
 
             use std::collections::hash_map::Entry::*;
             match assets.entry(key) {
@@ -447,14 +447,14 @@ impl LocalCache {
                 Action::Add => {
                     if let Some(dir) = dirs.get(&key) {
                         if !dir.contains(&id) {
-                            log::info!("Adding {:?} to {:?}", id, key.id());
+                            log::info!("Adding \"{}\" to \"{}\"", id, key.id());
                             dir.add(id);
                         }
                     }
                 }
                 Action::Remove => {
                     if let Some(dir) = dirs.get(&key) {
-                        log::info!("Removing {:?} from {:?}", id, key.id());
+                        log::info!("Removing \"{}\" from \"{}\"", id, key.id());
                         dir.remove(&id);
                     }
                 }

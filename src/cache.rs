@@ -301,7 +301,7 @@ where
     #[track_caller]
     pub fn load_expect<A: Compound>(&self, id: &str) -> Handle<A> {
         self.load(id).unwrap_or_else(|err| {
-            panic!("Failed to load essential asset {:?}: {}", id, err)
+            panic!("Failed to load essential asset \"{}\": {}", id, err)
         })
     }
 
