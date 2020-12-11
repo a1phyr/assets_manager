@@ -1,6 +1,6 @@
 use crate::{
-    cache::{AssetCache, OwnedKey},
-    utils::{HashMap, HashSet},
+    AssetCache,
+    utils::{HashMap, HashSet, OwnedKey},
 };
 
 use std::collections::hash_map::Entry;

@@ -4,6 +4,7 @@ use std::{
     any::Any,
     fmt,
     ops::Deref,
+    sync::Arc,
 };
 
 #[cfg(feature = "hot-reloading")]
@@ -15,7 +16,7 @@ use crate::utils::{RwLock, RwLockReadGuard};
 
 #[cfg(feature = "hot-reloading")]
 pub struct Inner<T> {
-    id: Box<str>,
+    id: Arc<str>,
     reload: AtomicUsize,
 
     value: RwLock<T>,
@@ -24,7 +25,7 @@ pub struct Inner<T> {
 #[cfg(feature = "hot-reloading")]
 impl<T> Inner<T> {
     #[inline]
-    fn new(value: T, id: Box<str>) -> Self {
+    fn new(value: T, id: Arc<str>) -> Self {
         Self {
             id,
             reload: AtomicUsize::new(0),
@@ -48,14 +49,14 @@ impl<T> Inner<T> {
 
 #[cfg(not(feature = "hot-reloading"))]
 pub struct Inner<T> {
-    id: Box<str>,
+    id: Arc<str>,
     value: T,
 }
 
 #[cfg(not(feature = "hot-reloading"))]
 impl<T> Inner<T> {
     #[inline]
-    fn new(value: T, id: Box<str>) -> Self {
+    fn new(value: T, id: Arc<str>) -> Self {
         Self { id, value }
     }
 
@@ -81,7 +82,7 @@ impl<'a> CacheEntry {
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new<T: Send + Sync + 'static>(asset: T, id: Box<str>) -> Self {
+    pub fn new<T: Send + Sync + 'static>(asset: T, id: Arc<str>) -> Self {
         CacheEntry(Box::new(Inner::new(asset, id)))
     }
 

@@ -1,10 +1,11 @@
 //! Definition of the cache
+
 use crate::{
     Asset, Error, Compound, Handle,
     dirs::{CachedDir, DirReader},
     entry::CacheEntry,
     loader::Loader,
-    utils::{HashMap, RwLock, Private},
+    utils::{HashMap, Key, OwnedKey, Private, RwLock},
     source::{FileSystem, Source},
 };
 
@@ -12,8 +13,6 @@ use crate::{
 use crate::{AssetGuard, ReadDir, ReadAllDir};
 
 use std::{
-    any::TypeId,
-    borrow::Borrow,
     fmt,
     io,
     path::Path,
@@ -38,102 +37,6 @@ struct Record {
 #[cfg(feature = "hot-reloading")]
 thread_local! {
     static RECORDING: Cell<Option<NonNull<Record>>> = Cell::new(None);
-}
-
-/// The key used to identify assets
-///
-/// **Note**: This definition has to kept in sync with [`Key`]'s one.
-#[derive(Clone, PartialEq, Eq, Hash)]
-#[repr(C)]
-pub(crate) struct OwnedKey {
-    id: Box<str>,
-    type_id: TypeId,
-}
-
-impl OwnedKey {
-    /// Creates a `OwnedKey` with the given type and id.
-    #[inline]
-    pub fn new<T: Compound>(id: Box<str>) -> Self {
-        Self {
-            id,
-            type_id: TypeId::of::<T>(),
-        }
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    #[inline]
-    pub fn id(&self) -> &str {
-        &self.id
-    }
-}
-
-/// A borrowed version of [`OwnedKey`]
-#[derive(PartialEq, Eq, Hash)]
-#[repr(C)]
-pub(crate) struct Key<'a> {
-    id: &'a str,
-    type_id: TypeId,
-}
-
-impl<'a> Key<'a> {
-    /// Creates an Key for the given type and id.
-    #[inline]
-    pub fn new<T: Compound>(id: &'a str) -> Self {
-        Self {
-            id,
-            type_id: TypeId::of::<T>(),
-        }
-    }
-
-    #[inline]
-    #[cfg(feature = "hot-reloading")]
-    pub fn new_with(id: &'a str, type_id: TypeId) -> Self {
-        Self { id, type_id }
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    #[inline]
-    pub fn id(&self) -> &str {
-        self.id
-    }
-}
-
-impl<'a> Borrow<Key<'a>> for OwnedKey {
-    #[inline]
-    fn borrow(&self) -> &Key<'a> {
-        unsafe {
-            let ptr = self as *const OwnedKey as *const Key;
-            &*ptr
-        }
-    }
-}
-
-impl<'a> ToOwned for Key<'a> {
-    type Owned = OwnedKey;
-
-    #[inline]
-    fn to_owned(&self) -> OwnedKey {
-        OwnedKey {
-            id: self.id.into(),
-            type_id: self.type_id,
-        }
-    }
-}
-
-impl fmt::Debug for OwnedKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let key: &Key = self.borrow();
-        key.fmt(f)
-    }
-}
-
-impl fmt::Debug for Key<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("OwnedKey")
-            .field("id", &self.id)
-            .field("type_id", &self.type_id)
-            .finish()
-    }
 }
 
 /// The main structure of this crate, used to cache assets.
@@ -253,12 +156,12 @@ where
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub(crate) fn add_record(&self, key: &Key) {
+    pub(crate) fn add_record<K: Into<OwnedKey>>(&self, key: K) {
         RECORDING.with(|rec| {
             if let Some(mut recorder) = rec.get() {
                 let recorder = unsafe { recorder.as_mut() };
                 if recorder.cache == self as *const Self as usize {
-                    recorder.records.insert(key.to_owned());
+                    recorder.records.insert(key.into());
                 }
             }
         });
@@ -348,21 +251,34 @@ where
     /// is not found in the cache.
     #[inline]
     pub fn load_cached<A: Compound>(&self, id: &str) -> Option<Handle<A>> {
-        let key = Key::new::<A>(id);
+        let key: &dyn Key = &Key::new::<A>(id);
+        let cache = self.assets.read();
+
+        #[cfg(not(feature = "hot-reloading"))]
+        let asset = cache.get(key)?;
 
         #[cfg(feature = "hot-reloading")]
-        self.add_record(&key);
+        let asset = match cache.get_key_value(key) {
+            Some((key, asset)) => {
+                self.add_record(key);
+                asset
+            },
+            None => {
+                let key = Key::new::<A>(id);
+                self.add_record(key);
+                return None;
+            },
+        };
 
-        let cache = self.assets.read();
-        cache.get(&key).map(|asset| unsafe { asset.get_ref() })
+        Some(unsafe { asset.get_ref() })
     }
 
     /// Returns `true` if the cache contains the specified asset.
     #[inline]
     pub fn contains<A: Compound>(&self, id: &str) -> bool {
-        let key = Key::new::<A>(id);
+        let key: &dyn Key = &Key::new::<A>(id);
         let cache = self.assets.read();
-        cache.contains_key(&key)
+        cache.contains_key(key)
     }
 
     /// Loads an asset and panic if an error happens.
@@ -405,17 +321,17 @@ where
     /// is not found in the cache.
     #[inline]
     pub fn load_cached_dir<A: Asset>(&self, id: &str) -> Option<DirReader<A, S>> {
-        let key = Key::new::<A>(id);
+        let key: &dyn Key = &Key::new::<A>(id);
         let dirs = self.dirs.read();
-        dirs.get(&key).map(|dir| unsafe { dir.read(self) })
+        dirs.get(key).map(|dir| unsafe { dir.read(self) })
     }
 
     /// Returns `true` if the cache contains the specified directory.
     #[inline]
     pub fn contains_dir<A: Asset>(&self, id: &str) -> bool {
-        let key = Key::new::<A>(id);
+        let key: &dyn Key = &Key::new::<A>(id);
         let dirs = self.dirs.read();
-        dirs.contains_key(&key)
+        dirs.contains_key(key)
     }
 
     /// Loads an owned version of an asset
@@ -431,7 +347,7 @@ where
         #[cfg(feature = "hot-reloading")]
         if self.is_recording() {
             let key = Key::new::<A>(id);
-            self.add_record(&key);
+            self.add_record(key);
             return A::_load::<S, Private>(self, id)
         }
 
@@ -445,18 +361,18 @@ where
     /// any [`Handle`], [`AssetGuard`], etc when you call this function.
     #[inline]
     pub fn remove<A: Compound>(&mut self, id: &str) -> bool {
-        let key = Key::new::<A>(id);
+        let key: &dyn Key = &Key::new::<A>(id);
         let cache = self.assets.get_mut();
-        cache.remove(&key).is_some()
+        cache.remove(key).is_some()
     }
 
     /// Takes ownership on a cached asset.
     ///
     /// The corresponding asset is removed from the cache.
     pub fn take<A: Compound>(&mut self, id: &str) -> Option<A> {
-        let key = Key::new::<A>(id);
+        let key: &dyn Key = &Key::new::<A>(id);
         let cache = self.assets.get_mut();
-        cache.remove(&key).map(|entry| unsafe { entry.into_inner() })
+        cache.remove(key).map(|entry| unsafe { entry.into_inner() })
     }
 
     /// Clears the cache.

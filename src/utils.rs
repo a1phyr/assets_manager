@@ -1,3 +1,190 @@
+//! Utilities for the whole crate
+//!
+//! This module contains:
+//! - Keys to represent assets
+//! - An unified API for synchronisation primitives between `std` and `parking_lot`
+//! - An unified API for `HashMap`s between `std` and `ahash` hashers
+//! - A marker for private APIs
+
+#[allow(unused_imports)]
+use std::{
+    any::TypeId,
+    borrow::Borrow,
+    collections::{
+        HashMap as StdHashMap,
+        HashSet as StdHashSet,
+    },
+    hash, fmt,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
+
+
+/// Trick to be able to use a `BorrowedKey` to index a HashMap<OwnedKey, _>`.
+///
+/// See https://stackoverflow.com/questions/45786717/how-to-implement-hashmap-with-two-keys/45795699#45795699.
+///
+/// TODO: Remove this in favor of the `raw_entry` API when it is stabilized.
+pub(crate) trait Key {
+    fn id(&self) -> &str;
+    fn type_id(&self) -> TypeId;
+}
+
+impl dyn Key {
+    #[inline]
+    pub fn new<T: 'static>(id: &str) -> BorrowedKey {
+        BorrowedKey::new::<T>(id)
+    }
+
+    #[inline]
+    #[cfg(feature = "hot-reloading")]
+    pub fn new_with(id: &str, type_id: TypeId) -> BorrowedKey {
+        BorrowedKey::new_with(id, type_id)
+    }
+}
+
+impl PartialEq for dyn Key + '_ {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.id() == other.id() && self.type_id() == other.type_id()
+    }
+}
+
+impl Eq for dyn Key + '_ {}
+
+impl hash::Hash for dyn Key + '_ {
+    #[inline]
+    fn hash<H: hash::Hasher>(&self, h: &mut H) {
+        self.id().hash(h);
+        self.type_id().hash(h);
+    }
+}
+
+/// The key used to identify assets
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(crate) struct OwnedKey {
+    id: Arc<str>,
+    type_id: TypeId,
+}
+
+impl OwnedKey {
+    /// Creates a `OwnedKey` with the given type and id.
+    #[inline]
+    pub fn new<T: 'static>(id: Arc<str>) -> Self {
+        Self {
+            id,
+            type_id: TypeId::of::<T>(),
+        }
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub fn borrow(&self) -> BorrowedKey {
+        BorrowedKey {
+            id: &self.id,
+            type_id: self.type_id,
+        }
+    }
+}
+
+impl Key for OwnedKey {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn type_id(&self) -> TypeId {
+        self.type_id
+    }
+}
+
+impl From<&OwnedKey> for OwnedKey {
+    fn from(key: &Self) -> Self {
+        key.clone()
+    }
+}
+
+impl<'a> Borrow<dyn Key + 'a> for OwnedKey {
+    #[inline]
+    fn borrow(&self) -> &(dyn Key + 'a) {
+        self
+    }
+}
+
+impl fmt::Debug for OwnedKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.borrow(), f)
+    }
+}
+
+
+/// A borrowed version of [`OwnedKey`]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct BorrowedKey<'a> {
+    id: &'a str,
+    type_id: TypeId,
+}
+
+impl<'a> BorrowedKey<'a> {
+    /// Creates an Key for the given type and id.
+    #[inline]
+    pub fn new<T: 'static>(id: &'a str) -> Self {
+        Self {
+            id,
+            type_id: TypeId::of::<T>(),
+        }
+    }
+
+    #[inline]
+    #[cfg(feature = "hot-reloading")]
+    pub fn new_with(id: &'a str, type_id: TypeId) -> Self {
+        Self { id, type_id }
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    pub fn id(self) -> &'a str {
+        self.id
+    }
+
+    #[inline]
+    pub fn to_owned(self) -> OwnedKey {
+        OwnedKey {
+            id: self.id.into(),
+            type_id: self.type_id,
+        }
+    }
+}
+
+impl Key for BorrowedKey<'_> {
+    fn id(&self) -> &str {
+        self.id
+    }
+
+    fn type_id(&self) -> TypeId {
+        self.type_id
+    }
+}
+
+impl From<BorrowedKey<'_>> for OwnedKey {
+    fn from(key: BorrowedKey) -> Self {
+        key.to_owned()
+    }
+}
+
+impl fmt::Debug for BorrowedKey<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Key")
+            .field("id", &self.id)
+            .field("type_id", &self.type_id)
+            .finish()
+    }
+}
+
+
 #[cfg(feature = "parking_lot")]
 use parking_lot as sync;
 #[cfg(not(feature = "parking_lot"))]
@@ -84,16 +271,6 @@ mod private {
 pub(crate) use private::{Private, PrivateMarker};
 
 
-#[allow(unused_imports)]
-use std::{
-    collections::{
-        HashMap as StdHashMap,
-        HashSet as StdHashSet,
-    },
-    fmt,
-    ops::{Deref, DerefMut},
-};
-
 #[cfg(feature = "ahash")]
 use ahash::RandomState;
 
@@ -178,4 +355,4 @@ where
 
 #[cfg(feature = "hot-reloading")]
 #[derive(Debug)]
-pub struct DepsRecord(pub(crate) HashSet<crate::cache::OwnedKey>);
+pub struct DepsRecord(pub(crate) HashSet<OwnedKey>);

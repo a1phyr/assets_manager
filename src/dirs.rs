@@ -12,15 +12,16 @@ use std::{
     io,
     fmt,
     marker::PhantomData,
+    sync::Arc
 };
 
 struct StringList {
-    list: RwLock<Vec<Box<str>>>,
+    list: RwLock<Vec<Arc<str>>>,
 }
 
-impl From<Vec<Box<str>>> for StringList {
+impl From<Vec<Arc<str>>> for StringList {
     #[inline]
-    fn from(vec: Vec<Box<str>>) -> Self {
+    fn from(vec: Vec<Arc<str>>) -> Self {
         Self {
             list: RwLock::new(vec),
         }
@@ -47,10 +48,10 @@ impl<'a> IntoIterator for &'a StringList {
 }
 
 struct StringIter<'a> {
-    current: *const Box<str>,
-    end: *const Box<str>,
+    current: *const Arc<str>,
+    end: *const Arc<str>,
 
-    _guard: RwLockReadGuard<'a, Vec<Box<str>>>,
+    _guard: RwLockReadGuard<'a, Vec<Arc<str>>>,
 }
 
 impl<'a> Iterator for StringIter<'a> {
@@ -80,7 +81,7 @@ impl ExactSizeIterator for StringIter<'_> {
     #[inline]
     fn len(&self) -> usize {
         let diff = (self.end as usize) - (self.current as usize);
-        diff / std::mem::size_of::<Box<str>>()
+        diff / std::mem::size_of::<Arc<str>>()
     }
 }
 
@@ -117,7 +118,7 @@ impl CachedDir {
 
     #[cfg(feature = "hot-reloading")]
     #[inline]
-    pub fn add(&self, id: Box<str>) {
+    pub fn add(&self, id: Arc<str>) {
         let mut list = self.assets.list.write();
         list.push(id);
     }

@@ -3,23 +3,23 @@ use std::{
     borrow::Cow,
     fs,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use crate::{
     Asset,
     AssetCache,
     Compound,
-    cache::{Key, OwnedKey},
     loader::Loader,
     entry::CacheEntry,
-    utils::{HashMap, HashSet},
+    utils::{BorrowedKey, HashMap, HashSet, Key, OwnedKey},
 };
 
 use super::dependencies::Dependencies;
 
 
 /// Push a component to an id
-fn clone_and_push(id: &str, name: &str) -> Box<str> {
+fn clone_and_push(id: &str, name: &str) -> Arc<str> {
     let mut id = id.to_string();
     if !id.is_empty() {
         id.push('.');
@@ -39,7 +39,7 @@ fn extension_of(path: &Path) -> Option<&str> {
 
 unsafe trait AnyAsset: Any + Send + Sync {
     unsafe fn reload(self: Box<Self>, entry: &CacheEntry);
-    fn create(self: Box<Self>, id: Box<str>) -> CacheEntry;
+    fn create(self: Box<Self>, id: Arc<str>) -> CacheEntry;
 }
 
 unsafe impl<A: Asset> AnyAsset for A {
@@ -47,7 +47,7 @@ unsafe impl<A: Asset> AnyAsset for A {
         entry.write::<A>(*self);
     }
 
-    fn create(self: Box<Self>, id: Box<str>) -> CacheEntry {
+    fn create(self: Box<Self>, id: Arc<str>) -> CacheEntry {
         CacheEntry::new::<A>(*self, id)
     }
 }
@@ -67,8 +67,8 @@ fn load<A: Asset>(content: Cow<[u8]>, ext: &str, id: &str, path: &Path) -> Optio
 pub(crate) type ReloadFn = fn(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>>;
 
 fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>> {
-    let key = Key::new::<T>(id);
-    let inner = unsafe { cache.assets.read().get(&key)?.inner::<T>() };
+    let key: &dyn Key = &Key::new::<T>(id);
+    let inner = unsafe { cache.assets.read().get(key)?.inner::<T>() };
 
     match cache.record_load::<T>(id) {
         Ok((asset, deps)) => {
@@ -90,11 +90,11 @@ type Ext = &'static [&'static str];
 ///
 /// Its invariant is that the TypeId is the same as the one of the value
 /// returned by the LoadFn.
-pub(crate) struct AssetReloadInfos(PathBuf, Box<str>, TypeId, LoadFn);
+pub(crate) struct AssetReloadInfos(PathBuf, Arc<str>, TypeId, LoadFn);
 
 impl AssetReloadInfos {
     #[inline]
-    pub fn of<A: Asset>(path: PathBuf, id: Box<str>) -> Self {
+    pub fn of<A: Asset>(path: PathBuf, id: Arc<str>) -> Self {
         AssetReloadInfos(path, id, TypeId::of::<A>(), load::<A>)
     }
 }
@@ -103,7 +103,7 @@ pub(crate) struct CompoundReloadInfos(OwnedKey, HashSet<OwnedKey>, ReloadFn);
 
 impl CompoundReloadInfos {
     #[inline]
-    pub fn of<A: Compound>(id: Box<str>, deps: HashSet<OwnedKey>) -> Self {
+    pub fn of<A: Compound>(id: Arc<str>, deps: HashSet<OwnedKey>) -> Self {
         let key = OwnedKey::new::<A>(id);
         CompoundReloadInfos(key, deps, reload::<A>)
     }
@@ -150,12 +150,12 @@ impl<T> Types<T> {
 
 /// A list of types associated with an id
 struct WatchedPath<T> {
-    id: Box<str>,
+    id: Arc<str>,
     types: Types<T>,
 }
 
 impl<T> WatchedPath<T> {
-    const fn new(id: Box<str>) -> Self {
+    const fn new(id: Arc<str>) -> Self {
         Self {
             id,
             types: Types::new(),
@@ -201,7 +201,7 @@ enum Action {
 /// Store assets until we can sync with the `AssetCache`.
 pub struct LocalCache {
     changed: HashMap<OwnedKey, Box<dyn AnyAsset>>,
-    changed_dirs: Vec<(OwnedKey, Box<str>, Action)>,
+    changed_dirs: Vec<(OwnedKey, Arc<str>, Action)>,
 }
 
 impl LocalCache {
@@ -222,13 +222,14 @@ impl CacheKind {
     /// # Safety
     ///
     /// `key.type_id == asset.type_id()`
-    unsafe fn update(&mut self, key: &Key, asset: Box<dyn AnyAsset>) {
+    unsafe fn update(&mut self, key: BorrowedKey, asset: Box<dyn AnyAsset>) {
         match self {
             CacheKind::Static(cache, to_reload) => {
                 log::info!("Reloading {:?}", key.id());
 
+                let dyn_key: &dyn Key = &key;
                 let assets = cache.assets.read();
-                if let Some(entry) = assets.get(key) {
+                if let Some(entry) = assets.get(dyn_key) {
                     asset.reload(entry);
                     to_reload.push(key.to_owned());
                 }
@@ -240,11 +241,12 @@ impl CacheKind {
     }
 
     /// Add an asset to a directory
-    fn add(&mut self, dir_key: &Key, id: Box<str>) {
+    fn add(&mut self, dir_key: BorrowedKey, id: Arc<str>) {
         match self {
             CacheKind::Static(cache, _) => {
                 log::info!("Adding {:?} to {:?}", id, dir_key.id());
 
+                let dir_key: &dyn Key = &dir_key;
                 let dirs = cache.dirs.read();
                 if let Some(dir) = dirs.get(dir_key) {
                     dir.add(id);
@@ -257,11 +259,12 @@ impl CacheKind {
     }
 
     /// Remove an asset from a directory
-    fn remove(&mut self, dir_key: &Key, id: Box<str>) {
+    fn remove(&mut self, dir_key: BorrowedKey, id: Arc<str>) {
         match self {
             CacheKind::Static(cache, _) => {
                 log::info!("Removing {:?} from {:?}", id, dir_key.id());
 
+                let dir_key: &dyn Key = &dir_key;
                 let dirs = cache.dirs.read();
                 if let Some(dir) = dirs.get(dir_key) {
                     dir.remove(&id);
@@ -324,7 +327,7 @@ impl HotReloadingData {
                 if let Some(asset) = load(Cow::Borrowed(&content), file_ext, &path_infos.id, path) {
                     unsafe {
                         let key = Key::new_with(&path_infos.id, *type_id);
-                        self.cache.update(&key, asset);
+                        self.cache.update(key, asset);
                     }
                 }
             }
@@ -344,7 +347,7 @@ impl HotReloadingData {
                     watched.types.insert(type_id, load);
 
                     let key = Key::new_with(&path_infos.id, type_id);
-                    self.cache.add(&key, file_id);
+                    self.cache.add(key, file_id);
                 }
             }
         }
@@ -363,7 +366,7 @@ impl HotReloadingData {
             if type_ext.contains(&file_ext) {
                 let key = Key::new_with(&path_infos.id, type_id);
                 let id = clone_and_push(&path_infos.id, file_stem);
-                self.cache.remove(&key, id);
+                self.cache.remove(key, id);
             }
         }
 
