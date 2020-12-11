@@ -1,11 +1,35 @@
 //! Bytes sources to load assets from.
 //!
 //! This module contains the trait [`Source`], which allows to specify how the
-//! files containing the assets are loaded. The struct [`AssetCache`] is
-//! notably generic over a `Source`.
+//! files containing the assets are loaded. The main usage usage of this trait
+//! is with an [`AssetCache`].
 //!
 //! This module also contains two built-in sources: [`FileSystem`] and
 //! [`Embedded`].
+//!
+//! # Hot-reloading
+//!
+//! Hot-reloading enable assets to be reloaded automatically when the source it
+//! was loaded from was modified. It is only supported for the [`FileSystem`]
+//! source at the moment.
+//!
+//! # Using a different source depending on the target platform
+//!
+//! There is no file system on WebAssembly, so you can for example choose to
+//! embed your assets on this platform:
+//!
+//! ```no_run
+//! use assets_manager::{AssetCache, source};
+//!
+//! #[cfg(not(target_arch = "wasm32"))]
+//! let source = source::FileSystem::new("assets")?;
+//!
+//! #[cfg(target_arch = "wasm32")]
+//! let source = source::Embedded::from(source::embed!("assets"));
+//!
+//! let cache = AssetCache::with_source(source);
+//! # Ok::<(), std::io::Error>(())
+//! ```
 
 #[cfg(feature = "hot-reloading")]
 use crate::utils::PrivateMarker;
@@ -49,28 +73,7 @@ mod tests;
 
 /// Bytes sources to load assets from.
 ///
-/// # Usage
-///
-/// This trait's main usage is through an [`AssetCache`]. You create a value
-/// which is `Source` and give it to `AssetCache`.
-///
-/// ## Example
-///
-/// Read assets from the file system or embed them in the binary depending on we
-/// are building for WebAssembly:
-///
-/// ```no_run
-/// use assets_manager::{AssetCache, source};
-///
-/// #[cfg(not(target_arch = "wasm32"))]
-/// let source = source::FileSystem::new("assets")?;
-///
-/// #[cfg(target_arch = "wasm32")]
-/// let source = source::Embedded::from(embed!("assets"));
-///
-/// let cache = AssetCache::with_source(source);
-/// # Ok::<(), std::io::Error>(())
-/// ```
+/// See [module-level documentation](super::source) for more informations.
 pub trait Source {
     /// Try reading the source given an id and an extension.
     ///
