@@ -145,26 +145,32 @@ where
             records: HashSet::new(),
         };
 
-        let asset = RECORDING.with(|rec| {
-            let old_rec = rec.replace(Some(NonNull::from(&mut record)));
-            let result = A::load(self, id);
-            rec.set(old_rec);
-            result
-        })?;
+        let asset = if S::_support_hot_reloading::<Private>() {
+            RECORDING.with(|rec| {
+                let old_rec = rec.replace(Some(NonNull::from(&mut record)));
+                let result = A::load(self, id);
+                rec.set(old_rec);
+                result
+            })
+        } else {
+            A::load(self, id)
+        };
 
-        Ok((asset, record.records))
+        Ok((asset?, record.records))
     }
 
     #[cfg(feature = "hot-reloading")]
     pub(crate) fn add_record<K: Into<OwnedKey>>(&self, key: K) {
-        RECORDING.with(|rec| {
-            if let Some(mut recorder) = rec.get() {
-                let recorder = unsafe { recorder.as_mut() };
-                if recorder.cache == self as *const Self as usize {
-                    recorder.records.insert(key.into());
+        if S::_support_hot_reloading::<Private>() {
+            RECORDING.with(|rec| {
+                if let Some(mut recorder) = rec.get() {
+                    let recorder = unsafe { recorder.as_mut() };
+                    if recorder.cache == self as *const Self as usize {
+                        recorder.records.insert(key.into());
+                    }
                 }
-            }
-        });
+            });
+        }
     }
 
     /// Temporarily disable dependencies recording.
@@ -174,18 +180,21 @@ where
     /// recorded as dependencies and the currently loading asset will not be
     /// reloaded when they are.
     ///
-    /// When hot-reloading is disabled, this function only returns the result
-    /// of the closure given as parameter.
+    /// When hot-reloading is disabled or if the cache's [`Source`] does not
+    /// support hot-reloading, this function only returns the result of the
+    /// closure given as parameter.
     #[inline]
     pub fn no_record<T, F: FnOnce() -> T>(&self, f: F) -> T {
         #[cfg(feature = "hot-reloading")]
-        {
+        if S::_support_hot_reloading::<Private>() {
             RECORDING.with(|rec| {
                 let old_rec = rec.replace(None);
                 let result = f();
                 rec.set(old_rec);
                 result
             })
+        } else {
+            f()
         }
 
         #[cfg(not(feature = "hot-reloading"))]

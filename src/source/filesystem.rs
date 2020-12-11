@@ -167,6 +167,12 @@ impl Source for FileSystem {
     fn _add_compound<A: Compound, P: PrivateMarker>(&self, id: &str, deps: crate::utils::DepsRecord) {
         self.reloader.send_update(UpdateMessage::AddCompound(CompoundReloadInfos::of::<A>(id.into(), deps.0)))
     }
+
+    #[cfg(feature = "hot-reloading")]
+    #[doc(hidden)]
+    fn _support_hot_reloading<P: PrivateMarker>() -> bool {
+        true
+    }
 }
 
 impl fmt::Debug for FileSystem {

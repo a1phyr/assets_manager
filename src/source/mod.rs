@@ -118,6 +118,12 @@ pub trait Source {
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
     fn _add_compound<A: crate::Compound, P: PrivateMarker>(&self, _: &str, _: crate::utils::DepsRecord) where Self: Sized {}
+
+    #[cfg(feature = "hot-reloading")]
+    #[doc(hidden)]
+    fn _support_hot_reloading<P: PrivateMarker>() -> bool where Self: Sized {
+        false
+    }
 }
 
 impl<S> Source for Box<S>
