@@ -515,7 +515,6 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AssetCache")
-            .field("source", &self.source)
             .field("assets", &self.assets.read())
             .field("dirs", &self.dirs.read())
             .finish()

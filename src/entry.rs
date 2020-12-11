@@ -132,7 +132,7 @@ impl<'a> CacheEntry {
 
 impl fmt::Debug for CacheEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.pad("CacheEntry")
+        f.debug_struct("CacheEntry").finish()
     }
 }
 
