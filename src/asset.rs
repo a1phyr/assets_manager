@@ -143,7 +143,8 @@ where
 /// # Hot-reloading
 ///
 /// Any asset loaded from the given cache is registered as a dependency of the
-/// Compound. When the former is reloaded, the latter will be reloaded too.
+/// Compound. When the former is reloaded, the latter will be reloaded too. An
+/// asset cannot depend on itself, or it may cause deadlocks to happen.
 ///
 /// To opt out of dependencies recording, use `AssetCache::no_record`.
 ///
