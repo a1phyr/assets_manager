@@ -8,7 +8,7 @@ use std::{
 };
 
 #[cfg(feature = "hot-reloading")]
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 #[cfg(feature = "hot-reloading")]
 use crate::utils::{RwLock, RwLockReadGuard};
@@ -18,6 +18,7 @@ use crate::utils::{RwLock, RwLockReadGuard};
 pub struct Inner<T> {
     id: Arc<str>,
     reload: AtomicUsize,
+    reload_global: AtomicBool,
 
     value: RwLock<T>,
 }
@@ -29,6 +30,7 @@ impl<T> Inner<T> {
         Self {
             id,
             reload: AtomicUsize::new(0),
+            reload_global: AtomicBool::new(false),
 
             value: RwLock::new(value),
         }
@@ -39,6 +41,7 @@ impl<T> Inner<T> {
         let mut data = self.value.write();
         *data = value;
         self.reload.fetch_add(1, Ordering::Release);
+        self.reload_global.store(true, Ordering::Release);
     }
 
     #[inline]
@@ -243,6 +246,23 @@ impl<'a, A> Handle<'a, A> {
                 false
             }
         }
+
+        #[cfg(not(feature = "hot-reloading"))]
+        { false }
+    }
+
+    /// Returns `true` if the asset has been reloaded since last call to this
+    /// method with **any** handle on this asset.
+    ///
+    /// Note that this method and [`reloaded`] are totally independant, and
+    /// the result of the two functions do not depend on whether the other was
+    /// called
+    ///
+    /// [`reloaded`]: Self::reloaded
+    #[inline]
+    pub fn reloaded_global(&self) -> bool {
+        #[cfg(feature = "hot-reloading")]
+        { self.data.reload_global.swap(false, Ordering::Acquire) }
 
         #[cfg(not(feature = "hot-reloading"))]
         { false }
