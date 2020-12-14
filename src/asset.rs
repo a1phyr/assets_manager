@@ -1,3 +1,5 @@
+//! Values loadable from a cache.
+
 use crate::{
     AssetCache,
     Error,
@@ -203,4 +205,85 @@ where
     fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
         cache.load_owned::<A>(id).map(Arc::new)
     }
+}
+
+
+macro_rules! serde_assets {
+    (
+        $(
+            #[doc = $doc:literal]
+            #[cfg(feature = $feature:literal)]
+            struct $name:ident => (
+                $loader:path,
+                [$($ext:literal),*],
+            );
+        )*
+    ) => {
+        $(
+            #[doc = $doc]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+            #[cfg(feature = $feature)]
+            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
+            ///
+            /// This type can directly be used as an [`Asset`] to load values
+            /// from an [`AssetCache`].
+            pub struct $name<T>(pub T);
+
+            #[cfg(feature = $feature)]
+            impl<T> From<T> for $name<T> {
+                #[inline]
+                fn from(t: T) -> Self {
+                    Self(t)
+                }
+            }
+
+            #[cfg(feature = $feature)]
+            impl<T> $name<T> {
+                /// Unwraps the inner value.
+                #[inline]
+                pub fn into_inner(self) -> T {
+                    self.0
+                }
+            }
+
+            #[cfg(feature = $feature)]
+            impl<T> Asset for $name<T>
+            where
+                T: for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
+            {
+                const EXTENSIONS: &'static [&'static str] = &[$( $ext ),*];
+                type Loader = loader::LoadFrom<T, $loader>;
+            }
+        )*
+    }
+}
+
+serde_assets! {
+    /// Loads a value from a RON file.
+    #[cfg(feature = "json")]
+    struct Json => (
+        loader::JsonLoader,
+        ["json"],
+    );
+
+    /// Loads a value from a JSON file.
+    #[cfg(feature = "ron")]
+    struct Ron => (
+        loader::RonLoader,
+        ["ron"],
+    );
+
+    /// Loads a value from a TOML file.
+    #[cfg(feature = "toml")]
+    struct Toml => (
+        loader::TomlLoader,
+        ["toml"],
+    );
+
+    /// Loads a value from a YAML file.
+    #[cfg(feature = "yaml")]
+    struct Yaml => (
+        loader::YamlLoader,
+        ["yaml", "yml"],
+    );
 }

@@ -163,7 +163,7 @@
 
 extern crate self as assets_manager;
 
-mod asset;
+pub mod asset;
 pub use asset::{Asset, Compound};
 
 mod cache;
