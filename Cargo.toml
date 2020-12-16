@@ -1,6 +1,6 @@
 [package]
 name = "assets_manager"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Benoît du Garreau"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -11,7 +11,7 @@ repository = "https://github.com/a1phyr/assets_manager"
 documentation = "https://docs.rs/assets_manager"
 
 categories = ["caching", "filesystem", "game-development"]
-keywords = ["asset", "assets", "cache", "resources"]
+keywords = ["asset", "assets", "cache", "hot-reloading", "resources"]
 
 
 [features]
