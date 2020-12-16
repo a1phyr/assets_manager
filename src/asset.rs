@@ -226,7 +226,8 @@ macro_rules! serde_assets {
             #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
             ///
             /// This type can directly be used as an [`Asset`] to load values
-            /// from an [`AssetCache`].
+            /// from an [`AssetCache`]. This is useful to load assets external
+            /// types without a newtype wrapper (eg [`Vec`]).
             pub struct $name<T>(pub T);
 
             #[cfg(feature = $feature)]
@@ -253,6 +254,14 @@ macro_rules! serde_assets {
             {
                 const EXTENSIONS: &'static [&'static str] = &[$( $ext ),*];
                 type Loader = loader::LoadFrom<T, $loader>;
+            }
+
+            #[cfg(feature = $feature)]
+            impl<T> AsRef<T> for $name<T> {
+                #[inline]
+                fn as_ref(&self) -> &T {
+                    &self.0
+                }
             }
         )*
     }
