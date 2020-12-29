@@ -434,10 +434,7 @@ impl AssetCache<FileSystem> {
     }
 }
 
-impl<S> fmt::Debug for AssetCache<S>
-where
-    S: fmt::Debug,
-{
+impl<S> fmt::Debug for AssetCache<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AssetCache")
             .field("assets", &self.assets.read())
