@@ -231,8 +231,8 @@ impl CacheKind {
                 let assets = cache.assets.read();
                 if let Some(entry) = assets.get(dyn_key) {
                     asset.reload(entry);
-                    to_reload.push(key.to_owned());
                 }
+                to_reload.push(key.to_owned());
             },
             CacheKind::Local(cache) => {
                 cache.changed.insert(key.to_owned(), asset);

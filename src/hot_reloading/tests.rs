@@ -123,6 +123,14 @@ test_scenario! {
     not_loaded: Y,
 }
 
+test_scenario! {
+    name: reload_arc_asset,
+    is_static: true,
+    type: Arc<X>,
+    id: "g",
+    start_value: 57,
+}
+
 
 #[test]
 fn dir_remove_and_add() -> Res {
