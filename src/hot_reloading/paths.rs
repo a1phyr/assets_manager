@@ -225,12 +225,11 @@ impl CacheKind {
     unsafe fn update(&mut self, key: BorrowedKey, asset: Box<dyn AnyAsset>) {
         match self {
             CacheKind::Static(cache, to_reload) => {
-                log::info!("Reloading \"{}\"", key.id());
-
                 let dyn_key: &dyn Key = &key;
                 let assets = cache.assets.read();
                 if let Some(entry) = assets.get(dyn_key) {
                     asset.reload(entry);
+                    log::info!("Reloading \"{}\"", key.id());
                 }
                 to_reload.push(key.to_owned());
             },
@@ -244,12 +243,12 @@ impl CacheKind {
     fn add(&mut self, dir_key: BorrowedKey, id: Arc<str>) {
         match self {
             CacheKind::Static(cache, _) => {
-                log::info!("Adding \"{}\" to \"{}\"", id, dir_key.id());
-
                 let dir_key: &dyn Key = &dir_key;
                 let dirs = cache.dirs.read();
                 if let Some(dir) = dirs.get(dir_key) {
-                    dir.add(id);
+                    if dir.add(&id) {
+                        log::info!("Adding \"{}\" to \"{}\"", id, dir_key.id());
+                    }
                 }
             },
             CacheKind::Local(cache) => {
@@ -262,12 +261,12 @@ impl CacheKind {
     fn remove(&mut self, dir_key: BorrowedKey, id: Arc<str>) {
         match self {
             CacheKind::Static(cache, _) => {
-                log::info!("Removing \"{}\" from \"{}\"", id, dir_key.id());
-
                 let dir_key: &dyn Key = &dir_key;
                 let dirs = cache.dirs.read();
                 if let Some(dir) = dirs.get(dir_key) {
-                    dir.remove(&id);
+                    if dir.remove(&id) {
+                        log::info!("Removing \"{}\" from \"{}\"", id, dir_key.id());
+                    }
                 }
             },
             CacheKind::Local(cache) => {
@@ -446,16 +445,16 @@ impl LocalCache {
             match action {
                 Action::Add => {
                     if let Some(dir) = dirs.get(&key) {
-                        if !dir.contains(&id) {
+                        if dir.add(&id) {
                             log::info!("Adding \"{}\" to \"{}\"", id, key.id());
-                            dir.add(id);
                         }
                     }
                 }
                 Action::Remove => {
                     if let Some(dir) = dirs.get(&key) {
-                        log::info!("Removing \"{}\" from \"{}\"", id, key.id());
-                        dir.remove(&id);
+                        if dir.remove(&id) {
+                            log::info!("Removing \"{}\" from \"{}\"", id, key.id());
+                        }
                     }
                 }
             }

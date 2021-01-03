@@ -118,18 +118,27 @@ impl CachedDir {
 
     #[cfg(feature = "hot-reloading")]
     #[inline]
-    pub fn add(&self, id: Arc<str>) {
-        let mut list = self.assets.list.write();
-        list.push(id);
+    pub fn add(&self, id: &Arc<str>) -> bool {
+        let insert = !self.contains(&id);
+
+        if insert {
+            let mut list = self.assets.list.write();
+            list.push(id.clone());
+        }
+
+        insert
     }
 
     #[cfg(feature = "hot-reloading")]
     #[inline]
-    pub fn remove(&self, id: &str) {
+    pub fn remove(&self, id: &str) -> bool {
         let mut list = self.assets.list.write();
 
         if let Some(pos) = list.iter().position(|s| s.as_ref() == id) {
             list.remove(pos);
+            true
+        } else {
+            false
         }
     }
 

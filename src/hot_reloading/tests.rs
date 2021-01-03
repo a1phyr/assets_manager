@@ -148,13 +148,47 @@ fn dir_remove_and_add() -> Res {
     fs::remove_file("assets/test/hot_dir/a.x")?;
     sleep();
     cache.hot_reload();
-
     assert_value(&[]);
 
     write_i32("assets/test/hot_dir/a.x".as_ref(), 61)?;
     sleep();
     cache.hot_reload();
+    assert_value(&[61]);
 
+    write_i32("assets/test/hot_dir/a.x".as_ref(), 61)?;
+    sleep();
+    cache.hot_reload();
+    assert_value(&[61]);
+
+    Ok(())
+}
+
+
+#[test]
+fn dir_remove_and_add_static() -> Res {
+    let cache = AssetCache::new("assets")?;
+    let cache = Box::leak(Box::new(cache));
+    cache.enhance_hot_reloading();
+
+    let dir = cache.load_dir::<X>("test.hot_dir_s")?;
+
+    let assert_value = |t: &[i32]| {
+        let res: Vec<_> = dir.iter().map(|x| x.read().0).collect();
+        assert_eq!(res, t);
+    };
+
+    assert_value(&[61]);
+
+    fs::remove_file("assets/test/hot_dir_s/a.x")?;
+    sleep();
+    assert_value(&[]);
+
+    write_i32("assets/test/hot_dir_s/a.x".as_ref(), 61)?;
+    sleep();
+    assert_value(&[61]);
+
+    write_i32("assets/test/hot_dir_s/a.x".as_ref(), 61)?;
+    sleep();
     assert_value(&[61]);
 
     Ok(())
