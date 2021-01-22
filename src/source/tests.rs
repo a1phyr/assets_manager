@@ -24,10 +24,33 @@ macro_rules! test_source {
         #[test]
         fn read_dir() {
             let source = $source;
+            let mut dir = Vec::new();
 
-            let mut dir = source.read_dir("test", &["x"]).unwrap();
+            source.read_dir("test", &mut |entry| {
+                if let DirEntry::File(id, ext) = entry {
+                    if ext == "x" {
+                        dir.push(id.to_owned());
+                    }
+                }
+            }).unwrap();
+
             dir.sort();
-            assert_eq!(dir, ["a", "b", "cache"]);
+            assert_eq!(dir, ["test.a", "test.b", "test.cache"]);
+        }
+
+        #[test]
+        fn read_root() {
+            let source = $source;
+            let mut dir = Vec::new();
+
+            source.read_dir("", &mut |entry| {
+                if let DirEntry::Directory(id) = entry {
+                    dir.push(id.to_owned());
+                }
+            }).unwrap();
+
+            dir.sort();
+            assert_eq!(dir, ["common", "example", "test"]);
         }
     }
 }

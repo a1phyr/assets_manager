@@ -24,7 +24,7 @@ impl Input {
     pub fn expand_dir(&self) -> Result<TokenStream, Vec<syn::Error>> {
         let mut errors = Vec::new();
         let mut content = Content::new();
-        content.push_dir(Id::new());
+        content.push_dir(None, Id::new());
 
         read_dir(&self.0, &mut content, Id::new(), &mut errors);
 
@@ -70,14 +70,13 @@ fn read_dir(path: &Path, content: &mut Content, id: Id, errors: &mut Vec<syn::Er
             let this_id = id.clone().push(stem);
 
             if path.is_dir() {
-                content.push_dir(this_id.clone());
+                content.push_dir(Some(&id), this_id.clone());
                 read_dir(&path, content, this_id, errors);
             } else if path.is_file() {
                 if let Some(ext) = extension_of(&path) {
                     let ext = ext.to_owned();
-                    let stem = stem.to_owned();
                     let desc = FileDesc(this_id, ext, path);
-                    content.push_file(desc, stem, &id);
+                    content.push_file(desc, &id);
                 }
             }
         }
@@ -105,9 +104,14 @@ impl Id {
 
 struct FileDesc(Id, String, PathBuf);
 
+enum DirEntry {
+    File(Id, String),
+    Dir(Id),
+}
+
 struct Content {
     files: Vec<FileDesc>,
-    dirs: HashMap<Id, Vec<(String, String)>>,
+    dirs: HashMap<Id, Vec<DirEntry>>,
 }
 
 impl Content {
@@ -118,12 +122,17 @@ impl Content {
         }
     }
 
-    fn push_file(&mut self, desc: FileDesc, stem: String, dir_id: &Id) {
-        self.dirs.get_mut(dir_id).expect("File without directory").push((stem, desc.1.clone()));
+    fn push_file(&mut self, desc: FileDesc, dir_id: &Id) {
+        let entry = DirEntry::File(desc.0.clone(), desc.1.clone());
+        self.dirs.get_mut(dir_id).expect("File without directory").push(entry);
         self.files.push(desc);
     }
 
-    fn push_dir(&mut self, id: Id) {
+    fn push_dir(&mut self, parent: Option<&Id>, id: Id) {
+        if let Some(parent) = parent {
+            let entry = DirEntry::Dir(id.clone());
+            self.dirs.get_mut(parent).expect("Directory without parent").push(entry);
+        }
         self.dirs.insert(id, Vec::new());
     }
 
@@ -135,10 +144,17 @@ impl Content {
             }
         });
 
-        let dirs = self.dirs.iter().map(|(Id(id), files)| {
-            let files = files.iter().map(|(id, ext)| quote!{ (#id, #ext) });
+        let dirs = self.dirs.iter().map(|(Id(id), entries)| {
+            let entries = entries.iter().map(|entry| match entry {
+                DirEntry::File(Id(id), ext) => quote! {
+                    assets_manager::source::DirEntry::File(#id, #ext)
+                },
+                DirEntry::Dir(Id(id)) => quote! {
+                    assets_manager::source::DirEntry::Directory(#id)
+                },
+            });
             quote! {
-                (#id, &[ #(#files),* ] as &[(&str, &str)])
+                (#id, &[ #(#entries),* ])
             }
         });
 
