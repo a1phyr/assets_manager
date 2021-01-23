@@ -319,6 +319,16 @@ where
 
 impl<A> Eq for Handle<'_, A> where A: Eq {}
 
+#[cfg(feature = "serde")]
+impl<A> serde::Serialize for Handle<'_, A>
+where
+    A: serde::Serialize,
+{
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.read().serialize(s)
+    }
+}
+
 impl<A> fmt::Debug for Handle<'_, A>
 where
     A: fmt::Debug,
@@ -358,6 +368,16 @@ where
     #[inline]
     fn as_ref(&self) -> &U {
         self.asset.as_ref()
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<A> serde::Serialize for AssetGuard<'_, A>
+where
+    A: serde::Serialize,
+{
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        (**self).serialize(s)
     }
 }
 

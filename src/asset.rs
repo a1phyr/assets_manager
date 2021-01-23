@@ -9,6 +9,10 @@ use crate::{
     utils::PrivateMarker,
 };
 
+#[cfg(feature = "serde")]
+#[allow(unused)]
+use serde::{Deserialize, Serialize};
+
 use std::sync::Arc;
 
 
@@ -221,13 +225,14 @@ macro_rules! serde_assets {
     ) => {
         $(
             #[doc = $doc]
-            #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-            #[cfg(feature = $feature)]
-            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
             ///
             /// This type can directly be used as an [`Asset`] to load values
             /// from an [`AssetCache`]. This is useful to load assets external
             /// types without a newtype wrapper (eg [`Vec`]).
+            #[cfg(feature = $feature)]
+            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+            #[serde(transparent)]
             pub struct $name<T>(pub T);
 
             #[cfg(feature = $feature)]
