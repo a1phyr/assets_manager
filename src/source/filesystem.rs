@@ -69,31 +69,45 @@ impl FileSystem {
     ///
     /// # Errors
     ///
-    /// An error can occur if `path` is not a valid readable directory or if
-    /// hot-reloading fails to start (if feature `hot-reloading` is used).
+    /// An error can occur if `path` is not a valid readable directory.
+    ///
+    /// If hot-reloading fails to start (if feature `hot-reloading` is used),
+    /// an error is logged and this function returns `Ok`.
     pub fn new<P: AsRef<Path>>(path: P) -> io::Result<FileSystem> {
-        fn inner(path: &Path) -> io::Result<FileSystem> {
-            let path = path.canonicalize()?;
-            let _ = path.read_dir()?;
+        Self::_new(path.as_ref(), true)
+    }
 
-            #[cfg(feature = "hot-reloading")]
-            let reloader = match HotReloader::start(&path) {
+    /// Same as `new`, but does not start hot-reloading.
+    ///
+    /// If feature `hot-reloading` is not enabled, this function is equivalent
+    /// to `new`.
+    pub fn without_hot_reloading<P: AsRef<Path>>(path: P) -> io::Result<FileSystem> {
+        Self::_new(path.as_ref(), false)
+    }
+
+    fn _new(path: &Path, _hot_reloading: bool) -> io::Result<FileSystem> {
+        let path = path.canonicalize()?;
+        let _ = path.read_dir()?;
+
+        #[cfg(feature = "hot-reloading")]
+        let reloader = if _hot_reloading {
+            match HotReloader::start(&path) {
                 Ok(r) => Some(r),
                 Err(err) => {
                     log::error!("Unable to start hot-reloading: {}", err);
                     None
                 }
-            };
+            }
+        } else {
+            None
+        };
 
-            Ok(FileSystem {
-                path,
+        Ok(FileSystem {
+            path,
 
-                #[cfg(feature = "hot-reloading")]
-                reloader,
-            })
-        }
-
-        inner(path.as_ref())
+            #[cfg(feature = "hot-reloading")]
+            reloader,
+        })
     }
 
     /// Gets the path of the source's root.
