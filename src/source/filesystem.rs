@@ -57,7 +57,7 @@ pub struct FileSystem {
     path: PathBuf,
 
     #[cfg(feature = "hot-reloading")]
-    pub(crate) reloader: HotReloader,
+    pub(crate) reloader: Option<HotReloader>,
 }
 
 impl FileSystem {
@@ -77,7 +77,13 @@ impl FileSystem {
             let _ = path.read_dir()?;
 
             #[cfg(feature = "hot-reloading")]
-            let reloader = HotReloader::start(&path).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+            let reloader = match HotReloader::start(&path) {
+                Ok(r) => Some(r),
+                Err(err) => {
+                    log::error!("Unable to start hot-reloading: {}", err);
+                    None
+                }
+            };
 
             Ok(FileSystem {
                 path,
@@ -144,34 +150,42 @@ impl Source for FileSystem {
 
     #[cfg(feature = "hot-reloading")]
     fn _add_asset<A: Asset, P: PrivateMarker>(&self, id: &str) {
-        for ext in A::EXTENSIONS {
-            let path = self.path_of(id, ext);
-            let msg = UpdateMessage::AddAsset(AssetReloadInfos::of::<A>(path, id.into()));
-            self.reloader.send_update(msg);
+        if let Some(reloader) = &self.reloader {
+            for ext in A::EXTENSIONS {
+                let path = self.path_of(id, ext);
+                let msg = UpdateMessage::AddAsset(AssetReloadInfos::of::<A>(path, id.into()));
+                reloader.send_update(msg);
+            }
         }
     }
 
     #[cfg(feature = "hot-reloading")]
     fn _add_dir<A: Asset, P: PrivateMarker>(&self, id: &str) {
-        let path = self.path_of(id, "");
-        let msg = UpdateMessage::AddDir(AssetReloadInfos::of::<A>(path, id.into()), A::EXTENSIONS);
-        self.reloader.send_update(msg);
+        if let Some(reloader) = &self.reloader {
+            let path = self.path_of(id, "");
+            let msg = UpdateMessage::AddDir(AssetReloadInfos::of::<A>(path, id.into()), A::EXTENSIONS);
+            reloader.send_update(msg);
+        }
     }
 
     #[cfg(feature = "hot-reloading")]
     fn _clear<P: PrivateMarker>(&mut self) {
-        self.reloader.send_update(UpdateMessage::Clear);
+        if let Some(reloader) = &self.reloader {
+            reloader.send_update(UpdateMessage::Clear);
+        }
     }
 
     #[cfg(feature = "hot-reloading")]
     fn _add_compound<A: Compound, P: PrivateMarker>(&self, id: &str, deps: crate::utils::DepsRecord) {
-        self.reloader.send_update(UpdateMessage::AddCompound(CompoundReloadInfos::of::<A>(id.into(), deps.0)))
+        if let Some(reloader) = &self.reloader {
+            reloader.send_update(UpdateMessage::AddCompound(CompoundReloadInfos::of::<A>(id.into(), deps.0)))
+        }
     }
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn _support_hot_reloading<P: PrivateMarker>() -> bool {
-        true
+    fn _support_hot_reloading<P: PrivateMarker>(&self) -> bool {
+        self.reloader.is_some()
     }
 }
 

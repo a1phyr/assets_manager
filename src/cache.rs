@@ -145,7 +145,7 @@ where
             records: HashSet::new(),
         };
 
-        let asset = if S::_support_hot_reloading::<Private>() {
+        let asset = if S::_support_hot_reloading::<Private>(&self.source) {
             RECORDING.with(|rec| {
                 let old_rec = rec.replace(Some(NonNull::from(&mut record)));
                 let result = A::load(self, id);
@@ -161,7 +161,7 @@ where
 
     #[cfg(feature = "hot-reloading")]
     pub(crate) fn add_record<K: Into<OwnedKey>>(&self, key: K) {
-        if S::_support_hot_reloading::<Private>() {
+        if S::_support_hot_reloading::<Private>(&self.source) {
             RECORDING.with(|rec| {
                 if let Some(mut recorder) = rec.get() {
                     let recorder = unsafe { recorder.as_mut() };
@@ -186,7 +186,7 @@ where
     #[inline]
     pub fn no_record<T, F: FnOnce() -> T>(&self, f: F) -> T {
         #[cfg(feature = "hot-reloading")]
-        if S::_support_hot_reloading::<Private>() {
+        if S::_support_hot_reloading::<Private>(&self.source) {
             RECORDING.with(|rec| {
                 let old_rec = rec.replace(None);
                 let result = f();
@@ -414,7 +414,9 @@ impl AssetCache<FileSystem> {
     #[cfg(feature = "hot-reloading")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
     pub fn hot_reload(&self) {
-        self.source.reloader.reload(self);
+        if let Some(reloader) = &self.source.reloader {
+            reloader.reload(self);
+        }
     }
 
     /// Enhances hot-reloading.
@@ -430,7 +432,9 @@ impl AssetCache<FileSystem> {
     #[cfg(feature = "hot-reloading")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
     pub fn enhance_hot_reloading(&'static self) {
-        self.source.reloader.send_static(self);
+        if let Some(reloader) = &self.source.reloader {
+            reloader.send_static(self);
+        }
     }
 }
 

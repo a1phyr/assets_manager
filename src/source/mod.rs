@@ -124,7 +124,7 @@ pub trait Source {
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn _support_hot_reloading<P: PrivateMarker>() -> bool where Self: Sized {
+    fn _support_hot_reloading<P: PrivateMarker>(&self) -> bool where Self: Sized {
         false
     }
 }
