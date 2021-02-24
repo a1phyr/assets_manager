@@ -24,18 +24,23 @@ macro_rules! test_source {
         #[test]
         fn read_dir() {
             let source = $source;
-            let mut dir = Vec::new();
+            let mut dirs = Vec::new();
+            let mut files = Vec::new();
 
-            source.read_dir("test", &mut |entry| {
-                if let DirEntry::File(id, ext) = entry {
-                    if ext == "x" {
-                        dir.push(id.to_owned());
-                    }
+            source.read_dir("test.read_dir", &mut |entry| {
+                match entry {
+                    DirEntry::File(id, ext) => files.push((String::from(id), String::from(ext))),
+                    DirEntry::Directory(id) => dirs.push(id.to_owned()),
                 }
             }).unwrap();
 
-            dir.sort();
-            assert_eq!(dir, ["test.a", "test.b", "test.cache"]);
+            dirs.sort();
+            files.sort();
+            assert_eq!(files, [
+                (String::from("test.read_dir.c"), String::from("txt")),
+                (String::from("test.read_dir.d"), String::from("")),
+            ]);
+            assert_eq!(dirs, ["test.read_dir.a", "test.read_dir.b"]);
         }
 
         #[test]
