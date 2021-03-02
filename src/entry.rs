@@ -320,6 +320,7 @@ where
 impl<A> Eq for Handle<'_, A> where A: Eq {}
 
 #[cfg(feature = "serde")]
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 impl<A> serde::Serialize for Handle<'_, A>
 where
     A: serde::Serialize,
@@ -368,16 +369,6 @@ where
     #[inline]
     fn as_ref(&self) -> &U {
         self.asset.as_ref()
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<A> serde::Serialize for AssetGuard<'_, A>
-where
-    A: serde::Serialize,
-{
-    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        (**self).serialize(s)
     }
 }
 
