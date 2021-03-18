@@ -217,7 +217,7 @@ where
 
         let entry = assets.entry(key).or_insert_with(|| CacheEntry::new(asset, id.into()));
 
-        unsafe { Ok(entry.get_ref()) }
+        unsafe { Ok(entry.handle()) }
     }
 
     /// Adds a directory to the cache.
@@ -267,19 +267,23 @@ where
         let asset = cache.get(key)?;
 
         #[cfg(feature = "hot-reloading")]
-        let asset = match cache.get_key_value(key) {
-            Some((key, asset)) => {
-                self.add_record(key);
-                asset
-            },
-            None => {
-                let key = Key::new::<A>(id);
-                self.add_record(key);
-                return None;
-            },
+        let asset = if A::HOT_RELOADED {
+            match cache.get_key_value(key) {
+                Some((key, asset)) => {
+                    self.add_record(key);
+                    asset
+                },
+                None => {
+                    let key = Key::new::<A>(id);
+                    self.add_record(key);
+                    return None;
+                },
+            }
+        } else {
+            cache.get(key)?
         };
 
-        Some(unsafe { asset.get_ref() })
+        Some(unsafe { asset.handle() })
     }
 
     /// Returns `true` if the cache contains the specified asset.
@@ -354,7 +358,7 @@ where
     #[inline]
     pub fn load_owned<A: Compound>(&self, id: &str) -> Result<A, Error> {
         #[cfg(feature = "hot-reloading")]
-        if self.is_recording() {
+        if A::HOT_RELOADED && self.is_recording() {
             let key = Key::new::<A>(id);
             self.add_record(key);
             return A::_load::<S, Private>(self, id)

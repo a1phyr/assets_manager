@@ -14,6 +14,23 @@ impl Asset for X {
     const EXTENSION: &'static str = "x";
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct XS(pub i32);
+
+impl From<i32> for XS {
+    fn from(n: i32) -> XS {
+        XS(n)
+    }
+}
+
+impl Asset for XS {
+    type Loader = loader::LoadFrom<i32, loader::ParseLoader>;
+    const EXTENSION: &'static str = "x";
+    const HOT_RELOADED: bool = false;
+}
+
+impl asset::NotHotReloaded for XS {}
+
 pub struct Y(pub i32);
 
 impl Compound for Y {
@@ -135,86 +152,28 @@ mod asset_cache {
     }
 }
 
-mod cache_entry {
-    use std::sync::{Arc, Mutex};
-    use crate::entry::CacheEntry;
-
-    #[derive(Clone)]
-    struct DropCounter(Arc<Mutex<usize>>);
-
-    impl Drop for DropCounter {
-        fn drop(&mut self) {
-            let mut count = self.0.lock().unwrap();
-            *count += 1;
-        }
-    }
+mod handle {
+    use super::*;
 
     #[test]
-    fn drop_inner() {
-        let count = DropCounter(Arc::new(Mutex::new(0)));
-
-        let entry_1 = CacheEntry::new(count.clone(), "".into());
-        let entry_2 = CacheEntry::new(count.clone(), "".into());
-        assert_eq!(*count.0.lock().unwrap(), 0);
-        drop(entry_1);
-        assert_eq!(*count.0.lock().unwrap(), 1);
-        drop(entry_2);
-        assert_eq!(*count.0.lock().unwrap(), 2);
-    }
-
-    #[test]
-    fn read() {
-        let val = rand::random::<i32>();
-
-        let entry = CacheEntry::new(val, "".into());
-        let guard = unsafe { entry.get_ref::<i32>() };
-
-        assert_eq!(*guard.read(), val);
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    #[test]
-    fn write() {
-        let x = rand::random::<i32>();
-        let y = rand::random::<i32>();
-
-        let entry = CacheEntry::new(x, "".into());
-        unsafe {
-            let guard = entry.write(y);
-            assert_eq!(*guard.read(), y);
-            let guard = entry.get_ref::<i32>();
-            assert_eq!(*guard.read(), y);
-        }
-    }
-
-    #[test]
-    fn into_inner() {
-        let x = rand::random::<i32>();
-
-        let entry = CacheEntry::new(x, "".into());
-        let y = unsafe { entry.into_inner::<i32>() };
-
-        assert_eq!(x, y);
+    fn id() {
+        let cache = AssetCache::new("assets").unwrap();
+        let handle = cache.load::<X>("test.cache").unwrap();
+        assert_eq!(handle.id(), "test.cache");
     }
 
     #[test]
     fn ptr_eq() {
-        let x = rand::random::<i32>();
-
-        let entry = CacheEntry::new(x, "".into());
-        unsafe {
-            let ref_1 = entry.get_ref::<i32>();
-            let ref_2 = entry.get_ref::<i32>();
-            assert!(ref_1.ptr_eq(&ref_2));
-        }
+        let cache = AssetCache::new("assets").unwrap();
+        let handle1 = cache.load::<X>("test.cache").unwrap();
+        let handle2 = cache.load::<X>("test.cache").unwrap();
+        assert!(handle1.ptr_eq(&handle2));
     }
 
     #[test]
-    fn id() {
-        let x = rand::random::<i32>();
-
-        let entry = CacheEntry::new(x, "test".into());
-        let guard = unsafe { entry.get_ref::<i32>() };
-        assert_eq!(guard.id(), "test");
+    fn get() {
+        let cache = AssetCache::new("assets").unwrap();
+        let handle = cache.load::<XS>("test.cache").unwrap();
+        assert_eq!(*handle.get(), XS(42));
     }
 }

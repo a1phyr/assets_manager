@@ -44,7 +44,11 @@ unsafe trait AnyAsset: Any + Send + Sync {
 
 unsafe impl<A: Asset> AnyAsset for A {
     unsafe fn reload(self: Box<Self>, entry: &CacheEntry) {
-        entry.write::<A>(*self);
+        let handle = entry.handle::<A>();
+        handle.either(
+            |_| log::error!("Static asset registered for hot-reloading: {}", std::any::type_name::<A>()),
+            |e| e.write(*self),
+        );
     }
 
     fn create(self: Box<Self>, id: Arc<str>) -> CacheEntry {
@@ -68,11 +72,18 @@ pub(crate) type ReloadFn = fn(cache: &AssetCache, id: &str) -> Option<HashSet<Ow
 
 fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>> {
     let key: &dyn Key = &Key::new::<T>(id);
-    let inner = unsafe { cache.assets.read().get(key)?.inner::<T>() };
+    let handle = unsafe { cache.assets.read().get(key)?.handle::<T>() };
+    let entry = handle.either(
+        |_| {
+            log::error!("Static asset registered for hot-reloading: {}", std::any::type_name::<T>());
+            None
+        },
+        |e| Some(e),
+    )?;
 
     match cache.record_load::<T>(id) {
         Ok((asset, deps)) => {
-            inner.write(asset);
+            entry.write(asset);
             log::info!("Reloading \"{}\"", id);
             Some(deps)
         }

@@ -217,7 +217,6 @@ impl<T> RwLock<T> {
         Self(sync::RwLock::new(inner))
     }
 
-    #[cfg(feature = "hot-reloading")]
     #[inline]
     pub fn into_inner(self) -> T {
         wrap(self.0.into_inner())

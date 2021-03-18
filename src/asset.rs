@@ -127,7 +127,13 @@ pub trait Asset: Sized + Send + Sync + 'static {
     fn default_value(id: &str, error: Error) -> Result<Self, Error> {
         Err(error)
     }
+
+    /// If `false`, disable hot-reloading for assets of this type (`true` by
+    /// default). If so, you may want to implement [`NotHotReloaded`] for this
+    /// type to enable additional functions.
+    const HOT_RELOADED: bool = true;
 }
+
 
 impl<A> Asset for Box<A>
 where
@@ -163,7 +169,7 @@ pub trait Compound: Sized + Send + Sync + 'static {
     /// delegated to [`Asset`]s.
     fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error>;
 
-    /// Loads an asset and does register it for hot-reloading if necessary.
+    /// Loads an asset and registers it for hot-reloading if necessary.
     #[doc(hidden)]
     #[cfg_attr(not(feature = "hot-reloading"), inline)]
     fn _load<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
@@ -171,14 +177,46 @@ pub trait Compound: Sized + Send + Sync + 'static {
         {
             use crate::utils::DepsRecord;
 
-            let (asset, deps) = cache.record_load(id)?;
-            cache.source()._add_compound::<Self, P>(id, DepsRecord(deps));
-            Ok(asset)
+            if Self::HOT_RELOADED {
+                let (asset, deps) = cache.record_load(id)?;
+                cache.source()._add_compound::<Self, P>(id, DepsRecord(deps));
+                Ok(asset)
+            } else {
+                cache.no_record(|| Self::load(cache, id))
+            }
         }
 
         #[cfg(not(feature = "hot-reloading"))]
         { Self::load(cache, id) }
     }
+
+    /// If `false`, disable hot-reloading for assets of this type (`true` by
+    /// default). If so, you may want to implement [`NotHotReloaded`] for this
+    /// type to enable additional functions.
+    const HOT_RELOADED: bool = true;
+
+    #[doc(hidden)]
+    /// Compile-time check that HOT_RELOADED is false when `NotHotReloaded` is
+    /// implemented.
+    /// ```compile_fail
+    /// use assets_manager::{Asset, asset::NotHotReloaded, AssetCache, loader};
+    ///
+    /// struct A(i32);
+    /// impl From<i32> for A {
+    ///     fn from(x: i32) -> A { A(x) }
+    /// }
+    ///
+    /// impl Asset for A {
+    ///     type Loader = loader::LoadFrom<i32, loader::ParseLoader>;
+    /// }
+    /// impl NotHotReloaded for A {}
+    ///
+    /// let cache = AssetCache::new("assets")?;
+    /// let handle = cache.load::<A>("tests")?;
+    /// let _ = handle.get();
+    /// # Ok::<(), assets_manager::BoxedError>(())
+    /// ```
+    const _CHECK_NOT_HOT_RELOADED: () = [()][Self::HOT_RELOADED as usize];
 }
 
 
@@ -196,10 +234,14 @@ where
         let asset = cache.no_record(|| Self::load(cache, id))?;
 
         #[cfg(feature = "hot-reloading")]
-        cache.source()._add_asset::<A, P>(id);
+        if A::HOT_RELOADED {
+            cache.source()._add_asset::<A, P>(id);
+        }
 
         Ok(asset)
     }
+
+    const HOT_RELOADED: bool = Self::HOT_RELOADED;
 }
 
 impl<A> Compound for Arc<A>
@@ -210,6 +252,18 @@ where
         cache.load_owned::<A>(id).map(Arc::new)
     }
 }
+
+
+/// Mark an asset as not being hot-reloaded.
+///
+/// At the moment, the only use of this trait is to enable `Handle::get` for
+/// types that implement it.
+///
+/// If you implement this trait, you MUST set [`Asset::HOT_RELOADED`] (or
+/// [`Compound::HOT_RELOADED`] to `true` or you will get compile-error at best
+/// and panics at worst. This is a workaround about Rust's type system current
+/// limitations.
+pub trait NotHotReloaded: Compound {}
 
 
 macro_rules! serde_assets {

@@ -1,42 +1,65 @@
 //! Definitions of cache entries
 
 use std::{
-    any::Any,
+    any::{Any, type_name},
     fmt,
+    marker::PhantomData,
     ops::Deref,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    },
 };
 
-#[cfg(feature = "hot-reloading")]
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use crate::{
+    asset::{Compound, NotHotReloaded},
+    utils::{RwLock, RwLockReadGuard},
+};
 
-#[cfg(feature = "hot-reloading")]
-use crate::utils::{RwLock, RwLockReadGuard};
-
-
-#[cfg(feature = "hot-reloading")]
-pub struct Inner<T> {
-    id: Arc<str>,
-    reload: AtomicUsize,
-    reload_global: AtomicBool,
-
-    value: RwLock<T>,
+#[inline]
+unsafe fn downcast<T: 'static>(val: &dyn Any) -> &T {
+    debug_assert!(val.is::<T>());
+    &*(val as *const dyn Any as *const T)
 }
 
-#[cfg(feature = "hot-reloading")]
-impl<T> Inner<T> {
+/// The representation of an asset whose value cannot change.
+pub(crate) struct StaticInner<T> {
+    id: Arc<str>,
+    value: T
+}
+
+impl<T> StaticInner<T> {
+    #[inline]
+    fn new(value: T, id: Arc<str>) -> Self {
+        Self { id, value }
+    }
+
+    #[inline]
+    fn into_inner(self) -> T {
+        self.value
+    }
+}
+
+/// The representation of an asset whose value can be updated (eg through
+/// hot-relaoding).
+pub(crate) struct DynamicInner<T> {
+    id: Arc<str>,
+    value: RwLock<T>,
+    reload_global: AtomicBool,
+    reload: AtomicUsize,
+}
+
+impl<T> DynamicInner<T> {
     #[inline]
     fn new(value: T, id: Arc<str>) -> Self {
         Self {
             id,
+            value: RwLock::new(value),
             reload: AtomicUsize::new(0),
             reload_global: AtomicBool::new(false),
-
-            value: RwLock::new(value),
         }
     }
 
-    #[inline]
     pub fn write(&self, value: T) {
         let mut data = self.value.write();
         *data = value;
@@ -50,27 +73,7 @@ impl<T> Inner<T> {
     }
 }
 
-#[cfg(not(feature = "hot-reloading"))]
-pub struct Inner<T> {
-    id: Arc<str>,
-    value: T,
-}
-
-#[cfg(not(feature = "hot-reloading"))]
-impl<T> Inner<T> {
-    #[inline]
-    fn new(value: T, id: Arc<str>) -> Self {
-        Self { id, value }
-    }
-
-    #[inline]
-    fn into_inner(self) -> T {
-        self.value
-    }
-}
-
-
-/// An entry in the cache
+/// An entry in the cache.
 ///
 /// # Safety
 ///
@@ -80,21 +83,18 @@ impl<T> Inner<T> {
 /// outlives it. The `CacheEntry` can be moved but cannot be dropped.
 pub(crate) struct CacheEntry(pub Box<dyn Any + Send + Sync>);
 
-impl<'a> CacheEntry {
+impl CacheEntry {
     /// Creates a new `CacheEntry` containing an asset of type `T`.
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new<T: Send + Sync + 'static>(asset: T, id: Arc<str>) -> Self {
-        CacheEntry(Box::new(Inner::new(asset, id)))
-    }
-
-    #[inline]
-    pub unsafe fn inner<T: Send + Sync + 'static>(&self) -> &'a Inner<T> {
-        debug_assert!(self.0.is::<Inner<T>>());
-
-        let ptr = &*self.0 as *const dyn Any as *const Inner<T>;
-        &*ptr
+    pub fn new<T: Compound>(asset: T, id: Arc<str>) -> Self {
+        let inner: Box<dyn Any + Send + Sync> = if T::HOT_RELOADED {
+            Box::new(DynamicInner::new(asset, id))
+        } else {
+            Box::new(StaticInner::new(asset, id))
+        };
+        CacheEntry(inner)
     }
 
     /// Returns a reference to the underlying lock.
@@ -103,21 +103,9 @@ impl<'a> CacheEntry {
     ///
     /// See type-level documentation.
     #[inline]
-    pub unsafe fn get_ref<T: Send + Sync + 'static>(&self) -> Handle<'a, T> {
-        let inner = self.inner::<T>();
-        Handle::new(inner)
-    }
-
-    /// Write a value and a get reference to the underlying lock
-    ///
-    /// # Safety
-    ///
-    /// See type-level documentation.
-    #[cfg(feature = "hot-reloading")]
-    pub unsafe fn write<T: Send + Sync + 'static>(&self, asset: T) -> Handle<'a, T> {
-        let inner = self.inner::<T>();
-        inner.write(asset);
-        Handle::new(inner)
+    pub unsafe fn handle<'a, T: Compound>(&self) -> Handle<'a, T> {
+        let inner = &*(&*self.0 as *const (dyn Any + Send + Sync));
+        Handle::new_unchecked(inner)
     }
 
     /// Consumes the `CacheEntry` and returns its inner value.
@@ -126,11 +114,16 @@ impl<'a> CacheEntry {
     ///
     /// See type-level documentation.
     #[inline]
-    pub unsafe fn into_inner<T: Send + Sync + 'static>(self) -> T {
-        debug_assert!(self.0.is::<Inner<T>>());
-
-        let inner = Box::from_raw(Box::into_raw(self.0) as *mut Inner<T>);
-        inner.into_inner()
+    pub unsafe fn into_inner<T: Compound>(self) -> T {
+        if T::HOT_RELOADED {
+            debug_assert!(self.0.is::<DynamicInner<T>>());
+            let value = Box::from_raw(Box::into_raw(self.0) as *mut DynamicInner<T>);
+            value.into_inner()
+        } else {
+            debug_assert!(self.0.is::<StaticInner<T>>());
+            let value = Box::from_raw(Box::into_raw(self.0) as *mut StaticInner<T>);
+            value.into_inner()
+        }
     }
 }
 
@@ -155,20 +148,44 @@ impl fmt::Debug for CacheEntry {
 /// However it is generally easier to work with `'static` data. For more
 /// information, see [top-level documentation](index.html#becoming-static).
 pub struct Handle<'a, A> {
-    data: &'a Inner<A>,
-
-    #[cfg(feature = "hot-reloading")]
+    data: &'a (dyn Any + Send + Sync),
     last_reload: usize,
+    _marker: PhantomData<&'a A>,
 }
 
-impl<'a, A> Handle<'a, A> {
+impl<'a, A> Handle<'a, A>
+where
+    // FIXME: Can we remove this bound without specialization ?
+    A: Compound,
+{
+    /// Creates a new handle.
+    ///
+    /// Safety: inner must contain a `DynamicInner<A>` if `A::HOT_RELOADED` or
+    /// else a `StaticInner<A>`.
     #[inline]
-    fn new(inner: &'a Inner<A>) -> Self {
-        Self {
+    unsafe fn new_unchecked(inner: &'a (dyn Any + Send + Sync)) -> Self {
+        let mut this = Self {
             data: inner,
+            last_reload: 0,
+            _marker: PhantomData,
+        };
+        this.reloaded();
+        this
+    }
 
-            #[cfg(feature = "hot-reloading")]
-            last_reload: inner.reload.load(Ordering::Acquire),
+    #[inline]
+    pub(crate) fn either<S, D, T>(&self, on_static: S, on_dynamic: D) -> T
+    where
+        S: FnOnce(&'a StaticInner<A>) -> T,
+        D: FnOnce(&'a DynamicInner<A>) -> T,
+    {
+        // Safety: guarantied by the caller of `new_unchecked`
+        if A::HOT_RELOADED {
+            let inner = unsafe { downcast::<DynamicInner<A>>(&*self.data) };
+            on_dynamic(inner)
+        } else {
+            let inner = unsafe { downcast::<StaticInner<A>>(&*self.data) };
+            on_static(inner)
         }
     }
 
@@ -177,19 +194,20 @@ impl<'a, A> Handle<'a, A> {
     /// Returns a RAII guard which will release the lock once dropped.
     #[inline]
     pub fn read(&self) -> AssetGuard<'a, A> {
-        AssetGuard {
-            #[cfg(feature = "hot-reloading")]
-            asset: self.data.value.read(),
-
-            #[cfg(not(feature = "hot-reloading"))]
-            asset: &self.data.value,
-        }
+        let inner = self.either(
+            |this| GuardInner::Ref(&this.value),
+            |this| GuardInner::Guard(this.value.read()),
+        );
+        AssetGuard { inner }
     }
 
-    /// Returns the id of the asset
+    /// Returns the id of the asset.
+    ///
+    /// Note that the lifetime of the returned `&str` is tied to that of the
+    /// `AssetCache`, so it can outlive the handle.
     #[inline]
     pub fn id(&self) -> &'a str {
-        &self.data.id
+        self.either(|s| &s.id, |d| &d.id)
     }
 
     /// Returns `true` if the asset has been reloaded since last call to this
@@ -235,20 +253,19 @@ impl<'a, A> Handle<'a, A> {
     /// ```
     #[inline]
     pub fn reloaded(&mut self) -> bool {
-        #[cfg(feature = "hot-reloading")]
-        {
-            let last_reload = self.data.reload.load(Ordering::Acquire);
+        let reloaded = self.either(
+            |_| None,
+            |this| Some(this.reload.load(Ordering::Acquire)),
+        );
 
-            if last_reload > self.last_reload {
+        match reloaded {
+            None => false,
+            Some(last_reload) => {
+                let reloaded = last_reload > self.last_reload;
                 self.last_reload = last_reload;
-                true
-            } else {
-                false
-            }
+                reloaded
+            },
         }
-
-        #[cfg(not(feature = "hot-reloading"))]
-        { false }
     }
 
     /// Returns `true` if the asset has been reloaded since last call to this
@@ -261,11 +278,10 @@ impl<'a, A> Handle<'a, A> {
     /// [`reloaded`]: Self::reloaded
     #[inline]
     pub fn reloaded_global(&self) -> bool {
-        #[cfg(feature = "hot-reloading")]
-        { self.data.reload_global.swap(false, Ordering::Acquire) }
-
-        #[cfg(not(feature = "hot-reloading"))]
-        { false }
+        self.either(
+            |_| false,
+            |this| this.reload_global.swap(false, Ordering::Acquire),
+        )
     }
 
     /// Checks if the two handles refer to the same asset.
@@ -275,9 +291,26 @@ impl<'a, A> Handle<'a, A> {
     }
 }
 
+impl<'a, A> Handle<'a, A>
+where
+    A: NotHotReloaded,
+{
+    /// Returns a reference to the underlying asset.
+    ///
+    /// This method only works if hot-reloading is disabled for the given type.
+    pub fn get(&self) -> &'a A {
+        let _ = A::_CHECK_NOT_HOT_RELOADED;
+
+        self.either(
+            |this| &this.value,
+            |_| panic!("`{}` implements `NotHotReloaded` but do not disable hot-reloading", type_name::<A>()),
+        )
+    }
+}
+
 impl<A> Handle<'_, A>
 where
-    A: Copy
+    A: Compound + Copy
 {
     /// Returns a copy of the inner asset.
     ///
@@ -291,7 +324,7 @@ where
 
 impl<A> Handle<'_, A>
 where
-    A: Clone
+    A: Compound + Clone
 {
     /// Returns a clone of the inner asset.
     #[inline]
@@ -310,20 +343,21 @@ impl<A> Copy for Handle<'_, A> {}
 
 impl<T, U> PartialEq<Handle<'_, U>> for Handle<'_, T>
 where
-    T: PartialEq<U>,
+    T: Compound + PartialEq<U>,
+    U: Compound,
 {
     fn eq(&self, other: &Handle<U>) -> bool {
         self.read().eq(&other.read())
     }
 }
 
-impl<A> Eq for Handle<'_, A> where A: Eq {}
+impl<A> Eq for Handle<'_, A> where A: Compound + Eq {}
 
 #[cfg(feature = "serde")]
 #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 impl<A> serde::Serialize for Handle<'_, A>
 where
-    A: serde::Serialize,
+    A: Compound + serde::Serialize,
 {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         self.read().serialize(s)
@@ -332,13 +366,17 @@ where
 
 impl<A> fmt::Debug for Handle<'_, A>
 where
-    A: fmt::Debug,
+    A: Compound + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Handle").field("value", &*self.read()).finish()
     }
 }
 
+pub enum GuardInner<'a, T> {
+    Ref(&'a T),
+    Guard(RwLockReadGuard<'a, T>),
+}
 
 /// RAII guard used to keep a read lock on an asset and release it when dropped.
 ///
@@ -346,11 +384,7 @@ where
 ///
 /// It can be obtained by calling [`Handle::read`].
 pub struct AssetGuard<'a, A> {
-    #[cfg(feature = "hot-reloading")]
-    asset: RwLockReadGuard<'a, A>,
-
-    #[cfg(not(feature = "hot-reloading"))]
-    asset: &'a A,
+    inner: GuardInner<'a, A>,
 }
 
 impl<A> Deref for AssetGuard<'_, A> {
@@ -358,7 +392,10 @@ impl<A> Deref for AssetGuard<'_, A> {
 
     #[inline]
     fn deref(&self) -> &A {
-        &self.asset
+        match &self.inner {
+            GuardInner::Ref(r) => r,
+            GuardInner::Guard(g) => &g,
+        }
     }
 }
 
@@ -368,7 +405,7 @@ where
 {
     #[inline]
     fn as_ref(&self) -> &U {
-        self.asset.as_ref()
+        (&**self).as_ref()
     }
 }
 
