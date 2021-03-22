@@ -411,6 +411,9 @@ impl AssetCache<FileSystem> {
     /// from the given `AssetCache`, or you might experience deadlocks. You are
     /// free to keep [`Handle`]s, though. The same restriction applies to
     /// [`ReadDir`] and [`ReadAllDir`].
+    ///
+    /// If `self.source()` was created without hot-reloading or if it failed to
+    /// start, this function is a no-op.
     #[cfg(feature = "hot-reloading")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
     pub fn hot_reload(&self) {
@@ -429,6 +432,9 @@ impl AssetCache<FileSystem> {
     /// You only have to call this function once for it to take effect. After
     /// calling this function, subsequent calls to `hot_reload` and to this
     /// function have no effect.
+    ///
+    /// If `self.source()` was created without hot-reloading or if it failed to
+    /// start, this function is a no-op.
     #[cfg(feature = "hot-reloading")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
     pub fn enhance_hot_reloading(&'static self) {
