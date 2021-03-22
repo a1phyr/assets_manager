@@ -30,7 +30,7 @@ This crates focuses on:
 
 - **Pleasant to use**:\
   A well-documented high-level API, easy to learn.\
-  Built-in support of common formats with serde.\
+  Built-in support of common formats with serde.
 
 - **Lightness**:\
   Pay for what you take, no dependency bloat.
