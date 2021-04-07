@@ -180,6 +180,9 @@ pub mod loader;
 mod entry;
 pub use entry::{AssetGuard, Handle};
 
+mod shared;
+pub use shared::SharedBytes;
+
 pub mod source;
 
 #[cfg(feature = "hot-reloading")]

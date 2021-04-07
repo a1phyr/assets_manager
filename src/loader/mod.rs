@@ -11,7 +11,7 @@
 //!
 //! [assets]: `crate::Asset`
 
-use crate::BoxedError;
+use crate::{BoxedError, SharedBytes};
 
 use std::{
     borrow::Cow,
@@ -158,6 +158,11 @@ impl Loader<Vec<u8>> for BytesLoader {
 }
 impl Loader<Box<[u8]>> for BytesLoader {
     fn load(content: Cow<[u8]>, _: &str) -> Result<Box<[u8]>, BoxedError> {
+        Ok(content.into())
+    }
+}
+impl Loader<SharedBytes> for BytesLoader {
+    fn load(content: Cow<[u8]>, _: &str) -> Result<SharedBytes, BoxedError> {
         Ok(content.into())
     }
 }
