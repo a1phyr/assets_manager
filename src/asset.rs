@@ -1,19 +1,31 @@
 //! Values loadable from a cache.
 
+#[allow(unused)]
 use crate::{
     AssetCache,
+    BoxedError,
     Error,
+    SharedBytes,
     loader,
     cache::load_from_source,
     source::Source,
     utils::PrivateMarker,
 };
 
+#[cfg(feature = "rodio")]
+#[allow(unused)]
+use rodio::decoder::{Decoder, DecoderError};
+
 #[cfg(feature = "serde")]
 #[allow(unused)]
 use serde::{Deserialize, Serialize};
 
-use std::sync::Arc;
+#[allow(unused)]
+use std::{
+    borrow::Cow,
+    io,
+    sync::Arc,
+};
 
 
 /// An asset is a type loadable from a file.
@@ -353,5 +365,96 @@ serde_assets! {
     struct Yaml => (
         loader::YamlLoader,
         ["yaml", "yml"],
+    );
+}
+
+
+macro_rules! sound_assets {
+    (
+        $(
+            #[doc = $doc:literal]
+            #[cfg(feature = $feature:literal)]
+            struct $name:ident => (
+                $decoder:path,
+                [$($ext:literal),*],
+            );
+        )*
+    ) => {
+        $(
+            #[doc = $doc]
+            #[cfg(feature = $feature)]
+            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
+            #[derive(Clone, Debug)]
+            pub struct $name(SharedBytes);
+
+            #[cfg(feature = $feature)]
+            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
+            impl loader::Loader<$name> for loader::SoundLoader {
+                #[inline]
+                fn load(content: Cow<[u8]>, _: &str) -> Result<$name, BoxedError> {
+                    let bytes = content.into();
+                    Ok($name::new(bytes)?)
+                }
+            }
+
+            #[cfg(feature = $feature)]
+            impl Asset for $name {
+                const EXTENSIONS: &'static [&'static str] = &[$( $ext ),*];
+                type Loader = loader::SoundLoader;
+            }
+
+            #[cfg(feature = $feature)]
+            impl $name {
+                /// Creates a new sound from raw bytes.
+                #[inline]
+                pub fn new(bytes: SharedBytes) -> Result<$name, DecoderError> {
+                    let _ = $decoder(io::Cursor::new(&bytes))?;
+                    Ok($name(bytes))
+                }
+
+                /// Creates a [`Decoder`] that can be send to `rodio` to play
+                /// sounds.
+                #[inline]
+                pub fn decoder(self) -> Decoder<io::Cursor<SharedBytes>> {
+                    $decoder(io::Cursor::new(self.0)).unwrap()
+                }
+
+                /// Convert the sound back to raw bytes.
+                #[inline]
+                pub fn into_bytes(self) -> SharedBytes {
+                    self.0
+                }
+            }
+        )*
+    }
+}
+
+sound_assets! {
+    /// Load FLAC sounds
+    #[cfg(feature = "flac")]
+    struct Flac => (
+        Decoder::new_flac,
+        ["flac"],
+    );
+
+    /// Load MP3 sounds
+    #[cfg(feature = "mp3")]
+    struct Mp3 => (
+        Decoder::new_mp3,
+        ["mp3"],
+    );
+
+    /// Load Vorbis sounds
+    #[cfg(feature = "vorbis")]
+    struct Vorbis => (
+        Decoder::new_vorbis,
+        ["ogg"],
+    );
+
+    /// Load WAV sounds
+    #[cfg(feature = "wav")]
+    struct Wav => (
+        Decoder::new_wav,
+        ["wav"],
     );
 }

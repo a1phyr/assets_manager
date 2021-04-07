@@ -28,6 +28,10 @@ ron = ["serde_ron", "serde"]
 yaml = ["serde_yaml", "serde"]
 toml = ["serde_toml", "serde"]
 
+flac = ["rodio/flac"]
+mp3 = ["rodio/mp3"]
+vorbis = ["rodio/vorbis"]
+wav = ["rodio/wav"]
 
 [dependencies]
 assets_manager_macros = {path = "macros", version = "0.1", optional = true}
@@ -48,6 +52,7 @@ serde_ron = {version = "0.6", package = "ron", optional = true}
 serde_toml = {version = "0.5", package = "toml", optional = true}
 serde_yaml = {version = "0.8.4", optional = true}
 
+rodio = {version = "0.13", default-features = false, optional = true}
 
 [dev-dependencies]
 cfg-if = "1.0"

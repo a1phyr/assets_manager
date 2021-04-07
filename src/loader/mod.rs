@@ -207,6 +207,10 @@ where
     }
 }
 
+/// Loads assets used as sounds.
+#[derive(Debug)]
+pub struct SoundLoader(());
+
 macro_rules! serde_loaders {
     (
         $(
