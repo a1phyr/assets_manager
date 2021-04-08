@@ -241,7 +241,7 @@ where
         load_from_source(cache.source(), id)
     }
 
-    #[cfg_attr(not(feature = "hot-reloading"), inline)]
+    #[inline]
     fn _load<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
         let asset = cache.no_record(|| Self::load(cache, id))?;
 

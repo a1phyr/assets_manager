@@ -258,7 +258,6 @@ where
     ///
     /// This function does not attempt to load the asset from the source if it
     /// is not found in the cache.
-    #[inline]
     pub fn load_cached<A: Compound>(&self, id: &str) -> Option<Handle<A>> {
         let key: &dyn Key = &Key::new::<A>(id);
         let cache = self.assets.read();
@@ -382,6 +381,7 @@ where
     /// Takes ownership on a cached asset.
     ///
     /// The corresponding asset is removed from the cache.
+    #[inline]
     pub fn take<A: Compound>(&mut self, id: &str) -> Option<A> {
         let key: &dyn Key = &Key::new::<A>(id);
         let cache = self.assets.get_mut();
@@ -420,6 +420,7 @@ impl AssetCache<FileSystem> {
     /// start, this function is a no-op.
     #[cfg(feature = "hot-reloading")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
+    #[inline]
     pub fn hot_reload(&self) {
         if let Some(reloader) = &self.source.reloader {
             reloader.reload(self);
@@ -441,6 +442,7 @@ impl AssetCache<FileSystem> {
     /// start, this function is a no-op.
     #[cfg(feature = "hot-reloading")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
+    #[inline]
     pub fn enhance_hot_reloading(&'static self) {
         if let Some(reloader) = &self.source.reloader {
             reloader.send_static(self);

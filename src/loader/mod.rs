@@ -137,6 +137,7 @@ where
     U: Into<T>,
     L: Loader<U>,
 {
+    #[inline]
     fn load(content: Cow<[u8]>, ext: &str) -> Result<T, BoxedError> {
         Ok(L::load(content, ext)?.into())
     }
@@ -152,16 +153,19 @@ pub type LoadFromAsset<A> = LoadFrom<A, <A as crate::Asset>::Loader>;
 #[derive(Debug)]
 pub struct BytesLoader(());
 impl Loader<Vec<u8>> for BytesLoader {
+    #[inline]
     fn load(content: Cow<[u8]>, _: &str) -> Result<Vec<u8>, BoxedError> {
         Ok(content.into_owned())
     }
 }
 impl Loader<Box<[u8]>> for BytesLoader {
+    #[inline]
     fn load(content: Cow<[u8]>, _: &str) -> Result<Box<[u8]>, BoxedError> {
         Ok(content.into())
     }
 }
 impl Loader<SharedBytes> for BytesLoader {
+    #[inline]
     fn load(content: Cow<[u8]>, _: &str) -> Result<SharedBytes, BoxedError> {
         Ok(content.into())
     }
@@ -176,11 +180,13 @@ impl Loader<SharedBytes> for BytesLoader {
 #[derive(Debug)]
 pub struct StringLoader(());
 impl Loader<String> for StringLoader {
+    #[inline]
     fn load(content: Cow<[u8]>, _: &str) -> Result<String, BoxedError> {
         Ok(String::from_utf8(content.into_owned())?)
     }
 }
 impl Loader<Box<str>> for StringLoader {
+    #[inline]
     fn load(content: Cow<[u8]>, ext: &str) -> Result<Box<str>, BoxedError> {
         StringLoader::load(content, ext).map(String::into_boxed_str)
     }
@@ -202,6 +208,7 @@ where
     T: FromStr,
     BoxedError: From<<T as FromStr>::Err>
 {
+    #[inline]
     fn load(content: Cow<[u8]>, _: &str) -> Result<T, BoxedError> {
         Ok(str::from_utf8(&content)?.parse()?)
     }
