@@ -299,6 +299,7 @@ macro_rules! serde_assets {
             #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
             #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
             #[serde(transparent)]
+            #[repr(transparent)]
             pub struct $name<T>(pub T);
 
             #[cfg(feature = $feature)]
