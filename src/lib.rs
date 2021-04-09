@@ -10,23 +10,22 @@
 //! - `hot-reloading`: Add hot-reloading
 //! - `embedded`: Add embedded source
 //!
-//! ### Additional loaders
+//! ### Additional formats
 //!
-//! - `bincode`: Bincode deserialization
-//! - `cbor`: CBOR deserialization
-//! - `json`: JSON deserialization
-//! - `msgpack`: MessagePack deserialization
-//! - `ron`: RON deserialization
-//! - `toml`: TOML deserialization
-//! - `yaml`: YAML deserialization
+//! These features add support for asset formats. There is one feature per
+//! format.
+//!
+//! - Serialisation formats (with [`serde`] crate): `bincode`, `cbor`, `json`,
+//! `msgpack`, `ron`, `toml`, `yaml`.
+//! - Audio formats (with [`rodio`] crate): `mp3`, `flac`, `vorbis`, `wav`.
 //!
 //! ### Internal features
 //!
 //! These features change inner data structures implementations. They usually
 //! increase performances, and are therefore enabled by default.
 //!
-//! - `parking_lot`: Use *parking_lot* crate's synchronization primitives
-//! - `ahash`: Use ahash algorithm instead Sip1-3 used in `std`.
+//! - [`parking_lot`]: Use improved synchronization primitives.
+//! - [`ahash`]: Use a faster hashing algorithm.
 //!
 //! ## Example
 //!
@@ -147,7 +146,7 @@
 //! can do so with [`AssetCache::load_cached`].
 //!
 //! If you have to clone them a lot, you may consider changing your `String`
-//! into an `Arc<str>` which is usually cheaper to clone.
+//! into an `Arc<str>` which is cheaper to clone.
 //!
 //! This is the technique internally used by `assets_manager` to store cached
 //! directories.
