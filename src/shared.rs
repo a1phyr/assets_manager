@@ -52,9 +52,44 @@ impl Deref for SharedBytes {
     }
 }
 
+impl Clone for SharedBytes {
+    #[inline]
+    fn clone(&self) -> Self {
+        unsafe {
+            if let Raw { zero: 0, ptr } = self.0.vec {
+                Arc::increment_strong_count(ptr);
+            } else {
+                Arc::increment_strong_count(self.0.slice);
+            }
+
+            SharedBytes(self.0)
+        }
+    }
+}
+
+impl Drop for SharedBytes {
+    #[inline]
+    fn drop(&mut self) {
+        unsafe {
+            if let Raw { zero: 0, ptr } = self.0.vec {
+                Arc::decrement_strong_count(ptr);
+            } else {
+                Arc::decrement_strong_count(self.0.slice);
+            }
+        }
+    }
+}
+
 impl AsRef<[u8]> for SharedBytes {
     #[inline]
     fn as_ref(&self) -> &[u8] {
+        &self
+    }
+}
+
+impl std::borrow::Borrow<[u8]> for SharedBytes {
+    #[inline]
+    fn borrow(&self) -> &[u8] {
         &self
     }
 }
@@ -106,31 +141,10 @@ impl From<Cow<'_, [u8]>> for SharedBytes {
     }
 }
 
-impl Clone for SharedBytes {
+impl From<&SharedBytes> for SharedBytes {
     #[inline]
-    fn clone(&self) -> Self {
-        unsafe {
-            if let Raw { zero: 0, ptr } = self.0.vec {
-                Arc::increment_strong_count(ptr);
-            } else {
-                Arc::increment_strong_count(self.0.slice);
-            }
-
-            SharedBytes(self.0)
-        }
-    }
-}
-
-impl Drop for SharedBytes {
-    #[inline]
-    fn drop(&mut self) {
-        unsafe {
-            if let Raw { zero: 0, ptr } = self.0.vec {
-                Arc::decrement_strong_count(ptr);
-            } else {
-                Arc::decrement_strong_count(self.0.slice);
-            }
-        }
+    fn from(bytes: &SharedBytes) -> SharedBytes {
+        bytes.clone()
     }
 }
 
@@ -143,6 +157,43 @@ impl std::iter::FromIterator<u8> for SharedBytes {
         SharedBytes::from(vec)
     }
 }
+
+impl std::hash::Hash for SharedBytes {
+    #[inline]
+    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+        self.as_ref().hash(hasher);
+    }
+}
+
+impl PartialEq<[u8]> for SharedBytes {
+    #[inline]
+    fn eq(&self, other: &[u8]) -> bool {
+        &*self == other
+    }
+}
+
+impl PartialEq<&[u8]> for SharedBytes {
+    #[inline]
+    fn eq(&self, other: &&[u8]) -> bool {
+        &*self == other
+    }
+}
+
+impl PartialEq<Vec<u8>> for SharedBytes {
+    #[inline]
+    fn eq(&self, other: &Vec<u8>) -> bool {
+        &*self == other
+    }
+}
+
+impl PartialEq for SharedBytes {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        &*self == &*other
+    }
+}
+
+impl Eq for SharedBytes {}
 
 impl fmt::Debug for SharedBytes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
