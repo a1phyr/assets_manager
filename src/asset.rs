@@ -420,10 +420,21 @@ macro_rules! sound_assets {
                     $decoder(io::Cursor::new(self.0)).unwrap()
                 }
 
+                #[inline]
+                pub fn as_bytes(&self) -> &[u8] {
+                    &self.0
+                }
+
                 /// Convert the sound back to raw bytes.
                 #[inline]
                 pub fn into_bytes(self) -> SharedBytes {
                     self.0
+                }
+            }
+
+            impl AsRef<[u8]> for $name {
+                fn as_ref(&self) -> &[u8] {
+                    &self.0
                 }
             }
         )*

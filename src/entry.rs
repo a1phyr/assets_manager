@@ -41,7 +41,7 @@ impl<T> StaticInner<T> {
 }
 
 /// The representation of an asset whose value can be updated (eg through
-/// hot-relaoding).
+/// hot-reloading).
 pub(crate) struct DynamicInner<T> {
     id: Arc<str>,
     value: RwLock<T>,
@@ -60,6 +60,7 @@ impl<T> DynamicInner<T> {
         }
     }
 
+    #[cfg(feature = "hot-reloading")]
     pub fn write(&self, value: T) {
         let mut data = self.value.write();
         *data = value;
