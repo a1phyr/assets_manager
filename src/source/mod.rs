@@ -71,6 +71,30 @@ pub use assets_manager_macros::embed;
 #[cfg(test)]
 mod tests;
 
+/// An entry in a directory.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DirEntry<'a> {
+    /// A file with an id and an extension.
+    File(&'a str, &'a str),
+
+    /// A directory with an id.
+    Directory(&'a str),
+}
+
+impl<'a> DirEntry<'a> {
+    /// Returns `true` if this is a `File`.
+    #[inline]
+    pub const fn is_file(&self) -> bool {
+        matches!(self, DirEntry::File(..))
+    }
+
+    /// Returns `true` if this is a `Directory`.
+    #[inline]
+    pub const fn is_dir(&self) -> bool {
+        matches!(self, DirEntry::Directory(_))
+    }
+}
+
 /// Bytes sources to load assets from.
 ///
 /// See [module-level documentation](super::source) for more informations.
@@ -81,30 +105,37 @@ pub trait Source {
     /// to avoid allocations.
     fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>>;
 
-    /// Reads a directory given its id and an extension list.
+    /// Reads the content of a directory.
     ///
-    /// If no error occurs, this function should return a list of file stems
-    /// (without extension nor dir prefix) from files that have at least one of
-    /// the given extensions.
+    /// If no error occurs, this function executes the given closure for each
+    /// entry in the directory.
     ///
     /// # Example
     ///
     /// ```
-    /// use assets_manager::source::{FileSystem, Source};
+    /// use assets_manager::source::{DirEntry, FileSystem, Source};
     ///
     /// // In "assets/example" directory, there are "giant_bat.ron",
     /// // "goblin.ron", and other files that do not have "ron" extension.
     ///
     /// let fs = FileSystem::new("assets")?;
-    /// let mut dir_content = fs.read_dir("example.monsters", &["ron"])?;
+    ///
+    /// let mut dir_content = Vec::new();
+    /// fs.read_dir("example.monsters", &mut |entry| {
+    ///     if let DirEntry::File(id, ext) = entry {
+    ///         if ext == "ron" {
+    ///             dir_content.push(id.to_owned());
+    ///         }
+    ///     }
+    /// })?;
     ///
     /// // Order is important for equality comparison
     /// dir_content.sort();
     ///
-    /// assert_eq!(dir_content, ["giant_bat", "goblin"]);
+    /// assert_eq!(dir_content, ["example.monsters.giant_bat", "example.monsters.goblin"]);
     /// # Ok::<(), std::io::Error>(())
     /// ```
-    fn read_dir(&self, id: &str, ext: &[&str]) -> io::Result<Vec<String>>;
+    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()>;
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
@@ -137,8 +168,8 @@ where
         self.as_ref().read(id, ext)
     }
 
-    fn read_dir(&self, dir: &str, ext: &[&str]) -> io::Result<Vec<String>> {
-        self.as_ref().read_dir(dir, ext)
+    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+        self.as_ref().read_dir(id, f)
     }
 }
 

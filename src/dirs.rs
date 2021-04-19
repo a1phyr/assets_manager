@@ -3,7 +3,7 @@ use crate::{
     AssetCache,
     Error,
     Handle,
-    source::Source,
+    source::{DirEntry, Source},
     utils::{RwLock, RwLockReadGuard},
 };
 
@@ -93,17 +93,16 @@ pub(crate) struct CachedDir {
 
 impl CachedDir {
     pub fn load<A: Asset, S: Source>(cache: &AssetCache<S>, dir_id: &str) -> io::Result<Self> {
-        let names = cache.source().read_dir(dir_id, A::EXTENSIONS)?;
-        let mut ids = Vec::with_capacity(names.len());
+        let mut ids = Vec::new();
 
-        for mut id in names {
-            if !dir_id.is_empty() {
-                id.insert(0, '.');
+        cache.source().read_dir(dir_id, &mut |entry| {
+            if let DirEntry::File(id, ext) = entry {
+                if A::EXTENSIONS.contains(&ext) {
+                    let _ = cache.load::<A>(&id);
+                    ids.push(id.into());
+                }
             }
-            id.insert_str(0, dir_id);
-            let _ = cache.load::<A>(&id);
-            ids.push(id.into());
-        }
+        })?;
 
         Ok(Self {
             assets: Box::new(ids.into()),

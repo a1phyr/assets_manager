@@ -21,7 +21,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::Source;
+use super::{DirEntry, Source};
 
 
 #[inline]
@@ -29,14 +29,6 @@ pub fn extension_of(path: &Path) -> Option<&str> {
     match path.extension() {
         Some(ext) => ext.to_str(),
         None => Some(""),
-    }
-}
-
-#[inline]
-fn has_extension(path: &Path, ext: &[&str]) -> bool {
-    match extension_of(path) {
-        Some(file_ext) => ext.contains(&file_ext),
-        None => false,
     }
 }
 
@@ -134,32 +126,40 @@ impl Source for FileSystem {
         fs::read(path).map(Into::into)
     }
 
-    fn read_dir(&self, id: &str, ext: &[&str]) -> io::Result<Vec<String>> {
+    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
         let dir_path = self.path_of(id, "");
         let entries = fs::read_dir(dir_path)?;
 
-        let mut loaded = Vec::new();
+        let mut entry_id = id.to_owned();
 
         for entry in entries {
             if let Ok(entry) = entry {
                 let path = entry.path();
-
-                if !has_extension(&path, ext) {
-                    continue;
-                }
 
                 let name = match path.file_stem().and_then(|n| n.to_str()) {
                     Some(name) => name,
                     None => continue,
                 };
 
+                let this_id: &str = if !id.is_empty() {
+                    entry_id.truncate(id.len());
+                    entry_id.extend([".", name].iter().copied());
+                    &entry_id
+                } else {
+                    name
+                };
+
                 if path.is_file() {
-                    loaded.push(name.into());
+                    if let Some(ext) = extension_of(&path) {
+                        f(DirEntry::File(this_id, ext));
+                    }
+                } else if path.is_dir() {
+                    f(DirEntry::Directory(this_id));
                 }
             }
         }
 
-        Ok(loaded)
+        Ok(())
     }
 
     #[cfg(feature = "hot-reloading")]

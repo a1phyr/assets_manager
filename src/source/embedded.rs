@@ -4,7 +4,7 @@ use std::{
     io,
 };
 
-use super::Source;
+use super::{DirEntry, Source};
 
 
 /// The raw representation of embedded files. The common way to create one is the
@@ -24,7 +24,7 @@ pub struct RawEmbedded<'a> {
 
     /// A list of directory, represented by their id, with the list of files
     /// they contain.
-    pub dirs: &'a [(&'a str, &'a [(&'a str, &'a str)])],
+    pub dirs: &'a [(&'a str, &'a [DirEntry<'a>])],
 }
 
 /// A [`Source`] which is embedded in the binary. It is created using a
@@ -56,7 +56,7 @@ pub struct RawEmbedded<'a> {
 #[derive(Clone, Debug)]
 pub struct Embedded<'a> {
     files: HashMap<(&'a str, &'a str), &'a [u8]>,
-    dirs: HashMap<&'a str, &'a [(&'a str, &'a str)]>,
+    dirs: HashMap<&'a str, &'a [DirEntry<'a>]>,
 }
 
 impl<'a> From<RawEmbedded<'a>> for Embedded<'a> {
@@ -76,13 +76,9 @@ impl<'a> Source for Embedded<'a> {
         }
     }
 
-    fn read_dir(&self, id: &str, ext: &[&str]) -> io::Result<Vec<String>> {
+    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
         let dir = self.dirs.get(id).ok_or(io::ErrorKind::NotFound)?;
-
-        Ok(dir.iter().copied()
-            .filter(|(_, file_ext)| ext.contains(file_ext))
-            .map(|(id,_)| id.to_owned())
-            .collect()
-        )
+        dir.iter().copied().for_each(f);
+        Ok(())
     }
 }
