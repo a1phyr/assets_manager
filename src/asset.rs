@@ -421,6 +421,7 @@ macro_rules! sound_assets {
                 }
 
                 #[inline]
+                /// Returns a bytes slice of the sound content.
                 pub fn as_bytes(&self) -> &[u8] {
                     &self.0
                 }
@@ -432,6 +433,7 @@ macro_rules! sound_assets {
                 }
             }
 
+            #[cfg(feature = $feature)]
             impl AsRef<[u8]> for $name {
                 fn as_ref(&self) -> &[u8] {
                     &self.0
