@@ -83,11 +83,18 @@ impl OwnedKey {
         &self.id
     }
 
+    #[inline]
     pub fn borrow(&self) -> BorrowedKey {
         BorrowedKey {
             id: &self.id,
             type_id: self.type_id,
         }
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    pub fn into_id(self) -> Arc<str> {
+        self.id
     }
 }
 
@@ -271,10 +278,10 @@ pub(crate) use private::{Private, PrivateMarker};
 
 
 #[cfg(feature = "ahash")]
-use ahash::RandomState;
+pub(crate) use ahash::RandomState;
 
 #[cfg(not(feature = "ahash"))]
-use std::collections::hash_map::RandomState;
+pub(crate) use std::collections::hash_map::RandomState;
 
 pub(crate) struct HashMap<K, V>(StdHashMap<K, V, RandomState>);
 
@@ -282,6 +289,11 @@ impl<K, V> HashMap<K, V> {
     #[inline]
     pub fn new() -> Self {
         Self(StdHashMap::with_hasher(RandomState::new()))
+    }
+
+    #[inline]
+    pub fn with_hasher(hasher: RandomState) -> Self {
+        Self(StdHashMap::with_hasher(hasher))
     }
 }
 

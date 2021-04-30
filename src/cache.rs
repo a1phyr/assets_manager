@@ -5,7 +5,7 @@ use crate::{
     dirs::{CachedDir, DirReader},
     entry::CacheEntry,
     loader::Loader,
-    utils::{HashMap, Key, OwnedKey, Private, RwLock},
+    utils::{HashMap, RandomState, Key, OwnedKey, Private, RwLock},
     source::{FileSystem, Source},
 };
 
@@ -16,6 +16,7 @@ use std::{
     fmt,
     io,
     path::Path,
+    sync::Arc,
 };
 
 #[cfg(feature = "hot-reloading")]
@@ -26,6 +27,122 @@ use std::{
     cell::Cell,
     ptr::NonNull,
 };
+
+type Shard = RwLock<HashMap<OwnedKey, CacheEntry>>;
+
+pub(crate) struct Map {
+    hash_builder: RandomState,
+    shards: Box<[Shard]>,
+}
+
+impl Map {
+    fn new(min_shards: usize) -> Map {
+        let shards = min_shards.next_power_of_two();
+
+        let hash_builder = RandomState::new();
+        let shards = (0..shards).map(|_| {
+            let map = HashMap::with_hasher(hash_builder.clone());
+            RwLock::new(map)
+        }).collect();
+
+        Map { hash_builder, shards }
+    }
+
+    fn get_shard(&self, key: &dyn Key) -> &Shard {
+        use std::hash::*;
+
+        let mut hasher = self.hash_builder.build_hasher();
+        key.hash(&mut hasher);
+        let id = (hasher.finish() as usize) & (self.shards.len() - 1);
+        &self.shards[id]
+    }
+
+    fn get_shard_mut(&mut self, key: &dyn Key) -> &mut Shard {
+        use std::hash::*;
+
+        let mut hasher = self.hash_builder.build_hasher();
+        key.hash(&mut hasher);
+        let id = (hasher.finish() as usize) & (self.shards.len() - 1);
+        &mut self.shards[id]
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    pub fn with_cache_entry(&self, key: &dyn Key, f: impl FnOnce(&CacheEntry)) {
+        let shard = self.get_shard(key).read();
+        shard.get(key).map(f);
+    }
+
+    pub fn get<T: Compound>(&self, id: &str) -> Option<Handle<T>> {
+        let key: &dyn Key = &Key::new::<T>(id);
+        let shard = self.get_shard(key).read();
+        shard.get(key).map(|entry| unsafe { entry.handle() })
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    fn get_key_value<T: Compound>(&self, id: &str) -> Option<(OwnedKey, Handle<T>)> {
+        let key: &dyn Key = &Key::new::<T>(id);
+        let shard = self.get_shard(key).read();
+        shard.get_key_value(key).map(|(key, entry)| (key.into(), unsafe { entry.handle() }))
+    }
+
+    fn insert<T: Compound>(&self, id: Arc<str>, asset: T) -> Handle<T> {
+        let id_clone = Arc::clone(&id);
+        let key = OwnedKey::new::<T>(id);
+
+        let shard = &mut *self.get_shard(&key).write();
+        let entry = shard.entry(key).or_insert_with(|| CacheEntry::new(asset, id_clone));
+        unsafe { entry.handle() }
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    pub fn update_or_insert<T>(
+        &self, key: OwnedKey, val: T,
+        on_occupied: impl FnOnce(T, &CacheEntry),
+        on_vacant: impl FnOnce(T, Arc<str>) -> CacheEntry,
+    ) {
+        use std::collections::hash_map::Entry;
+        let shard = &mut *self.get_shard(&key).write();
+
+        match shard.entry(key) {
+            Entry::Occupied(entry) => on_occupied(val, entry.get()),
+            Entry::Vacant(entry) => {
+                let id = entry.key().clone().into_id();
+                entry.insert(on_vacant(val, id));
+            }
+        }
+    }
+
+    fn contains_key(&self, key: &dyn Key) -> bool {
+        let shard = self.get_shard(key).read();
+        shard.contains_key(key)
+    }
+
+    fn take(&mut self, key: &dyn Key) -> Option<CacheEntry> {
+        self.get_shard_mut(key).get_mut().remove(key)
+    }
+
+    fn remove(&mut self, key: &dyn Key) -> bool {
+        self.get_shard_mut(key).get_mut().remove(key).is_some()
+    }
+
+    fn clear(&mut self) {
+        for shard in &mut *self.shards {
+            shard.get_mut().clear();
+        }
+    }
+}
+
+impl fmt::Debug for Map {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut map = f.debug_map();
+
+        for shard in &*self.shards {
+            map.entries(&**shard.read());
+        }
+
+        map.finish()
+    }
+}
 
 
 #[cfg(feature = "hot-reloading")]
@@ -100,7 +217,7 @@ thread_local! {
 pub struct AssetCache<S=FileSystem> {
     source: S,
 
-    pub(crate) assets: RwLock<HashMap<OwnedKey, CacheEntry>>,
+    pub(crate) assets: Map,
     pub(crate) dirs: RwLock<HashMap<OwnedKey, CachedDir>>,
 }
 
@@ -125,7 +242,7 @@ where
     /// Creates a cache that loads assets from the given source.
     pub fn with_source(source: S) -> AssetCache<S> {
         AssetCache {
-            assets: RwLock::new(HashMap::new()),
+            assets: Map::new(32),
             dirs: RwLock::new(HashMap::new()),
 
             source,
@@ -211,13 +328,9 @@ where
     #[cold]
     fn add_asset<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
         let asset = A::_load::<S, Private>(self, id)?;
-
-        let key = OwnedKey::new::<A>(id.into());
-        let mut assets = self.assets.write();
-
-        let entry = assets.entry(key).or_insert_with(|| CacheEntry::new(asset, id.into()));
-
-        unsafe { Ok(entry.handle()) }
+        let id = Arc::from(id);
+        let handle = self.assets.insert(id, asset);
+        Ok(handle)
     }
 
     /// Adds a directory to the cache.
@@ -259,18 +372,15 @@ where
     /// This function does not attempt to load the asset from the source if it
     /// is not found in the cache.
     pub fn load_cached<A: Compound>(&self, id: &str) -> Option<Handle<A>> {
-        let key: &dyn Key = &Key::new::<A>(id);
-        let cache = self.assets.read();
-
         #[cfg(not(feature = "hot-reloading"))]
-        let asset = cache.get(key)?;
+        { self.assets.get(id) }
 
         #[cfg(feature = "hot-reloading")]
-        let asset = if A::HOT_RELOADED {
-            match cache.get_key_value(key) {
+        if A::HOT_RELOADED {
+            match self.assets.get_key_value(id) {
                 Some((key, asset)) => {
                     self.add_record(key);
-                    asset
+                    Some(asset)
                 },
                 None => {
                     let key = Key::new::<A>(id);
@@ -279,18 +389,15 @@ where
                 },
             }
         } else {
-            cache.get(key)?
-        };
-
-        Some(unsafe { asset.handle() })
+            self.assets.get(id)
+        }
     }
 
     /// Returns `true` if the cache contains the specified asset.
     #[inline]
     pub fn contains<A: Compound>(&self, id: &str) -> bool {
         let key: &dyn Key = &Key::new::<A>(id);
-        let cache = self.assets.read();
-        cache.contains_key(key)
+        self.assets.contains_key(key)
     }
 
     /// Loads an asset and panic if an error happens.
@@ -374,8 +481,7 @@ where
     #[inline]
     pub fn remove<A: Compound>(&mut self, id: &str) -> bool {
         let key: &dyn Key = &Key::new::<A>(id);
-        let cache = self.assets.get_mut();
-        cache.remove(key).is_some()
+        self.assets.remove(key)
     }
 
     /// Takes ownership on a cached asset.
@@ -384,8 +490,7 @@ where
     #[inline]
     pub fn take<A: Compound>(&mut self, id: &str) -> Option<A> {
         let key: &dyn Key = &Key::new::<A>(id);
-        let cache = self.assets.get_mut();
-        cache.remove(key).map(|entry| unsafe { entry.into_inner() })
+        self.assets.take(key).map(|e| unsafe { e.into_inner() })
     }
 
     /// Clears the cache.
@@ -393,7 +498,7 @@ where
     /// Removes all cached assets and directories.
     #[inline]
     pub fn clear(&mut self) {
-        self.assets.get_mut().clear();
+        self.assets.clear();
         self.dirs.get_mut().clear();
 
         #[cfg(feature = "hot-reloading")]
@@ -453,7 +558,7 @@ impl AssetCache<FileSystem> {
 impl<S> fmt::Debug for AssetCache<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AssetCache")
-            .field("assets", &self.assets.read())
+            .field("assets", &self.assets)
             .field("dirs", &self.dirs.read())
             .finish()
     }

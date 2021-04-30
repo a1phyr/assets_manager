@@ -71,8 +71,7 @@ fn load<A: Asset>(content: Cow<[u8]>, ext: &str, id: &str, path: &Path) -> Optio
 pub(crate) type ReloadFn = fn(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>>;
 
 fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>> {
-    let key: &dyn Key = &Key::new::<T>(id);
-    let handle = unsafe { cache.assets.read().get(key)?.handle::<T>() };
+    let handle = cache.assets.get(id)?;
     let entry = handle.either(
         |_| {
             log::error!("Static asset registered for hot-reloading: {}", std::any::type_name::<T>());
@@ -236,12 +235,10 @@ impl CacheKind {
     unsafe fn update(&mut self, key: BorrowedKey, asset: Box<dyn AnyAsset>) {
         match self {
             CacheKind::Static(cache, to_reload) => {
-                let dyn_key: &dyn Key = &key;
-                let assets = cache.assets.read();
-                if let Some(entry) = assets.get(dyn_key) {
+                cache.assets.with_cache_entry(&key, |entry| {
                     asset.reload(entry);
                     log::info!("Reloading \"{}\"", key.id());
-                }
+                });
                 to_reload.push(key.to_owned());
             },
             CacheKind::Local(cache) => {
@@ -432,22 +429,14 @@ impl LocalCache {
         let to_update = super::dependencies::AssetDepGraph::new(&deps, self.changed.iter().map(|(k,_)| k));
 
         // Update assets
-        let mut assets = cache.assets.write();
-
         for (key, value) in self.changed.drain() {
             log::info!("Reloading \"{}\"", key.id());
 
-            use std::collections::hash_map::Entry::*;
-            match assets.entry(key) {
-                Occupied(entry) => unsafe { value.reload(entry.get()) },
-                Vacant(entry) => {
-                    let id = entry.key().id().into();
-                    entry.insert(value.create(id));
-                },
-            }
-
+            cache.assets.update_or_insert(key, value,
+                |value, entry| unsafe { value.reload(entry) },
+                |value, id| value.create(id),
+            );
         }
-        drop(assets);
 
         // Update directories
         let dirs = cache.dirs.read();
