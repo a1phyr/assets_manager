@@ -158,7 +158,14 @@ where
     fn default_value(id: &str, error: Error) -> Result<Box<A>, Error> {
         A::default_value(id, error).map(Box::new)
     }
+
+    const HOT_RELOADED: bool = A::HOT_RELOADED;
 }
+
+impl<A> NotHotReloaded for Box<A>
+where
+    A: Asset + NotHotReloaded,
+{}
 
 /// An asset type that can load other kinds of assets.
 ///
@@ -263,8 +270,14 @@ where
     fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
         cache.load_owned::<A>(id).map(Arc::new)
     }
+
+    const HOT_RELOADED: bool = A::HOT_RELOADED;
 }
 
+impl<A> NotHotReloaded for Arc<A>
+where
+    A: Compound + NotHotReloaded,
+{}
 
 /// Mark an asset as not being hot-reloaded.
 ///
