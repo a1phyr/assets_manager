@@ -89,3 +89,10 @@ mod embedded {
 
     test_source!(Embedded::from(RAW));
 }
+
+#[cfg(feature = "embedded")]
+mod zip {
+    use super::*;
+
+    test_source!(Zip::open("assets/test/test.zip").unwrap());
+}

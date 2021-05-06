@@ -16,9 +16,19 @@ use std::{
     },
     hash, fmt,
     ops::{Deref, DerefMut},
+    path::Path,
     sync::Arc,
 };
 
+
+#[inline]
+#[cfg(feature = "zip")]
+pub fn extension_of(path: &Path) -> Option<&str> {
+    match path.extension() {
+        Some(ext) => ext.to_str(),
+        None => Some(""),
+    }
+}
 
 /// Trick to be able to use a `BorrowedKey` to index a HashMap<OwnedKey, _>`.
 ///
@@ -248,10 +258,10 @@ impl<T: ?Sized> RwLock<T> {
 }
 
 
-#[cfg(feature = "hot-reloading")]
+#[allow(unused)]
 pub(crate) struct Mutex<T: ?Sized>(sync::Mutex<T>);
 
-#[cfg(feature = "hot-reloading")]
+#[allow(unused)]
 impl<T> Mutex<T> {
     #[inline]
     pub fn new(inner: T) -> Self {
@@ -259,7 +269,7 @@ impl<T> Mutex<T> {
     }
 }
 
-#[cfg(feature = "hot-reloading")]
+#[allow(unused)]
 impl<T: ?Sized> Mutex<T> {
     #[inline]
     pub fn lock(&self) -> sync::MutexGuard<T> {
@@ -294,6 +304,12 @@ impl<K, V> HashMap<K, V> {
     #[inline]
     pub fn with_hasher(hasher: RandomState) -> Self {
         Self(StdHashMap::with_hasher(hasher))
+    }
+
+    #[cfg(feature = "zip")]
+    #[inline]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(StdHashMap::with_capacity_and_hasher(capacity, RandomState::new()))
     }
 }
 

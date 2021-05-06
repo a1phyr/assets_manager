@@ -4,8 +4,8 @@
 //! files containing the assets are loaded. The main usage usage of this trait
 //! is with an [`AssetCache`].
 //!
-//! This module also contains two built-in sources: [`FileSystem`] and
-//! [`Embedded`].
+//! This module also contains three built-in sources: [`FileSystem`], [`Zip`]
+//! and [`Embedded`].
 //!
 //! # Hot-reloading
 //!
@@ -47,6 +47,12 @@ pub use filesystem::FileSystem;
 mod embedded;
 #[cfg(feature = "embedded")]
 pub use embedded::{Embedded, RawEmbedded};
+
+
+#[cfg(feature = "zip")]
+mod _zip;
+#[cfg(feature = "zip")]
+pub use _zip::Zip;
 
 /// Embed a directory in the binary
 ///

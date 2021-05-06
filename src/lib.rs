@@ -8,7 +8,18 @@
 //! ## Cargo features
 //!
 //! - `hot-reloading`: Add hot-reloading
-//! - `embedded`: Add embedded source
+//!
+//!
+//! ### Additional sources
+//!
+//! These features enable to read assets from other sources than the file
+//! system. They are defined in the [`source`] module.
+//!
+//! - `embedded`: Embed assets files directly in your binary.
+//! - `zip`: Read asset from zip archives. Note that no decompression method is
+//!   enabled by default, but you can do so with the following features:
+//!   - `zip-bzip2`: Enable `bzip2` decompression.
+//!   - `zip-deflate`: Enable `flate2` decompression.
 //!
 //! ### Additional formats
 //!
