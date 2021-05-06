@@ -22,7 +22,6 @@ use std::{
 
 
 #[inline]
-#[cfg(feature = "zip")]
 pub fn extension_of(path: &Path) -> Option<&str> {
     match path.extension() {
         Some(ext) => ext.to_str(),

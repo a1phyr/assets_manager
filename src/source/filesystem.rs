@@ -7,8 +7,10 @@ use crate::{
         HotReloader,
         UpdateMessage,
     },
-    utils::PrivateMarker,
+    utils::{PrivateMarker},
 };
+
+use crate::utils::extension_of;
 
 #[cfg(doc)]
 use crate::AssetCache;
@@ -23,14 +25,6 @@ use std::{
 
 use super::{DirEntry, Source};
 
-
-#[inline]
-pub fn extension_of(path: &Path) -> Option<&str> {
-    match path.extension() {
-        Some(ext) => ext.to_str(),
-        None => Some(""),
-    }
-}
 
 /// A [`Source`] to load assets from a directory in the file system.
 ///

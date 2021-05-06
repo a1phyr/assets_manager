@@ -12,7 +12,7 @@ use crate::{
     Compound,
     loader::Loader,
     entry::CacheEntry,
-    utils::{BorrowedKey, HashMap, HashSet, Key, OwnedKey},
+    utils::{extension_of, BorrowedKey, HashMap, HashSet, Key, OwnedKey},
 };
 
 use super::dependencies::Dependencies;
@@ -26,14 +26,6 @@ fn clone_and_push(id: &str, name: &str) -> Arc<str> {
     }
     id.push_str(name);
     id.into()
-}
-
-#[inline]
-fn extension_of(path: &Path) -> Option<&str> {
-    match path.extension() {
-        Some(ext) => ext.to_str(),
-        None => Some(""),
-    }
 }
 
 
