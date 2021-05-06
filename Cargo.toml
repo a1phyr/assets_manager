@@ -36,6 +36,10 @@ mp3 = ["rodio/mp3"]
 vorbis = ["rodio/vorbis"]
 wav = ["rodio/wav"]
 
+bmp = ["image/bmp"]
+jpeg = ["image/jpeg"]
+png = ["image/png"]
+
 
 [dependencies]
 log = {version = "0.4"}
@@ -60,6 +64,7 @@ serde_toml = {version = "0.5", package = "toml", optional = true}
 serde_yaml = {version = "0.8.4", optional = true}
 
 rodio = {version = "0.13", default-features = false, optional = true}
+image = {version = "0.23", default-features = false, optional = true}
 
 
 [dev-dependencies]

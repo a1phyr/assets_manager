@@ -382,6 +382,67 @@ serde_assets! {
     );
 }
 
+macro_rules! image_assets {
+    (
+        $(
+            #[doc = $doc:literal]
+            #[cfg(feature = $feature:literal)]
+            struct $name:ident => (
+                $format:path,
+                [$($ext:literal),*],
+            );
+        )*
+    ) => {
+        $(
+            #[doc = $doc]
+            #[cfg(feature = $feature)]
+            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
+            #[derive(Clone, Debug)]
+            #[repr(transparent)]
+            pub struct $name(pub image::DynamicImage);
+
+            #[cfg(feature = $feature)]
+            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
+            impl loader::Loader<$name> for loader::ImageLoader {
+                #[inline]
+                fn load(content: Cow<[u8]>, _: &str) -> Result<$name, BoxedError> {
+                    let img = image::load_from_memory_with_format(&content, $format)?;
+                    Ok($name(img))
+                }
+            }
+
+            #[cfg(feature = $feature)]
+            impl Asset for $name {
+                const EXTENSIONS: &'static [&'static str] = &[$( $ext ),*];
+                type Loader = loader::ImageLoader;
+            }
+        )*
+    }
+}
+
+image_assets! {
+    /// An asset to load BMP images.
+    #[cfg(feature = "bmp")]
+    struct Bmp => (
+        image::ImageFormat::Bmp,
+        ["bmp"],
+    );
+
+    /// An asset to load JPEG images.
+    #[cfg(feature = "jpeg")]
+    struct Jpeg => (
+        image::ImageFormat::Jpeg,
+        ["jpg", "jpeg"],
+    );
+
+    /// An asset to load PNG images.
+    #[cfg(feature = "png")]
+    struct Png => (
+        image::ImageFormat::Png,
+        ["png"],
+    );
+}
+
 
 macro_rules! sound_assets {
     (

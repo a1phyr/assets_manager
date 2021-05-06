@@ -218,6 +218,20 @@ where
 #[derive(Debug)]
 pub struct SoundLoader(());
 
+/// Loads assets as images.
+#[derive(Debug)]
+pub struct ImageLoader(());
+
+#[cfg(feature = "image")]
+#[cfg_attr(docsrs, doc(cfg(feature = "image")))]
+impl Loader<image::DynamicImage> for ImageLoader {
+    fn load(content: Cow<[u8]>, ext: &str) -> Result<image::DynamicImage, BoxedError> {
+        let format = image::ImageFormat::from_extension(ext).ok_or("unknown image format")?;
+        let img = image::load_from_memory_with_format(&content, format)?;
+        Ok(img)
+    }
+}
+
 macro_rules! serde_loaders {
     (
         $(
