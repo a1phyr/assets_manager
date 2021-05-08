@@ -5,7 +5,7 @@ use crate::{
     dirs::{CachedDir, DirReader},
     entry::CacheEntry,
     loader::Loader,
-    utils::{HashMap, RandomState, Key, OwnedKey, Private, RwLock},
+    utils::{HashMap, RandomState, BorrowedKey, Key, OwnedKey, Private, RwLock},
     source::{FileSystem, Source},
 };
 
@@ -73,14 +73,14 @@ impl Map {
     }
 
     pub fn get<T: Compound>(&self, id: &str) -> Option<Handle<T>> {
-        let key: &dyn Key = &Key::new::<T>(id);
+        let key: &dyn Key = &BorrowedKey::new::<T>(id);
         let shard = self.get_shard(key).read();
         shard.get(key).map(|entry| unsafe { entry.handle() })
     }
 
     #[cfg(feature = "hot-reloading")]
     fn get_key_value<T: Compound>(&self, id: &str) -> Option<(OwnedKey, Handle<T>)> {
-        let key: &dyn Key = &Key::new::<T>(id);
+        let key: &dyn Key = &BorrowedKey::new::<T>(id);
         let shard = self.get_shard(key).read();
         shard.get_key_value(key).map(|(key, entry)| (key.into(), unsafe { entry.handle() }))
     }
@@ -383,9 +383,9 @@ where
                     Some(asset)
                 },
                 None => {
-                    let key = Key::new::<A>(id);
+                    let key = BorrowedKey::new::<A>(id);
                     self.add_record(key);
-                    return None;
+                    None
                 },
             }
         } else {
@@ -396,7 +396,7 @@ where
     /// Returns `true` if the cache contains the specified asset.
     #[inline]
     pub fn contains<A: Compound>(&self, id: &str) -> bool {
-        let key: &dyn Key = &Key::new::<A>(id);
+        let key: &dyn Key = &BorrowedKey::new::<A>(id);
         self.assets.contains_key(key)
     }
 
@@ -440,7 +440,7 @@ where
     /// is not found in the cache.
     #[inline]
     pub fn load_cached_dir<A: Asset>(&self, id: &str) -> Option<DirReader<A, S>> {
-        let key: &dyn Key = &Key::new::<A>(id);
+        let key: &dyn Key = &BorrowedKey::new::<A>(id);
         let dirs = self.dirs.read();
         dirs.get(key).map(|dir| unsafe { dir.read(self) })
     }
@@ -448,7 +448,7 @@ where
     /// Returns `true` if the cache contains the specified directory.
     #[inline]
     pub fn contains_dir<A: Asset>(&self, id: &str) -> bool {
-        let key: &dyn Key = &Key::new::<A>(id);
+        let key: &dyn Key = &BorrowedKey::new::<A>(id);
         let dirs = self.dirs.read();
         dirs.contains_key(key)
     }
@@ -465,7 +465,7 @@ where
     pub fn load_owned<A: Compound>(&self, id: &str) -> Result<A, Error> {
         #[cfg(feature = "hot-reloading")]
         if A::HOT_RELOADED && self.is_recording() {
-            let key = Key::new::<A>(id);
+            let key = BorrowedKey::new::<A>(id);
             self.add_record(key);
             return A::_load::<S, Private>(self, id)
         }
@@ -480,7 +480,7 @@ where
     /// any [`Handle`], [`AssetGuard`], etc when you call this function.
     #[inline]
     pub fn remove<A: Compound>(&mut self, id: &str) -> bool {
-        let key: &dyn Key = &Key::new::<A>(id);
+        let key: &dyn Key = &BorrowedKey::new::<A>(id);
         self.assets.remove(key)
     }
 
@@ -489,7 +489,7 @@ where
     /// The corresponding asset is removed from the cache.
     #[inline]
     pub fn take<A: Compound>(&mut self, id: &str) -> Option<A> {
-        let key: &dyn Key = &Key::new::<A>(id);
+        let key: &dyn Key = &BorrowedKey::new::<A>(id);
         self.assets.take(key).map(|e| unsafe { e.into_inner() })
     }
 

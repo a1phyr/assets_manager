@@ -325,7 +325,7 @@ impl HotReloadingData {
             for (type_id, load) in &path_infos.types.0 {
                 if let Some(asset) = load(Cow::Borrowed(&content), file_ext, &path_infos.id, path) {
                     unsafe {
-                        let key = Key::new_with(&path_infos.id, *type_id);
+                        let key = BorrowedKey::new_with(&path_infos.id, *type_id);
                         self.cache.update(key, asset);
                     }
                 }
@@ -345,7 +345,7 @@ impl HotReloadingData {
                     let watched = self.paths.assets.entry(path.into()).or_insert_with(|| WatchedPath::new(file_id.clone()));
                     watched.types.insert(type_id, load);
 
-                    let key = Key::new_with(&path_infos.id, type_id);
+                    let key = BorrowedKey::new_with(&path_infos.id, type_id);
                     self.cache.add(key, file_id);
                 }
             }
@@ -363,7 +363,7 @@ impl HotReloadingData {
 
         for &(type_id, (_, type_ext)) in &path_infos.types.0 {
             if type_ext.contains(&file_ext) {
-                let key = Key::new_with(&path_infos.id, type_id);
+                let key = BorrowedKey::new_with(&path_infos.id, type_id);
                 let id = clone_and_push(&path_infos.id, file_stem);
                 self.cache.remove(key, id);
             }

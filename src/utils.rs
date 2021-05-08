@@ -39,19 +39,6 @@ pub(crate) trait Key {
     fn type_id(&self) -> TypeId;
 }
 
-impl dyn Key {
-    #[inline]
-    pub fn new<T: 'static>(id: &str) -> BorrowedKey {
-        BorrowedKey::new::<T>(id)
-    }
-
-    #[inline]
-    #[cfg(feature = "hot-reloading")]
-    pub fn new_with(id: &str, type_id: TypeId) -> BorrowedKey {
-        BorrowedKey::new_with(id, type_id)
-    }
-}
-
 impl PartialEq for dyn Key + '_ {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
