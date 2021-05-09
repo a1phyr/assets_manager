@@ -11,7 +11,7 @@
 //!
 //! [assets]: `crate::Asset`
 
-use crate::{BoxedError, SharedBytes};
+use crate::{BoxedError, utils::SharedBytes};
 
 use std::{
     borrow::Cow,

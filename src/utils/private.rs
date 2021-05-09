@@ -22,7 +22,7 @@ use std::{
 
 
 #[inline]
-pub fn extension_of(path: &Path) -> Option<&str> {
+pub(crate) fn extension_of(path: &Path) -> Option<&str> {
     match path.extension() {
         Some(ext) => ext.to_str(),
         None => Some(""),

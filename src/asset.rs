@@ -5,11 +5,10 @@ use crate::{
     AssetCache,
     BoxedError,
     Error,
-    SharedBytes,
     loader,
     cache::load_from_source,
     source::Source,
-    utils::PrivateMarker,
+    utils::{PrivateMarker, SharedBytes},
 };
 
 #[cfg(feature = "rodio")]
