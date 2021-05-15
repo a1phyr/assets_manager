@@ -264,13 +264,13 @@ impl<T: ?Sized> Mutex<T> {
 }
 
 
-mod private {
+mod private_marker {
     pub trait PrivateMarker {}
     pub(crate) enum Private {}
     impl PrivateMarker for Private {}
 }
 
-pub(crate) use private::{Private, PrivateMarker};
+pub(crate) use private_marker::{Private, PrivateMarker};
 
 
 #[cfg(feature = "ahash")]

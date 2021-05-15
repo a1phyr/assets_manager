@@ -168,28 +168,28 @@ impl std::hash::Hash for SharedBytes {
 impl PartialEq<[u8]> for SharedBytes {
     #[inline]
     fn eq(&self, other: &[u8]) -> bool {
-        &*self == other
+        **self == *other
     }
 }
 
 impl PartialEq<&[u8]> for SharedBytes {
     #[inline]
     fn eq(&self, other: &&[u8]) -> bool {
-        &*self == other
+        **self == **other
     }
 }
 
 impl PartialEq<Vec<u8>> for SharedBytes {
     #[inline]
     fn eq(&self, other: &Vec<u8>) -> bool {
-        &*self == other
+        **self == *other
     }
 }
 
 impl PartialEq for SharedBytes {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        &*self == &*other
+        **self == **other
     }
 }
 

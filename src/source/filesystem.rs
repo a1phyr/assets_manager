@@ -126,30 +126,29 @@ impl Source for FileSystem {
 
         let mut entry_id = id.to_owned();
 
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
+        // Ignore entries that return an error
+        for entry in entries.flatten() {
+            let path = entry.path();
 
-                let name = match path.file_stem().and_then(|n| n.to_str()) {
-                    Some(name) => name,
-                    None => continue,
-                };
+            let name = match path.file_stem().and_then(|n| n.to_str()) {
+                Some(name) => name,
+                None => continue,
+            };
 
-                let this_id: &str = if !id.is_empty() {
-                    entry_id.truncate(id.len());
-                    entry_id.extend([".", name].iter().copied());
-                    &entry_id
-                } else {
-                    name
-                };
+            let this_id: &str = if !id.is_empty() {
+                entry_id.truncate(id.len());
+                entry_id.extend([".", name].iter().copied());
+                &entry_id
+            } else {
+                name
+            };
 
-                if path.is_file() {
-                    if let Some(ext) = extension_of(&path) {
-                        f(DirEntry::File(this_id, ext));
-                    }
-                } else if path.is_dir() {
-                    f(DirEntry::Directory(this_id));
+            if path.is_file() {
+                if let Some(ext) = extension_of(&path) {
+                    f(DirEntry::File(this_id, ext));
                 }
+            } else if path.is_dir() {
+                f(DirEntry::Directory(this_id));
             }
         }
 

@@ -141,28 +141,28 @@ impl std::hash::Hash for SharedString {
 impl PartialEq<str> for SharedString {
     #[inline]
     fn eq(&self, other: &str) -> bool {
-        &*self == other
+        **self == *other
     }
 }
 
 impl PartialEq<&str> for SharedString {
     #[inline]
     fn eq(&self, other: &&str) -> bool {
-        &*self == other
+        **self == **other
     }
 }
 
 impl PartialEq<String> for SharedString {
     #[inline]
     fn eq(&self, other: &String) -> bool {
-        &*self == other
+        **self == *other
     }
 }
 
 impl PartialEq for SharedString {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        &*self == &*other
+        **self == **other
     }
 }
 

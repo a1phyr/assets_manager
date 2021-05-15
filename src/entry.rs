@@ -288,7 +288,7 @@ where
     /// Checks if the two handles refer to the same asset.
     #[inline]
     pub fn ptr_eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.data, other.data)
+        std::ptr::eq(self.data as *const _ as *const (), other.data as *const _ as *const ())
     }
 }
 

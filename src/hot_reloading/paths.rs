@@ -62,6 +62,7 @@ fn load<A: Asset>(content: Cow<[u8]>, ext: &str, id: &str, path: &Path) -> Optio
 
 pub(crate) type ReloadFn = fn(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>>;
 
+#[allow(clippy::redundant_closure)]
 fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>> {
     let handle = cache.assets.get(id)?;
     let entry = handle.either(
