@@ -2,6 +2,7 @@ use super::SharedBytes;
 
 use std::{
     borrow::Cow,
+    cmp,
     fmt,
     ops::Deref,
     str,
@@ -167,6 +168,24 @@ impl PartialEq for SharedString {
 }
 
 impl Eq for SharedString {}
+
+impl PartialOrd<str> for SharedString {
+    fn partial_cmp(&self, other: &str) -> Option<cmp::Ordering> {
+        (**self).partial_cmp(&other)
+    }
+}
+
+impl PartialOrd for SharedString {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        (**self).partial_cmp(&other)
+    }
+}
+
+impl Ord for SharedString {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        (**self).cmp(&other)
+    }
+}
 
 impl fmt::Debug for SharedString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

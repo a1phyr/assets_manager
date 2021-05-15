@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    cmp,
     fmt,
     ops::Deref,
     sync::Arc,
@@ -194,6 +195,24 @@ impl PartialEq for SharedBytes {
 }
 
 impl Eq for SharedBytes {}
+
+impl PartialOrd<[u8]> for SharedBytes {
+    fn partial_cmp(&self, other: &[u8]) -> Option<cmp::Ordering> {
+        (**self).partial_cmp(&other)
+    }
+}
+
+impl PartialOrd for SharedBytes {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        (**self).partial_cmp(&other)
+    }
+}
+
+impl Ord for SharedBytes {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        (**self).cmp(&other)
+    }
+}
 
 impl fmt::Debug for SharedBytes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
