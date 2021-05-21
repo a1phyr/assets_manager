@@ -149,10 +149,6 @@ pub trait Source {
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn _add_dir<A: crate::Asset, P: PrivateMarker>(&self, _: &str) where Self: Sized {}
-
-    #[cfg(feature = "hot-reloading")]
-    #[doc(hidden)]
     fn _clear<P: PrivateMarker>(&mut self) where Self: Sized {}
 
     #[cfg(feature = "hot-reloading")]

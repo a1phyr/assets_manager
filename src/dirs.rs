@@ -1,351 +1,333 @@
 use crate::{
     Asset,
     AssetCache,
+    Compound,
     Error,
     Handle,
     source::{DirEntry, Source},
-    utils::{RwLock, RwLockReadGuard},
+    utils::SharedString,
 };
 
 use std::{
-    iter::FusedIterator,
     io,
     fmt,
     marker::PhantomData,
-    sync::Arc
 };
 
-struct StringList {
-    list: RwLock<Vec<Arc<str>>>,
+/// Helper type to implement [`DirLoadable`].
+///
+/// This type provides a way to execute a function for each file in a directory.
+pub struct Directory<'a> {
+    source: &'a dyn Source,
+    id: &'a str,
 }
 
-impl From<Vec<Arc<str>>> for StringList {
+impl<'a> Directory<'a> {
+    /// Returns the id of the directory.
     #[inline]
-    fn from(vec: Vec<Arc<str>>) -> Self {
-        Self {
-            list: RwLock::new(vec),
-        }
+    pub fn id(&self) -> &'a str {
+        self.id
+    }
+
+    /// Iterates over all files in the directory.
+    ///
+    /// The given closure is executed for each file in the directory, one none
+    /// if the function returns `Err`.
+    #[inline]
+    pub fn for_each_file(&self, mut f: impl FnMut(&str, &str)) -> io::Result<()> {
+        self.source.read_dir(self.id, &mut |entry| match entry {
+            DirEntry::File(id, ext) => f(id, ext),
+            DirEntry::Directory(_) => (),
+        })
     }
 }
 
-impl<'a> IntoIterator for &'a StringList {
-    type Item = &'a str;
-    type IntoIter = StringIter<'a>;
-
-    #[inline]
-    fn into_iter(self) -> StringIter<'a> {
-        let guard = self.list.read();
-        let current = guard.as_ptr();
-        let end = unsafe { current.add(guard.len()) };
-
-        StringIter {
-            current,
-            end,
-
-            _guard: guard,
-        }
+impl fmt::Debug for Directory<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Directory")
+            .field("id", &self.id)
+            .finish()
     }
 }
 
-struct StringIter<'a> {
-    current: *const Arc<str>,
-    end: *const Arc<str>,
-
-    _guard: RwLockReadGuard<'a, Vec<Arc<str>>>,
+/// Assets that are loadable from directories
+///
+/// Types that implement this trait can be used with [`AssetCache::load_dir`] to
+/// load all available assets in a directory (eventually recursively).
+///
+/// This trait is automatically implemented for all types that implement
+/// [`Asset`], and you can implement it to extend your own `Compound`s.
+///
+/// # Exemple implementation
+///
+/// Imagine you have several playlists with a JSON manifest to specify the ids
+/// of the musics to include.
+///
+/// ```no_run
+/// # cfg_if::cfg_if! { if #[cfg(all(feature = "json", feature = "flac"))] {
+/// use assets_manager::{
+///     Compound, Error, AssetCache,
+///     asset::{DirLoadable, Json, Flac},
+///     source::Source,
+///     utils::{Directory, SharedString},
+/// };
+///
+/// /// A simple playlist, a mere ordered list of musics
+/// struct Playlist {
+///     sounds: Vec<Flac>
+/// }
+///
+/// // Specify how to load a playlist
+/// impl Compound for Playlist {
+///     fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
+///         // Read the manifest (a list of ids)
+///         let manifest = cache.load::<Json<Vec<String>>>(id)?.read();
+///
+///         // Load each sound
+///         let sounds = manifest.0.iter()
+///             .map(|id| Ok(cache.load::<Flac>(id)?.cloned()))
+///             .collect::<Result<_, Error>>()?;
+///
+///         Ok(Playlist { sounds })
+///     }
+/// }
+///
+/// // Specify how to get ids of playlists in a directory
+/// impl DirLoadable for Playlist {
+///     fn select_ids(dir: Directory) -> std::io::Result<Vec<SharedString>> {
+///         let mut ids = Vec::new();
+///
+///         // Select all files with the "json" extensions (manifest files)
+///         dir.for_each_file(|id, ext| {
+///             if ext == "json" {
+///                 ids.push(id.into());
+///             }
+///         })?;
+///
+///         Ok(ids)
+///     }
+/// }
+/// # }}
+/// ```
+pub trait DirLoadable: Compound {
+    /// Returns the ids of the assets contained in the directory.
+    ///
+    /// The list of files and the id of the directory can be retreived through
+    /// the `files` parameter.
+    ///
+    /// Note that the order of the returned ids is not kept, and that redundant
+    /// ids are removed.
+    fn select_ids(dir: Directory) -> io::Result<Vec<SharedString>>;
 }
 
-impl<'a> Iterator for StringIter<'a> {
-    type Item = &'a str;
-
+impl<A> DirLoadable for A
+where
+    A: Asset,
+{
     #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.current == self.end {
-            None
-        } else {
-            unsafe {
-                let string = &*self.current;
-                self.current = self.current.offset(1);
-                Some(string)
-            }
-        }
-    }
+    fn select_ids(dir: Directory) -> io::Result<Vec<SharedString>> {
+        fn inner(dir: Directory, extensions: &[&str]) -> io::Result<Vec<SharedString>> {
+            let mut ids = Vec::new();
 
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = self.len();
-        (len, Some(len))
-    }
-}
-
-impl ExactSizeIterator for StringIter<'_> {
-    #[inline]
-    fn len(&self) -> usize {
-        let diff = (self.end as usize) - (self.current as usize);
-        diff / std::mem::size_of::<Arc<str>>()
-    }
-}
-
-impl FusedIterator for StringIter<'_> {}
-
-pub(crate) struct CachedDir {
-    assets: Box<StringList>,
-}
-
-impl CachedDir {
-    pub fn load<A: Asset, S: Source>(cache: &AssetCache<S>, dir_id: &str) -> io::Result<Self> {
-        let mut ids = Vec::new();
-
-        cache.source().read_dir(dir_id, &mut |entry| {
-            if let DirEntry::File(id, ext) = entry {
-                if A::EXTENSIONS.contains(&ext) {
-                    let _ = cache.load::<A>(&id);
+            dir.for_each_file(|id, ext| {
+                if extensions.contains(&ext) {
                     ids.push(id.into());
+                }
+            })?;
+
+            Ok(ids)
+        }
+
+        inner(dir, A::EXTENSIONS)
+    }
+}
+
+pub(crate) struct CachedDir<A> {
+    ids: Vec<SharedString>,
+    _marker: PhantomData<A>,
+}
+
+impl<A> Compound for CachedDir<A>
+where
+    A: DirLoadable,
+{
+    fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
+        let files = Directory { id, source: cache.source() };
+        let mut ids = A::select_ids(files)?;
+
+        // Remove deduplicated entries
+        ids.sort_unstable();
+        ids.dedup();
+
+        // Pre-load inner assets
+        cache.no_record(|| {
+            for id in &ids {
+                let _ = cache.load::<A>(id);
+            }
+        });
+
+        Ok(CachedDir {
+            ids,
+            _marker: PhantomData,
+        })
+    }
+
+    const HOT_RELOADED: bool = false;
+}
+
+impl<A: DirLoadable> crate::asset::NotHotReloaded for CachedDir<A> {}
+
+impl<A> fmt::Debug for CachedDir<A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.ids.fmt(f)
+    }
+}
+
+pub(crate) struct CachedRecDir<A> {
+    ids: Vec<SharedString>,
+    _marker: PhantomData<A>,
+}
+
+impl<A> Compound for CachedRecDir<A>
+where
+    A: DirLoadable,
+{
+    fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
+        // Load the current directory
+        let this = cache.load::<CachedDir<A>>(id)?;
+        let mut ids = this.get().ids.clone();
+
+        // Recursively load child directories
+        cache.source().read_dir(id, &mut |entry| {
+            if let DirEntry::Directory(id) = entry {
+                if let Ok(child) = cache.load::<CachedRecDir<A>>(id) {
+                    ids.extend_from_slice(&child.get().ids);
                 }
             }
         })?;
 
-        Ok(Self {
-            assets: Box::new(ids.into()),
+        Ok(CachedRecDir {
+            ids,
+            _marker: PhantomData,
         })
     }
 
-    #[cfg(feature = "hot-reloading")]
-    #[inline]
-    pub fn contains(&self, id: &str) -> bool {
-        self.assets.into_iter().any(|s| s == id)
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    #[inline]
-    pub fn add(&self, id: &Arc<str>) -> bool {
-        let insert = !self.contains(&id);
-
-        if insert {
-            let mut list = self.assets.list.write();
-            list.push(id.clone());
-        }
-
-        insert
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    #[inline]
-    pub fn remove(&self, id: &str) -> bool {
-        let mut list = self.assets.list.write();
-
-        if let Some(pos) = list.iter().position(|s| s.as_ref() == id) {
-            list.remove(pos);
-            true
-        } else {
-            false
-        }
-    }
-
-    #[inline]
-    pub unsafe fn read<'a, A, S>(&self, cache: &'a AssetCache<S>) -> DirReader<'a, A, S> {
-        DirReader {
-            cache,
-            assets: &*(&*self.assets as *const StringList),
-            _marker: PhantomData,
-        }
-    }
+    const HOT_RELOADED: bool = false;
 }
 
-impl fmt::Debug for CachedDir {
+impl<A: DirLoadable> crate::asset::NotHotReloaded for CachedRecDir<A> {}
+
+impl<A> fmt::Debug for CachedRecDir<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list().entries(&*self.assets.list.read()).finish()
+        self.ids.fmt(f)
     }
 }
 
-/// A reference to all assets in a directory.
-///
-/// This type provides methods to iterates over theses assets.
-///
-/// When [hot-reloading] is used, added/removed files will be added/removed from
-/// this structure.
-///
-/// This structure can be obtained by calling [`AssetCache::load_dir`].
-///
-/// [hot-reloading]: `AssetCache::hot_reload`
-pub struct DirReader<'a, A, S> {
-    cache: &'a AssetCache<S>,
-    assets: &'a StringList,
-    _marker: PhantomData<&'a A>,
+enum DirHandleInner<'a, A> {
+    Simple(Handle<'a, CachedDir<A>>),
+    Recursive(Handle<'a, CachedRecDir<A>>),
 }
 
-impl<A, S> Clone for DirReader<'_, A, S> {
-    #[inline]
+impl<A> Clone for DirHandleInner<'_, A> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<A, S> Copy for DirReader<'_, A, S> {}
+impl<A> Copy for DirHandleInner<'_, A> {}
 
-impl<'a, A: Asset, S> DirReader<'a, A, S> {
-    /// An iterator over successfully loaded assets in a directory.
-    ///
-    /// This iterator yields each asset that was successfully loaded. It is
-    /// garantied to perform no I/O. This is the method you want to use most of
-    /// the time.
-    ///
-    /// Note that if an asset is [removed from the cache], it won't be returned
-    /// by this iterator until it is cached again.
-    ///
-    /// [removed from the cache]: `AssetCache::remove`
-    #[inline]
-    pub fn iter(&self) -> ReadDir<'a, A, S> {
-        ReadDir {
-            cache: self.cache,
-            iter: self.assets.into_iter(),
-            _marker: PhantomData,
-        }
-    }
-
-    /// An iterator over all assets in a directory.
-    ///
-    /// This iterator yields the id asset of each asset in a directory, with the
-    /// result of its last loading from the cache. It will happily try to reload
-    /// any asset that is not in the cache (e.g. that previously failed to load
-    /// or was removed).
-    #[inline]
-    pub fn iter_all(&self) -> ReadAllDir<'a, A, S> {
-        ReadAllDir {
-            cache: self.cache,
-            iter: self.assets.into_iter(),
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<'a, A, S> IntoIterator for &DirReader<'a, A, S>
+impl<'a, A> DirHandleInner<'a, A>
 where
-    A: Asset,
-    S: Source,
+    A: DirLoadable,
 {
-    type Item = Handle<'a, A>;
-    type IntoIter = ReadDir<'a, A, S>;
-
-    /// Equivalent to [`iter`](#method.iter).
     #[inline]
-    fn into_iter(self) -> ReadDir<'a, A, S> {
-        self.iter()
+    fn id(self) -> &'a str {
+        match self {
+            Self::Simple(handle) => &handle.id(),
+            Self::Recursive(handle) => &handle.id(),
+        }
+    }
+
+    #[inline]
+    fn ids(self) -> &'a [SharedString] {
+        match self {
+            Self::Simple(handle) => &handle.get().ids,
+            Self::Recursive(handle) => &handle.get().ids,
+        }
     }
 }
 
-/// An iterator over successfully loaded assets in a directory.
+/// A handle on a asset directory.
 ///
-/// This iterator yields each asset that was successfully loaded.
-///
-/// It can be obtained by calling [`DirReader::iter`].
-pub struct ReadDir<'a, A, S> {
+/// This type provides methods to access assets within th directory.
+pub struct DirHandle<'a, A, S> {
+    inner: DirHandleInner<'a, A>,
     cache: &'a AssetCache<S>,
-    iter: StringIter<'a>,
-    _marker: PhantomData<&'a A>,
 }
 
-impl<'a, A, S> Iterator for ReadDir<'a, A, S>
+impl<'a, A, S> DirHandle<'a, A, S>
 where
-    A: Asset,
-    S: Source,
-{
-    type Item = Handle<'a, A>;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let id = self.iter.next()?;
-
-            if let asset @ Some(_) = self.cache.load_cached(id) {
-                break asset;
-            }
-        }
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (0, self.iter.size_hint().1)
-    }
-}
-
-impl<A, S> FusedIterator for ReadDir<'_, A, S>
-where
-    A: Asset,
-    S: Source,
-{}
-
-/// An iterator over all assets in a directory.
-///
-/// This iterator yields the id asset of each asset in a directory, with the
-/// result of its loading from the cache.
-///
-/// It can be obtained by calling [`DirReader::iter_all`].
-pub struct ReadAllDir<'a, A, S> {
-    cache: &'a AssetCache<S>,
-    iter: StringIter<'a>,
-    _marker: PhantomData<&'a A>,
-}
-
-impl<'a, A, S> Iterator for ReadAllDir<'a, A, S>
-where
-    A: Asset,
-    S: Source,
-{
-    type Item = (&'a str, Result<Handle<'a, A>, Error>);
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        let id = self.iter.next()?;
-        Some((id, self.cache.load(id)))
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
-    }
-}
-
-impl<A, S> ExactSizeIterator for ReadAllDir<'_, A, S>
-where
-    A: Asset,
+    A: DirLoadable,
     S: Source,
 {
     #[inline]
-    fn len(&self) -> usize {
-        self.iter.len()
+    pub(crate) fn new(handle: Handle<'a, CachedDir<A>>, cache: &'a AssetCache<S>) -> Self {
+        let inner = DirHandleInner::Simple(handle);
+        DirHandle { inner, cache }
+    }
+
+    #[inline]
+    pub(crate) fn new_rec(handle: Handle<'a, CachedRecDir<A>>, cache: &'a AssetCache<S>) -> Self {
+        let inner = DirHandleInner::Recursive(handle);
+        DirHandle { inner, cache }
+    }
+
+    /// The id of the directory handle.
+    #[inline]
+    pub fn id(self) -> &'a str {
+        self.inner.id()
+    }
+
+    /// Returns an iterator over the ids of the assets in the directory.
+    #[inline]
+    pub fn ids(self) -> impl ExactSizeIterator<Item=&'a str> {
+        self.inner.ids().iter().map(|id| &**id)
+    }
+
+    /// Returns an iterator over the assets in the directory.
+    ///
+    /// This fonction does not do any I/O and assets that previously failed to
+    /// load are ignored.
+    #[inline]
+    pub fn iter(self) -> impl Iterator<Item=Handle<'a, A>> {
+        self.inner.ids().iter().filter_map(move |id| self.cache.load_cached(&**id))
+    }
+
+    /// Returns an iterator over the assets in the directory.
+    ///
+    /// Unlike `Self::iter`, this function will happily try to load all assets, even
+    /// if an error occured the last time it was tried.
+    ///
+    /// The iterator is a list of tuples (id, result of the `load` operation).
+    #[inline]
+    pub fn iter_all(self) -> impl ExactSizeIterator<Item=(&'a str, Result<Handle<'a, A>, Error>)> {
+        self.inner.ids().iter().map(move |id| (&**id, self.cache.load(&**id)))
     }
 }
 
-impl<A, S> FusedIterator for ReadAllDir<'_, A, S>
-where
-    A: Asset,
-    S: Source,
-{}
+impl<A, S> Clone for DirHandle<'_, A, S> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
 
-impl<A, S> fmt::Debug for DirReader<'_, A, S>
+impl<A, S> Copy for DirHandle<'_, A, S> {}
+
+impl<A, S> fmt::Debug for DirHandle<'_, A, S>
 where
-    A: fmt::Debug + Asset,
-    S: Source,
+    A: DirLoadable,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list().entries(self.iter()).finish()
-    }
-}
-
-impl<A, S> fmt::Debug for ReadDir<'_, A, S>
-where
-    A: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ReadDir").finish()
-    }
-}
-
-impl<A, S> fmt::Debug for ReadAllDir<'_, A, S>
-where
-    A: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ReadAllDir").finish()
+        f.debug_struct("DirHandle").field("ids", &self.inner.ids()).finish()
     }
 }

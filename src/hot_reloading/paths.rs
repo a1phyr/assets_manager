@@ -12,21 +12,10 @@ use crate::{
     Compound,
     loader::Loader,
     entry::CacheEntry,
-    utils::{extension_of, BorrowedKey, HashMap, HashSet, Key, OwnedKey},
+    utils::{extension_of, BorrowedKey, HashMap, HashSet, OwnedKey},
 };
 
 use super::dependencies::Dependencies;
-
-
-/// Push a component to an id
-fn clone_and_push(id: &str, name: &str) -> Arc<str> {
-    let mut id = id.to_string();
-    if !id.is_empty() {
-        id.push('.');
-    }
-    id.push_str(name);
-    id.into()
-}
 
 
 unsafe trait AnyAsset: Any + Send + Sync {
@@ -87,8 +76,6 @@ fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>
 }
 
 
-type Ext = &'static [&'static str];
-
 /// This struct is responsible of the safety of the whole module.
 ///
 /// Its invariant is that the TypeId is the same as the one of the value
@@ -117,7 +104,6 @@ impl CompoundReloadInfos {
 pub(crate) enum UpdateMessage {
     Clear,
     AddAsset(AssetReloadInfos),
-    AddDir(AssetReloadInfos, Ext),
     AddCompound(CompoundReloadInfos),
 }
 
@@ -173,13 +159,11 @@ impl<T> WatchedPath<T> {
 /// when an asset or a directory is added.
 pub struct AssetPaths {
     assets: HashMap<PathBuf, WatchedPath<LoadFn>>,
-    dirs: HashMap<PathBuf, WatchedPath<(LoadFn, Ext)>>,
 }
 
 impl AssetPaths {
     fn clear(&mut self) {
         self.assets.clear();
-        self.dirs.clear();
     }
 
     fn add_asset(&mut self, id: AssetReloadInfos) {
@@ -187,30 +171,16 @@ impl AssetPaths {
         let watched = self.assets.entry(path).or_insert_with(|| WatchedPath::new(id));
         watched.types.insert(type_id, load);
     }
-
-    fn add_dir(&mut self, id: AssetReloadInfos, ext: Ext) {
-        let AssetReloadInfos(path, id, type_id, load) = id;
-        let watched = self.dirs.entry(path).or_insert_with(|| WatchedPath::new(id));
-        watched.types.insert(type_id, (load, ext));
-    }
-}
-
-
-enum Action {
-    Add,
-    Remove,
 }
 
 /// Store assets until we can sync with the `AssetCache`.
 pub struct LocalCache {
     changed: HashMap<OwnedKey, Box<dyn AnyAsset>>,
-    changed_dirs: Vec<(OwnedKey, Arc<str>, Action)>,
 }
 
 impl LocalCache {
     fn clear(&mut self) {
         self.changed.clear();
-        self.changed_dirs.clear();
     }
 }
 
@@ -239,42 +209,6 @@ impl CacheKind {
             },
         }
     }
-
-    /// Add an asset to a directory
-    fn add(&mut self, dir_key: BorrowedKey, id: Arc<str>) {
-        match self {
-            CacheKind::Static(cache, _) => {
-                let dir_key: &dyn Key = &dir_key;
-                let dirs = cache.dirs.read();
-                if let Some(dir) = dirs.get(dir_key) {
-                    if dir.add(&id) {
-                        log::info!("Adding \"{}\" to \"{}\"", id, dir_key.id());
-                    }
-                }
-            },
-            CacheKind::Local(cache) => {
-                cache.changed_dirs.push((dir_key.to_owned(), id, Action::Add));
-            },
-        }
-    }
-
-    /// Remove an asset from a directory
-    fn remove(&mut self, dir_key: BorrowedKey, id: Arc<str>) {
-        match self {
-            CacheKind::Static(cache, _) => {
-                let dir_key: &dyn Key = &dir_key;
-                let dirs = cache.dirs.read();
-                if let Some(dir) = dirs.get(dir_key) {
-                    if dir.remove(&id) {
-                        log::info!("Removing \"{}\" from \"{}\"", id, dir_key.id());
-                    }
-                }
-            },
-            CacheKind::Local(cache) => {
-                cache.changed_dirs.push((dir_key.to_owned(), id, Action::Remove));
-            },
-        }
-    }
 }
 
 pub(crate) struct HotReloadingData {
@@ -287,13 +221,11 @@ impl HotReloadingData {
     pub fn new() -> Self {
         let cache = LocalCache {
             changed: HashMap::new(),
-            changed_dirs: Vec::new(),
         };
 
         HotReloadingData {
             paths: AssetPaths {
                 assets: HashMap::new(),
-                dirs: HashMap::new(),
             },
 
             cache: CacheKind::Local(cache),
@@ -305,7 +237,6 @@ impl HotReloadingData {
     pub fn load(&mut self, path: PathBuf) -> Option<()> {
         let file_ext = extension_of(&path)?;
 
-        self.load_dir(&path, file_ext)?;
         self.load_asset(&path, file_ext);
 
         self.update_if_static();
@@ -332,45 +263,6 @@ impl HotReloadingData {
                 }
             }
         }
-    }
-
-    fn load_dir(&mut self, path: &Path, file_ext: &str) -> Option<()> {
-        let parent = path.parent()?;
-        let file_stem = path.file_stem()?.to_str()?;
-
-        if let Some(path_infos) = self.paths.dirs.get(parent) {
-            for &(type_id, (load, type_ext)) in &path_infos.types.0 {
-                if type_ext.contains(&file_ext) {
-                    let file_id = clone_and_push(&path_infos.id, file_stem);
-
-                    let watched = self.paths.assets.entry(path.into()).or_insert_with(|| WatchedPath::new(file_id.clone()));
-                    watched.types.insert(type_id, load);
-
-                    let key = BorrowedKey::new_with(&path_infos.id, type_id);
-                    self.cache.add(key, file_id);
-                }
-            }
-        }
-
-        Some(())
-    }
-
-    pub fn remove(&mut self, path: PathBuf) -> Option<()> {
-        let parent = path.parent()?;
-        let path_infos = self.paths.dirs.get(parent)?;
-        let file_ext = extension_of(&path)?;
-
-        let file_stem = path.file_stem()?.to_str()?;
-
-        for &(type_id, (_, type_ext)) in &path_infos.types.0 {
-            if type_ext.contains(&file_ext) {
-                let key = BorrowedKey::new_with(&path_infos.id, type_id);
-                let id = clone_and_push(&path_infos.id, file_stem);
-                self.cache.remove(key, id);
-            }
-        }
-
-        Some(())
     }
 
     pub fn update_if_local(&mut self, cache: &AssetCache) {
@@ -406,7 +298,6 @@ impl HotReloadingData {
                 }
             },
             UpdateMessage::AddAsset(infos) => self.paths.add_asset(infos),
-            UpdateMessage::AddDir(infos, ext) => self.paths.add_dir(infos, ext),
             UpdateMessage::AddCompound(infos) => {
                 let CompoundReloadInfos(key, new_deps, reload) = infos;
                 self.deps.insert(key, new_deps, Some(reload));
@@ -429,28 +320,6 @@ impl LocalCache {
                 |value, entry| unsafe { value.reload(entry) },
                 |value, id| value.create(id),
             );
-        }
-
-        // Update directories
-        let dirs = cache.dirs.read();
-
-        for (key, id, action) in self.changed_dirs.drain(..) {
-            match action {
-                Action::Add => {
-                    if let Some(dir) = dirs.get(&key) {
-                        if dir.add(&id) {
-                            log::info!("Adding \"{}\" to \"{}\"", id, key.id());
-                        }
-                    }
-                }
-                Action::Remove => {
-                    if let Some(dir) = dirs.get(&key) {
-                        if dir.remove(&id) {
-                            log::info!("Removing \"{}\" from \"{}\"", id, key.id());
-                        }
-                    }
-                }
-            }
         }
 
         to_update.update(deps, cache);

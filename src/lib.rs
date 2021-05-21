@@ -181,7 +181,7 @@ mod cache;
 pub use cache::AssetCache;
 
 mod dirs;
-pub use dirs::{DirReader, ReadAllDir, ReadDir};
+pub use dirs::DirHandle;
 
 mod error;
 pub use error::{BoxedError, Error};

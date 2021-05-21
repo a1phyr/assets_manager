@@ -2,7 +2,8 @@
 
 use crate::{
     Asset, Error, Compound, Handle,
-    dirs::{CachedDir, DirReader},
+    asset::DirLoadable,
+    dirs::DirHandle,
     entry::CacheEntry,
     loader::Loader,
     utils::{HashMap, RandomState, BorrowedKey, Key, OwnedKey, Private, RwLock},
@@ -10,7 +11,7 @@ use crate::{
 };
 
 #[cfg(doc)]
-use crate::{AssetGuard, ReadDir, ReadAllDir};
+use crate::{AssetGuard};
 
 use std::{
     fmt,
@@ -216,9 +217,7 @@ thread_local! {
 /// ```
 pub struct AssetCache<S=FileSystem> {
     source: S,
-
     pub(crate) assets: Map,
-    pub(crate) dirs: RwLock<HashMap<OwnedKey, CachedDir>>,
 }
 
 impl AssetCache<FileSystem> {
@@ -243,8 +242,6 @@ where
     pub fn with_source(source: S) -> AssetCache<S> {
         AssetCache {
             assets: Map::new(32),
-            dirs: RwLock::new(HashMap::new()),
-
             source,
         }
     }
@@ -333,22 +330,6 @@ where
         Ok(handle)
     }
 
-    /// Adds a directory to the cache.
-    #[cold]
-    fn add_dir<A: Asset>(&self, id: &str) -> Result<DirReader<A, S>, io::Error> {
-        #[cfg(feature = "hot-reloading")]
-        self.source._add_dir::<A, Private>(id);
-
-        let dir = self.no_record(|| CachedDir::load::<A, S>(self, id))?;
-
-        let key = OwnedKey::new::<A>(id.into());
-        let mut dirs = self.dirs.write();
-
-        let dir = dirs.entry(key).or_insert(dir);
-
-        unsafe { Ok(dir.read(self)) }
-    }
-
     /// Loads an asset.
     ///
     /// If the asset is not found in the cache, it is loaded from the source.
@@ -415,43 +396,53 @@ where
         })
     }
 
-    /// Loads all assets of a given type in a directory.
+    /// Loads all assets of a given type from a directory.
+    ///
+    /// If `recursive` is `true`, this function also loads assets recursively
+    /// from subdirectories.
     ///
     /// The directory's id is constructed the same way as assets. To specify
     /// the cache's root, give the empty string (`""`) as id.
     ///
-    /// The returned structure can be iterated on to get the loaded assets.
+    /// The returned structure can be use to iterate over the loaded assets.
     ///
     /// # Errors
     ///
     /// An error is returned if the given id does not match a valid readable
     /// directory.
     #[inline]
-    pub fn load_dir<A: Asset>(&self, id: &str) -> io::Result<DirReader<A, S>> {
-        match self.load_cached_dir(id) {
-            Some(dir) => Ok(dir),
-            None => self.add_dir(id),
-        }
+    pub fn load_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> Result<DirHandle<A, S>, Error> {
+        Ok(if recursive {
+            let handle = self.load(id)?;
+            DirHandle::new_rec(handle, self)
+        } else {
+            let handle = self.load(id)?;
+            DirHandle::new(handle, self)
+        })
     }
 
     /// Loads an directory from the cache.
     ///
-    /// This function does not attempt to load the asset from the source if it
-    /// is not found in the cache.
+    /// This function does not attempt to load the it from the source if it is
+    /// not found in the cache.
     #[inline]
-    pub fn load_cached_dir<A: Asset>(&self, id: &str) -> Option<DirReader<A, S>> {
-        let key: &dyn Key = &BorrowedKey::new::<A>(id);
-        let dirs = self.dirs.read();
-        dirs.get(key).map(|dir| unsafe { dir.read(self) })
+    pub fn load_cached_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> Option<DirHandle<A, S>> {
+        Some(if recursive {
+            let handle = self.load_cached(id)?;
+            DirHandle::new_rec(handle, self)
+        } else {
+            let handle = self.load_cached(id)?;
+            DirHandle::new(handle, self)
+        })
     }
 
-    /// Returns `true` if the cache contains the specified directory.
+    /// Returns `true` if the cache contains the specified directory with the
+    /// given `recursive` parameter.
     #[inline]
-    pub fn contains_dir<A: Asset>(&self, id: &str) -> bool {
-        let key: &dyn Key = &BorrowedKey::new::<A>(id);
-        let dirs = self.dirs.read();
-        dirs.contains_key(key)
+    pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
+        self.load_cached_dir::<A>(id, recursive).is_some()
     }
+
 
     /// Loads an owned version of an asset
     ///
@@ -499,7 +490,6 @@ where
     #[inline]
     pub fn clear(&mut self) {
         self.assets.clear();
-        self.dirs.get_mut().clear();
 
         #[cfg(feature = "hot-reloading")]
         self.source._clear::<Private>();
@@ -518,8 +508,7 @@ impl AssetCache<FileSystem> {
     /// reloaded, but it does not perform any I/O. However, it needs to lock
     /// some assets for writing, so you **must not** have any [`AssetGuard`]
     /// from the given `AssetCache`, or you might experience deadlocks. You are
-    /// free to keep [`Handle`]s, though. The same restriction applies to
-    /// [`ReadDir`] and [`ReadAllDir`].
+    /// free to keep [`Handle`]s, though.
     ///
     /// If `self.source()` was created without hot-reloading or if it failed to
     /// start, this function is a no-op.
@@ -559,7 +548,6 @@ impl<S> fmt::Debug for AssetCache<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AssetCache")
             .field("assets", &self.assets)
-            .field("dirs", &self.dirs.read())
             .finish()
     }
 }

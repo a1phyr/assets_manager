@@ -283,6 +283,7 @@ pub(crate) struct HashMap<K, V>(StdHashMap<K, V, RandomState>);
 
 impl<K, V> HashMap<K, V> {
     #[inline]
+    #[allow(unused)]
     pub fn new() -> Self {
         Self(StdHashMap::with_hasher(RandomState::new()))
     }

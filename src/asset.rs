@@ -1,5 +1,7 @@
 //! Values loadable from a cache.
 
+pub use crate::dirs::DirLoadable;
+
 #[allow(unused)]
 use crate::{
     AssetCache,

@@ -167,15 +167,6 @@ impl Source for FileSystem {
     }
 
     #[cfg(feature = "hot-reloading")]
-    fn _add_dir<A: Asset, P: PrivateMarker>(&self, id: &str) {
-        if let Some(reloader) = &self.reloader {
-            let path = self.path_of(id, "");
-            let msg = UpdateMessage::AddDir(AssetReloadInfos::of::<A>(path, id.into()), A::EXTENSIONS);
-            reloader.send_update(msg);
-        }
-    }
-
-    #[cfg(feature = "hot-reloading")]
     fn _clear<P: PrivateMarker>(&mut self) {
         if let Some(reloader) = &self.reloader {
             reloader.send_update(UpdateMessage::Clear);

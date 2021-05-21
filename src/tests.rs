@@ -99,10 +99,10 @@ mod asset_cache {
     fn load_dir_ok() {
         let cache = AssetCache::new("assets").unwrap();
 
-        assert!(!cache.contains_dir::<X>("test"));
-        let mut loaded: Vec<_> = cache.load_dir::<X>("test").unwrap()
+        assert!(!cache.contains_dir::<X>("test", false));
+        let mut loaded: Vec<_> = cache.load_dir::<X>("test", false).unwrap()
             .iter().map(|x| x.read().0).collect();
-        assert!(cache.contains_dir::<X>("test"));
+        assert!(cache.contains_dir::<X>("test", false));
 
         loaded.sort();
         assert_eq!(loaded, [-7, 42]);
@@ -112,7 +112,7 @@ mod asset_cache {
     fn load_dir_all() {
         let cache = AssetCache::new("assets").unwrap();
 
-        let mut loaded: Vec<_> = cache.load_dir::<X>("test").unwrap().iter_all().collect();
+        let mut loaded: Vec<_> = cache.load_dir::<X>("test", false).unwrap().iter_all().collect();
         loaded.sort_by_key(|i| i.0);
         let mut loaded = loaded.into_iter();
 
