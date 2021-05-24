@@ -4,7 +4,7 @@ use crate::{
     Asset, Error, Compound, Handle,
     asset::DirLoadable,
     dirs::DirHandle,
-    entry::CacheEntry,
+    entry::{CacheEntry, CacheEntryInner},
     loader::Loader,
     utils::{HashMap, RandomState, BorrowedKey, Key, OwnedKey, Private, RwLock},
     source::{FileSystem, Source},
@@ -67,23 +67,17 @@ impl Map {
         &mut self.shards[id]
     }
 
-    #[cfg(feature = "hot-reloading")]
-    pub fn with_cache_entry(&self, key: &dyn Key, f: impl FnOnce(&CacheEntry)) {
+    pub fn get_entry(&self, key: &dyn Key) -> Option<CacheEntryInner> {
         let shard = self.get_shard(key).read();
-        shard.get(key).map(f);
-    }
-
-    pub fn get<T: Compound>(&self, id: &str) -> Option<Handle<T>> {
-        let key: &dyn Key = &BorrowedKey::new::<T>(id);
-        let shard = self.get_shard(key).read();
-        shard.get(key).map(|entry| unsafe { entry.handle() })
+        let entry = shard.get(key)?;
+        unsafe { Some(entry.inner().extend_lifetime()) }
     }
 
     #[cfg(feature = "hot-reloading")]
-    fn get_key_value<T: Compound>(&self, id: &str) -> Option<(OwnedKey, Handle<T>)> {
-        let key: &dyn Key = &BorrowedKey::new::<T>(id);
+    pub fn get_key_entry(&self, key: &dyn Key) -> Option<(OwnedKey, CacheEntryInner)> {
         let shard = self.get_shard(key).read();
-        shard.get_key_value(key).map(|(key, entry)| (key.into(), unsafe { entry.handle() }))
+        let (key, entry) = shard.get_key_value(key)?;
+        unsafe { Some((key.into(), entry.inner().extend_lifetime())) }
     }
 
     fn insert<T: Compound>(&self, id: Arc<str>, asset: T) -> Handle<T> {
@@ -92,7 +86,8 @@ impl Map {
 
         let shard = &mut *self.get_shard(&key).write();
         let entry = shard.entry(key).or_insert_with(|| CacheEntry::new(asset, id_clone));
-        unsafe { entry.handle() }
+        let entry_inner = unsafe { entry.inner().extend_lifetime() };
+        entry_inner.handle()
     }
 
     #[cfg(feature = "hot-reloading")]
@@ -353,15 +348,17 @@ where
     /// This function does not attempt to load the asset from the source if it
     /// is not found in the cache.
     pub fn load_cached<A: Compound>(&self, id: &str) -> Option<Handle<A>> {
+        let key = &BorrowedKey::new::<A>(id);
+
         #[cfg(not(feature = "hot-reloading"))]
-        { self.assets.get(id) }
+        let entry = self.assets.get_entry(key)?;
 
         #[cfg(feature = "hot-reloading")]
-        if A::HOT_RELOADED {
-            match self.assets.get_key_value(id) {
-                Some((key, asset)) => {
+        let entry = if A::HOT_RELOADED {
+            match self.assets.get_key_entry(key) {
+                Some((key, entry)) => {
                     self.add_record(key);
-                    Some(asset)
+                    Some(entry)
                 },
                 None => {
                     let key = BorrowedKey::new::<A>(id);
@@ -370,14 +367,16 @@ where
                 },
             }
         } else {
-            self.assets.get(id)
-        }
+            self.assets.get_entry(key)
+        }?;
+
+        Some(entry.handle())
     }
 
     /// Returns `true` if the cache contains the specified asset.
     #[inline]
     pub fn contains<A: Compound>(&self, id: &str) -> bool {
-        let key: &dyn Key = &BorrowedKey::new::<A>(id);
+        let key = &BorrowedKey::new::<A>(id);
         self.assets.contains_key(key)
     }
 
@@ -471,7 +470,7 @@ where
     /// any [`Handle`], [`AssetGuard`], etc when you call this function.
     #[inline]
     pub fn remove<A: Compound>(&mut self, id: &str) -> bool {
-        let key: &dyn Key = &BorrowedKey::new::<A>(id);
+        let key = &BorrowedKey::new::<A>(id);
         self.assets.remove(key)
     }
 
@@ -480,8 +479,8 @@ where
     /// The corresponding asset is removed from the cache.
     #[inline]
     pub fn take<A: Compound>(&mut self, id: &str) -> Option<A> {
-        let key: &dyn Key = &BorrowedKey::new::<A>(id);
-        self.assets.take(key).map(|e| unsafe { e.into_inner() })
+        let key = &BorrowedKey::new::<A>(id);
+        self.assets.take(key).map(|e| e.into_inner())
     }
 
     /// Clears the cache.

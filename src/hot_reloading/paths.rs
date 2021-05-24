@@ -11,22 +11,21 @@ use crate::{
     AssetCache,
     Compound,
     loader::Loader,
-    entry::CacheEntry,
+    entry::{CacheEntry, CacheEntryInner},
     utils::{extension_of, BorrowedKey, HashMap, HashSet, OwnedKey},
 };
 
 use super::dependencies::Dependencies;
 
 
-unsafe trait AnyAsset: Any + Send + Sync {
-    unsafe fn reload(self: Box<Self>, entry: &CacheEntry);
+trait AnyAsset: Any + Send + Sync {
+    fn reload(self: Box<Self>, entry: CacheEntryInner);
     fn create(self: Box<Self>, id: Arc<str>) -> CacheEntry;
 }
 
-unsafe impl<A: Asset> AnyAsset for A {
-    unsafe fn reload(self: Box<Self>, entry: &CacheEntry) {
-        let handle = entry.handle::<A>();
-        handle.either(
+impl<A: Asset> AnyAsset for A {
+    fn reload(self: Box<Self>, entry: CacheEntryInner) {
+        entry.handle::<A>().either(
             |_| log::error!("Static asset registered for hot-reloading: {}", std::any::type_name::<A>()),
             |e| e.write(*self),
         );
@@ -53,7 +52,8 @@ pub(crate) type ReloadFn = fn(cache: &AssetCache, id: &str) -> Option<HashSet<Ow
 
 #[allow(clippy::redundant_closure)]
 fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>> {
-    let handle = cache.assets.get(id)?;
+    let key = BorrowedKey::new::<T>(id);
+    let handle = cache.assets.get_entry(&key)?.handle();
     let entry = handle.either(
         |_| {
             log::error!("Static asset registered for hot-reloading: {}", std::any::type_name::<T>());
@@ -76,10 +76,8 @@ fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>
 }
 
 
-/// This struct is responsible of the safety of the whole module.
-///
-/// Its invariant is that the TypeId is the same as the one of the value
-/// returned by the LoadFn.
+/// Invariant: the TypeId is the same as the one of the value returned by the
+/// LoadFn.
 pub(crate) struct AssetReloadInfos(PathBuf, Arc<str>, TypeId, LoadFn);
 
 impl AssetReloadInfos {
@@ -190,18 +188,16 @@ enum CacheKind {
 }
 
 impl CacheKind {
-    /// Reload an asset
-    ///
-    /// # Safety
+    /// Reloads an asset
     ///
     /// `key.type_id == asset.type_id()`
-    unsafe fn update(&mut self, key: BorrowedKey, asset: Box<dyn AnyAsset>) {
+    fn update(&mut self, key: BorrowedKey, asset: Box<dyn AnyAsset>) {
         match self {
             CacheKind::Static(cache, to_reload) => {
-                cache.assets.with_cache_entry(&key, |entry| {
+                if let Some(entry) = cache.assets.get_entry(&key) {
                     asset.reload(entry);
                     log::info!("Reloading \"{}\"", key.id());
-                });
+                }
                 to_reload.push(key.to_owned());
             },
             CacheKind::Local(cache) => {
@@ -256,10 +252,8 @@ impl HotReloadingData {
 
             for (type_id, load) in &path_infos.types.0 {
                 if let Some(asset) = load(Cow::Borrowed(&content), file_ext, &path_infos.id, path) {
-                    unsafe {
-                        let key = BorrowedKey::new_with(&path_infos.id, *type_id);
-                        self.cache.update(key, asset);
-                    }
+                    let key = BorrowedKey::new_with(&path_infos.id, *type_id);
+                    self.cache.update(key, asset);
                 }
             }
         }
@@ -317,7 +311,7 @@ impl LocalCache {
             log::info!("Reloading \"{}\"", key.id());
 
             cache.assets.update_or_insert(key, value,
-                |value, entry| unsafe { value.reload(entry) },
+                |value, entry| value.reload(entry.inner()),
                 |value, id| value.create(id),
             );
         }

@@ -3,7 +3,6 @@
 use std::{
     any::{Any, type_name},
     fmt,
-    marker::PhantomData,
     ops::Deref,
     sync::{
         Arc,
@@ -16,11 +15,6 @@ use crate::{
     utils::{RwLock, RwLockReadGuard},
 };
 
-#[inline]
-unsafe fn downcast<T: 'static>(val: &dyn Any) -> &T {
-    debug_assert!(val.is::<T>());
-    &*(val as *const dyn Any as *const T)
-}
 
 /// The representation of an asset whose value cannot change.
 pub(crate) struct StaticInner<T> {
@@ -33,11 +27,6 @@ impl<T> StaticInner<T> {
     fn new(value: T, id: Arc<str>) -> Self {
         Self { id, value }
     }
-
-    #[inline]
-    fn into_inner(self) -> T {
-        self.value
-    }
 }
 
 /// The representation of an asset whose value can be updated (eg through
@@ -49,6 +38,7 @@ pub(crate) struct DynamicInner<T> {
     reload: AtomicUsize,
 }
 
+#[cfg(feature = "hot-reloading")]
 impl<T> DynamicInner<T> {
     #[inline]
     fn new(value: T, id: Arc<str>) -> Self {
@@ -60,28 +50,31 @@ impl<T> DynamicInner<T> {
         }
     }
 
-    #[cfg(feature = "hot-reloading")]
     pub fn write(&self, value: T) {
         let mut data = self.value.write();
         *data = value;
         self.reload.fetch_add(1, Ordering::Release);
         self.reload_global.store(true, Ordering::Release);
     }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct CacheEntryInner<'a>(&'a (dyn Any + Send + Sync));
+
+impl<'a> CacheEntryInner<'a> {
+    #[inline]
+    pub unsafe fn extend_lifetime<'b>(self) -> CacheEntryInner<'b> {
+        let inner = &*(self.0 as *const (dyn Any + Send + Sync));
+        CacheEntryInner(inner)
+    }
 
     #[inline]
-    fn into_inner(self) -> T {
-        self.value.into_inner()
+    pub fn handle<T: 'static>(self) -> Handle<'a, T> {
+        Handle::new(self)
     }
 }
 
 /// An entry in the cache.
-///
-/// # Safety
-///
-/// - Methods that are generic over `T` can only be called with the same `T` used
-/// to create them.
-/// - When an `Handle<'a, T>` is returned, you have to ensure that `self`
-/// outlives it. The `CacheEntry` can be moved but cannot be dropped.
 pub(crate) struct CacheEntry(pub Box<dyn Any + Send + Sync>);
 
 impl CacheEntry {
@@ -90,41 +83,39 @@ impl CacheEntry {
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
     pub fn new<T: Compound>(asset: T, id: Arc<str>) -> Self {
+        #[cfg(not(feature = "hot-reloading"))]
+        let inner = Box::new(StaticInner::new(asset, id));
+
+        #[cfg(feature = "hot-reloading")]
         let inner: Box<dyn Any + Send + Sync> = if T::HOT_RELOADED {
             Box::new(DynamicInner::new(asset, id))
         } else {
             Box::new(StaticInner::new(asset, id))
         };
+
         CacheEntry(inner)
     }
 
-    /// Returns a reference to the underlying lock.
-    ///
-    /// # Safety
-    ///
-    /// See type-level documentation.
+    /// Returns a reference on the inner storage of the entry.
     #[inline]
-    pub unsafe fn handle<'a, T: Compound>(&self) -> Handle<'a, T> {
-        let inner = &*(&*self.0 as *const (dyn Any + Send + Sync));
-        Handle::new_unchecked(inner)
+    pub fn inner(&self) -> CacheEntryInner {
+        CacheEntryInner(self.0.as_ref())
     }
 
     /// Consumes the `CacheEntry` and returns its inner value.
-    ///
-    /// # Safety
-    ///
-    /// See type-level documentation.
     #[inline]
-    pub unsafe fn into_inner<T: Compound>(self) -> T {
-        if T::HOT_RELOADED {
-            debug_assert!(self.0.is::<DynamicInner<T>>());
-            let value = Box::from_raw(Box::into_raw(self.0) as *mut DynamicInner<T>);
-            value.into_inner()
-        } else {
-            debug_assert!(self.0.is::<StaticInner<T>>());
-            let value = Box::from_raw(Box::into_raw(self.0) as *mut StaticInner<T>);
-            value.into_inner()
+    pub fn into_inner<T: 'static>(self) -> T {
+        let _this = match self.0.downcast::<StaticInner<T>>() {
+            Ok(inner) => return inner.value,
+            Err(this) => this,
+        };
+
+        #[cfg(feature = "hot-reloading")]
+        if let Ok(inner) = _this.downcast::<DynamicInner<T>>() {
+            return inner.value.into_inner();
         }
+
+        panic!("wrong handle type");
     }
 }
 
@@ -134,6 +125,20 @@ impl fmt::Debug for CacheEntry {
     }
 }
 
+enum HandleInner<'a, T> {
+    Static(&'a StaticInner<T>),
+    #[cfg(feature = "hot-reloading")]
+    Dynamic(&'a DynamicInner<T>),
+}
+
+impl<T> Clone for HandleInner<'_, T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for HandleInner<'_, T> {}
 
 /// A handle on an asset.
 ///
@@ -148,45 +153,50 @@ impl fmt::Debug for CacheEntry {
 /// This is the structure you want to use to store a reference to an asset.
 /// However it is generally easier to work with `'static` data. For more
 /// information, see [top-level documentation](index.html#becoming-static).
-pub struct Handle<'a, A> {
-    data: &'a (dyn Any + Send + Sync),
+pub struct Handle<'a, T> {
+    inner: HandleInner<'a, T>,
     last_reload: usize,
-    _marker: PhantomData<&'a A>,
 }
 
-impl<'a, A> Handle<'a, A>
+impl<'a, T> Handle<'a, T>
 where
-    // FIXME: Can we remove this bound without specialization ?
-    A: Compound,
+    T: 'static,
 {
     /// Creates a new handle.
     ///
-    /// Safety: inner must contain a `DynamicInner<A>` if `A::HOT_RELOADED` or
-    /// else a `StaticInner<A>`.
-    #[inline]
-    unsafe fn new_unchecked(inner: &'a (dyn Any + Send + Sync)) -> Self {
+    /// `inner` must contain a `StaticInner<T>` or a `DynamicInner<T>`.
+    fn new(inner: CacheEntryInner<'a>) -> Self {
+        let inner = loop {
+            if let Some(inner) = inner.0.downcast_ref::<StaticInner<T>>() {
+                break HandleInner::Static(inner);
+            }
+
+            #[cfg(feature = "hot-reloading")]
+            if let Some(inner) = inner.0.downcast_ref::<DynamicInner<T>>() {
+                break HandleInner::Dynamic(inner);
+            }
+
+            panic!("wrong handle type");
+        };
+
         let mut this = Self {
-            data: inner,
+            inner,
             last_reload: 0,
-            _marker: PhantomData,
         };
         this.reloaded();
         this
     }
 
+
     #[inline]
-    pub(crate) fn either<S, D, T>(&self, on_static: S, on_dynamic: D) -> T
-    where
-        S: FnOnce(&'a StaticInner<A>) -> T,
-        D: FnOnce(&'a DynamicInner<A>) -> T,
-    {
-        // Safety: guarantied by the caller of `new_unchecked`
-        if A::HOT_RELOADED {
-            let inner = unsafe { downcast::<DynamicInner<A>>(&*self.data) };
-            on_dynamic(inner)
-        } else {
-            let inner = unsafe { downcast::<StaticInner<A>>(&*self.data) };
-            on_static(inner)
+    pub(crate) fn either<U>(&self,
+        on_static: impl FnOnce(&'a StaticInner<T>) -> U,
+        _on_dynamic: impl FnOnce(&'a DynamicInner<T>) -> U,
+    ) -> U {
+        match &self.inner {
+            HandleInner::Static(s) => on_static(s),
+            #[cfg(feature = "hot-reloading")]
+            HandleInner::Dynamic(s) => _on_dynamic(s),
         }
     }
 
@@ -194,7 +204,7 @@ where
     ///
     /// Returns a RAII guard which will release the lock once dropped.
     #[inline]
-    pub fn read(&self) -> AssetGuard<'a, A> {
+    pub fn read(&self) -> AssetGuard<'a, T> {
         let inner = self.either(
             |this| GuardInner::Ref(&this.value),
             |this| GuardInner::Guard(this.value.read()),
@@ -288,7 +298,10 @@ where
     /// Checks if the two handles refer to the same asset.
     #[inline]
     pub fn ptr_eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.data as *const _ as *const (), other.data as *const _ as *const ())
+        self.either(
+            |s1| other.either(|s2| std::ptr::eq(s1, s2), |_| false),
+            |d1| other.either(|_| false, |d2| std::ptr::eq(d1, d2)),
+        )
     }
 }
 
@@ -311,7 +324,7 @@ where
 
 impl<A> Handle<'_, A>
 where
-    A: Compound + Copy
+    A: Copy + 'static,
 {
     /// Returns a copy of the inner asset.
     ///
@@ -325,7 +338,7 @@ where
 
 impl<A> Handle<'_, A>
 where
-    A: Compound + Clone
+    A: Clone + 'static,
 {
     /// Returns a clone of the inner asset.
     #[inline]
@@ -344,21 +357,21 @@ impl<A> Copy for Handle<'_, A> {}
 
 impl<T, U> PartialEq<Handle<'_, U>> for Handle<'_, T>
 where
-    T: Compound + PartialEq<U>,
-    U: Compound,
+    T: PartialEq<U> + 'static,
+    U: 'static,
 {
     fn eq(&self, other: &Handle<U>) -> bool {
         self.read().eq(&other.read())
     }
 }
 
-impl<A> Eq for Handle<'_, A> where A: Compound + Eq {}
+impl<A> Eq for Handle<'_, A> where A: Eq + 'static {}
 
 #[cfg(feature = "serde")]
 #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 impl<A> serde::Serialize for Handle<'_, A>
 where
-    A: Compound + serde::Serialize,
+    A: serde::Serialize + 'static,
 {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         self.read().serialize(s)
@@ -367,7 +380,7 @@ where
 
 impl<A> fmt::Debug for Handle<'_, A>
 where
-    A: Compound + fmt::Debug,
+    A: fmt::Debug + 'static,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Handle").field("value", &*self.read()).finish()

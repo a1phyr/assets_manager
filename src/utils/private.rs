@@ -214,6 +214,7 @@ fn wrap<T>(param: sync::LockResult<T>) -> T {
 /// simple wrapper to easily permit both.
 pub(crate) struct RwLock<T: ?Sized>(sync::RwLock<T>);
 
+#[allow(unused)]
 impl<T> RwLock<T> {
     #[inline]
     pub fn new(inner: T) -> Self {
