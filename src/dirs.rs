@@ -300,7 +300,7 @@ where
     /// load are ignored.
     #[inline]
     pub fn iter(self) -> impl Iterator<Item=Handle<'a, A>> {
-        self.inner.ids().iter().filter_map(move |id| self.cache.load_cached(&**id))
+        self.inner.ids().iter().filter_map(move |id| self.cache.get_cached(&**id))
     }
 
     /// Returns an iterator over the assets in the directory.

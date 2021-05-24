@@ -337,7 +337,7 @@ where
     /// - The asset has no extension
     #[inline]
     pub fn load<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
-        match self.load_cached(id) {
+        match self.get_cached(id) {
             Some(asset) => Ok(asset),
             None => self.add_asset(id),
         }
@@ -347,7 +347,7 @@ where
     ///
     /// This function does not attempt to load the asset from the source if it
     /// is not found in the cache.
-    pub fn load_cached<A: Compound>(&self, id: &str) -> Option<Handle<A>> {
+    pub fn get_cached<A: Compound>(&self, id: &str) -> Option<Handle<A>> {
         let key = &BorrowedKey::new::<A>(id);
 
         #[cfg(not(feature = "hot-reloading"))]
@@ -425,12 +425,12 @@ where
     /// This function does not attempt to load the it from the source if it is
     /// not found in the cache.
     #[inline]
-    pub fn load_cached_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> Option<DirHandle<A, S>> {
+    pub fn get_cached_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> Option<DirHandle<A, S>> {
         Some(if recursive {
-            let handle = self.load_cached(id)?;
+            let handle = self.get_cached(id)?;
             DirHandle::new_rec(handle, self)
         } else {
-            let handle = self.load_cached(id)?;
+            let handle = self.get_cached(id)?;
             DirHandle::new(handle, self)
         })
     }
@@ -439,7 +439,7 @@ where
     /// given `recursive` parameter.
     #[inline]
     pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
-        self.load_cached_dir::<A>(id, recursive).is_some()
+        self.get_cached_dir::<A>(id, recursive).is_some()
     }
 
 

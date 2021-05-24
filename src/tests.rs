@@ -87,12 +87,12 @@ mod asset_cache {
     }
 
     #[test]
-    fn load_cached() {
+    fn get_cached() {
         let cache = AssetCache::new("assets").unwrap();
 
-        assert!(cache.load_cached::<X>("test.cache").is_none());
+        assert!(cache.get_cached::<X>("test.cache").is_none());
         cache.load::<X>("test.cache").unwrap();
-        assert_eq!(*cache.load_cached::<X>("test.cache").unwrap().read(), X(42));
+        assert_eq!(*cache.get_cached::<X>("test.cache").unwrap().read(), X(42));
     }
 
     #[test]

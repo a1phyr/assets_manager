@@ -103,7 +103,7 @@ pub trait Asset: Sized + Send + Sync + 'static {
     /// Specifies a eventual default value to use if an asset fails to load. If
     /// this method returns `Ok`, the returned value is used as an asset. In
     /// particular, if this method always returns `Ok`, all `AssetCache::load*`
-    /// (except `load_cached`) are guaranteed not to fail.
+    /// (except `get_cached`) are guaranteed not to fail.
     ///
     /// The `id` parameter is given to easily report the error.
     ///

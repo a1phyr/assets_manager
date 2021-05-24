@@ -155,7 +155,7 @@
 //! Strings are `'static` and easy to work with, and you can use them to load
 //! an asset from the cache, which is a cheap operation if the asset is already
 //! stored in it. If you want to ensure that no heavy operation is used, you
-//! can do so with [`AssetCache::load_cached`].
+//! can do so with [`AssetCache::get_cached`].
 //!
 //! If you have to clone them a lot, you may consider changing your `String`
 //! into an `Arc<str>` which is cheaper to clone.
