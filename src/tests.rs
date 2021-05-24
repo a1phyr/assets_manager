@@ -96,6 +96,15 @@ mod asset_cache {
     }
 
     #[test]
+    fn get_or_insert() {
+        let cache = AssetCache::new("assets").unwrap();
+
+        assert!(cache.get_cached::<i32>("test.xxx").is_none());
+        let handle = cache.get_or_insert::<i32>("test.xxx", 5);
+        assert_eq!(*handle.read(), 5);
+    }
+
+    #[test]
     fn load_dir_ok() {
         let cache = AssetCache::new("assets").unwrap();
 

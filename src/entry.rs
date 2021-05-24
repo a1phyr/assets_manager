@@ -11,7 +11,7 @@ use std::{
 };
 
 use crate::{
-    asset::{Compound, NotHotReloaded},
+    asset::NotHotReloaded,
     utils::{RwLock, RwLockReadGuard},
 };
 
@@ -82,12 +82,12 @@ impl CacheEntry {
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new<T: Compound>(asset: T, id: Arc<str>) -> Self {
+    pub fn new<T: Send + Sync + 'static>(asset: T, id: Arc<str>, _reloadable: bool) -> Self {
         #[cfg(not(feature = "hot-reloading"))]
         let inner = Box::new(StaticInner::new(asset, id));
 
         #[cfg(feature = "hot-reloading")]
-        let inner: Box<dyn Any + Send + Sync> = if T::HOT_RELOADED {
+        let inner: Box<dyn Any + Send + Sync> = if _reloadable {
             Box::new(DynamicInner::new(asset, id))
         } else {
             Box::new(StaticInner::new(asset, id))

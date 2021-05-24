@@ -10,7 +10,7 @@ use crate::{
     loader,
     cache::load_from_source,
     source::Source,
-    utils::{PrivateMarker, SharedBytes},
+    utils::{PrivateMarker, SharedBytes, SharedString},
 };
 
 #[cfg(feature = "rodio")]
@@ -291,6 +291,40 @@ where
 /// limitations.
 pub trait NotHotReloaded: Compound {}
 
+
+/// Trait marker to store values in a cache.
+///
+/// Implementing this trait is necessary to use [`AssetCache::get_cached`]. This
+/// trait is already implemented for all `Compound` types.
+///
+/// This trait is a workaround about Rust's current lack of specialization.
+pub trait Storable: Send + Sync + 'static {
+    #[doc(hidden)]
+    const HOT_RELOADED: bool = false;
+}
+
+impl<A> Storable for A
+where
+    A: Compound
+{
+    #[doc(hidden)]
+    const HOT_RELOADED: bool = A::HOT_RELOADED;
+}
+
+macro_rules! impl_storable {
+    ( $( $typ:ty, )* ) => { $( impl Storable for $typ {} )* }
+}
+
+impl_storable! {
+    i8, i16, i32, i64, i128, isize,
+    u8, u16, u32, u64, u128, usize,
+    f32, f64, char,
+    SharedString, SharedBytes,
+    String, &'static str,
+}
+
+impl<A: Send + Sync + 'static> Storable for Vec<A> {}
+impl<A: Send + Sync + 'static> Storable for &'static [A] {}
 
 macro_rules! serde_assets {
     (

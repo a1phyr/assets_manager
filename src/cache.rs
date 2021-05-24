@@ -2,7 +2,7 @@
 
 use crate::{
     Asset, Error, Compound, Handle,
-    asset::DirLoadable,
+    asset::{DirLoadable, Storable},
     dirs::DirHandle,
     entry::{CacheEntry, CacheEntryInner},
     loader::Loader,
@@ -80,14 +80,10 @@ impl Map {
         unsafe { Some((key.into(), entry.inner().extend_lifetime())) }
     }
 
-    fn insert<T: Compound>(&self, id: Arc<str>, asset: T) -> Handle<T> {
-        let id_clone = Arc::clone(&id);
-        let key = OwnedKey::new::<T>(id);
-
+    fn insert(&self, key: OwnedKey, entry: CacheEntry) -> CacheEntryInner {
         let shard = &mut *self.get_shard(&key).write();
-        let entry = shard.entry(key).or_insert_with(|| CacheEntry::new(asset, id_clone));
-        let entry_inner = unsafe { entry.inner().extend_lifetime() };
-        entry_inner.handle()
+        let entry = shard.entry(key).or_insert(entry);
+        unsafe { entry.inner().extend_lifetime() }
     }
 
     #[cfg(feature = "hot-reloading")]
@@ -316,13 +312,27 @@ where
         RECORDING.with(|rec| rec.get().is_some())
     }
 
+
     /// Adds an asset to the cache.
     #[cold]
     fn add_asset<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
         let asset = A::_load::<S, Private>(self, id)?;
-        let id = Arc::from(id);
-        let handle = self.assets.insert(id, asset);
+        let id = Arc::<str>::from(id);
+        let entry = CacheEntry::new(asset, id.clone(), A::HOT_RELOADED);
+        let key = OwnedKey::new::<A>(id);
+
+        let handle = self.assets.insert(key, entry).handle();
         Ok(handle)
+    }
+
+    /// Adds any value to the cache.
+    #[cold]
+    fn add_any<A: Send + Sync + 'static>(&self, id: &str, asset: A) -> Handle<A> {
+        let id = Arc::<str>::from(id);
+        let entry = CacheEntry::new(asset, id.clone(), false);
+        let key = OwnedKey::new::<A>(id);
+
+        self.assets.insert(key, entry).handle()
     }
 
     /// Loads an asset.
@@ -343,11 +353,14 @@ where
         }
     }
 
-    /// Loads an asset from the cache.
+    /// Gets a value from the cache.
+    ///
+    /// The value does not have to be an asset, but if it is not, its type must
+    /// be marked with the [`Storable`] trait.
     ///
     /// This function does not attempt to load the asset from the source if it
     /// is not found in the cache.
-    pub fn get_cached<A: Compound>(&self, id: &str) -> Option<Handle<A>> {
+    pub fn get_cached<A: Storable>(&self, id: &str) -> Option<Handle<A>> {
         let key = &BorrowedKey::new::<A>(id);
 
         #[cfg(not(feature = "hot-reloading"))]
@@ -371,6 +384,17 @@ where
         }?;
 
         Some(entry.handle())
+    }
+
+    /// Gets a value from the cache or inserts one.
+    ///
+    /// As for `get_cached`, non-assets types must be marked with [`Storable`].
+    #[inline]
+    pub fn get_or_insert<A: Storable>(&self, id: &str, default: A) -> Handle<A> {
+        match self.get_cached(id) {
+            Some(handle) => handle,
+            None => self.add_any(id, default),
+        }
     }
 
     /// Returns `true` if the cache contains the specified asset.
