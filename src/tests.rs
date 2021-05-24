@@ -101,7 +101,7 @@ mod asset_cache {
 
         assert!(cache.get_cached::<i32>("test.xxx").is_none());
         let handle = cache.get_or_insert::<i32>("test.xxx", 5);
-        assert_eq!(*handle.read(), 5);
+        assert_eq!(*handle.get(), 5);
     }
 
     #[test]
