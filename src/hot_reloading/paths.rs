@@ -53,7 +53,7 @@ pub(crate) type ReloadFn = fn(cache: &AssetCache, id: &str) -> Option<HashSet<Ow
 #[allow(clippy::redundant_closure)]
 fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>> {
     let key = BorrowedKey::new::<T>(id);
-    let handle = cache.assets.get_entry(&key)?.handle();
+    let handle = cache.assets.get_entry(key)?.handle();
     let entry = handle.either(
         |_| {
             log::error!("Static asset registered for hot-reloading: {}", std::any::type_name::<T>());
@@ -194,7 +194,7 @@ impl CacheKind {
     fn update(&mut self, key: BorrowedKey, asset: Box<dyn AnyAsset>) {
         match self {
             CacheKind::Static(cache, to_reload) => {
-                if let Some(entry) = cache.assets.get_entry(&key) {
+                if let Some(entry) = cache.assets.get_entry(key) {
                     asset.reload(entry);
                     log::info!("Reloading \"{}\"", key.id());
                 }

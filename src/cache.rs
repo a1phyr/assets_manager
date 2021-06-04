@@ -31,6 +31,13 @@ use std::{
 
 type Shard = RwLock<HashMap<OwnedKey, CacheEntry>>;
 
+/// A map to store assets, optimized for concurrency.
+///
+/// This type has several uses:
+/// - Provide a safe wrapper to ensure that no issue with lifetimes happen.
+/// - Make a sharded lock map to reduce contention on the `RwLock` that guard
+///   inner `HashMap`s.
+/// - Provide an interface with the minimum of generics to reduce compile times.
 pub(crate) struct Map {
     hash_builder: RandomState,
     shards: Box<[Shard]>,
@@ -49,7 +56,7 @@ impl Map {
         Map { hash_builder, shards }
     }
 
-    fn get_shard(&self, key: &dyn Key) -> &Shard {
+    fn get_shard(&self, key: BorrowedKey) -> &Shard {
         use std::hash::*;
 
         let mut hasher = self.hash_builder.build_hasher();
@@ -58,7 +65,7 @@ impl Map {
         &self.shards[id]
     }
 
-    fn get_shard_mut(&mut self, key: &dyn Key) -> &mut Shard {
+    fn get_shard_mut(&mut self, key: BorrowedKey) -> &mut Shard {
         use std::hash::*;
 
         let mut hasher = self.hash_builder.build_hasher();
@@ -67,21 +74,21 @@ impl Map {
         &mut self.shards[id]
     }
 
-    pub fn get_entry(&self, key: &dyn Key) -> Option<CacheEntryInner> {
+    pub fn get_entry(&self, key: BorrowedKey) -> Option<CacheEntryInner> {
         let shard = self.get_shard(key).read();
-        let entry = shard.get(key)?;
+        let entry = shard.get(&key as &dyn Key)?;
         unsafe { Some(entry.inner().extend_lifetime()) }
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub fn get_key_entry(&self, key: &dyn Key) -> Option<(OwnedKey, CacheEntryInner)> {
+    pub fn get_key_entry(&self, key: BorrowedKey) -> Option<(OwnedKey, CacheEntryInner)> {
         let shard = self.get_shard(key).read();
-        let (key, entry) = shard.get_key_value(key)?;
+        let (key, entry) = shard.get_key_value(&key as &dyn Key)?;
         unsafe { Some((key.into(), entry.inner().extend_lifetime())) }
     }
 
     fn insert(&self, key: OwnedKey, entry: CacheEntry) -> CacheEntryInner {
-        let shard = &mut *self.get_shard(&key).write();
+        let shard = &mut *self.get_shard(key.borrow()).write();
         let entry = shard.entry(key).or_insert(entry);
         unsafe { entry.inner().extend_lifetime() }
     }
@@ -93,7 +100,7 @@ impl Map {
         on_vacant: impl FnOnce(T, Arc<str>) -> CacheEntry,
     ) {
         use std::collections::hash_map::Entry;
-        let shard = &mut *self.get_shard(&key).write();
+        let shard = &mut *self.get_shard(key.borrow()).write();
 
         match shard.entry(key) {
             Entry::Occupied(entry) => on_occupied(val, entry.get()),
@@ -104,17 +111,18 @@ impl Map {
         }
     }
 
-    fn contains_key(&self, key: &dyn Key) -> bool {
+    fn contains_key(&self, key: BorrowedKey) -> bool {
         let shard = self.get_shard(key).read();
-        shard.contains_key(key)
+        shard.contains_key(&key as &dyn Key)
     }
 
-    fn take(&mut self, key: &dyn Key) -> Option<CacheEntry> {
-        self.get_shard_mut(key).get_mut().remove(key)
+    fn take(&mut self, key: BorrowedKey) -> Option<CacheEntry> {
+        self.get_shard_mut(key).get_mut().remove(&key as &dyn Key)
     }
 
-    fn remove(&mut self, key: &dyn Key) -> bool {
-        self.get_shard_mut(key).get_mut().remove(key).is_some()
+    #[inline]
+    fn remove(&mut self, key: BorrowedKey) -> bool {
+        self.take(key).is_some()
     }
 
     fn clear(&mut self) {
@@ -360,7 +368,7 @@ where
     /// This function does not attempt to load the value from the source if it
     /// is not found in the cache.
     pub fn get_cached<A: Storable>(&self, id: &str) -> Option<Handle<A>> {
-        let key = &BorrowedKey::new::<A>(id);
+        let key = BorrowedKey::new::<A>(id);
 
         #[cfg(not(feature = "hot-reloading"))]
         let entry = self.assets.get_entry(key)?;
@@ -399,7 +407,7 @@ where
     /// Returns `true` if the cache contains the specified asset.
     #[inline]
     pub fn contains<A: Compound>(&self, id: &str) -> bool {
-        let key = &BorrowedKey::new::<A>(id);
+        let key = BorrowedKey::new::<A>(id);
         self.assets.contains_key(key)
     }
 
@@ -496,7 +504,7 @@ where
     /// any [`Handle`], [`AssetGuard`], etc when you call this function.
     #[inline]
     pub fn remove<A: Compound>(&mut self, id: &str) -> bool {
-        let key = &BorrowedKey::new::<A>(id);
+        let key = BorrowedKey::new::<A>(id);
         self.assets.remove(key)
     }
 
@@ -505,7 +513,7 @@ where
     /// The corresponding asset is removed from the cache.
     #[inline]
     pub fn take<A: Compound>(&mut self, id: &str) -> Option<A> {
-        let key = &BorrowedKey::new::<A>(id);
+        let key = BorrowedKey::new::<A>(id);
         self.assets.take(key).map(|e| e.into_inner())
     }
 
