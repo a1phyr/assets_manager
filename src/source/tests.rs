@@ -77,7 +77,7 @@ mod filesystem {
             path
         };
 
-        assert_eq!(path, fs.path_of("test.a", "x"));
+        assert_eq!(path, fs.path_of(DirEntry::File("test.a", "x")));
     }
 }
 

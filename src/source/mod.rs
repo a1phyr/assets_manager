@@ -99,6 +99,14 @@ impl<'a> DirEntry<'a> {
     pub const fn is_dir(&self) -> bool {
         matches!(self, DirEntry::Directory(_))
     }
+
+    #[inline]
+    fn id(self) -> &'a str {
+        match self {
+            DirEntry::File(id, _) => id,
+            DirEntry::Directory(id) => id,
+        }
+    }
 }
 
 /// Bytes sources to load assets from.

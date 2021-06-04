@@ -104,24 +104,25 @@ impl FileSystem {
         &self.path
     }
 
-    /// Returns the path of the (eventual) file represented by an id and an
-    /// extension.
-    pub fn path_of(&self, id: &str, ext: &str) -> PathBuf {
+    /// Returns the path that the directory entry would have if it exists.
+    pub fn path_of(&self, entry: DirEntry) -> PathBuf {
         let mut path = self.path.clone();
-        path.extend(id.split('.'));
-        path.set_extension(ext);
+        path.extend(entry.id().split('.'));
+        if let DirEntry::File(_, ext) = entry {
+            path.set_extension(ext);
+        }
         path
     }
 }
 
 impl Source for FileSystem {
     fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
-        let path = self.path_of(id, ext);
+        let path = self.path_of(DirEntry::File(id, ext));
         fs::read(path).map(Into::into)
     }
 
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
-        let dir_path = self.path_of(id, "");
+        let dir_path = self.path_of(DirEntry::Directory(id));
         let entries = fs::read_dir(dir_path)?;
 
         let mut entry_id = id.to_owned();
@@ -159,7 +160,7 @@ impl Source for FileSystem {
     fn _add_asset<A: Asset, P: PrivateMarker>(&self, id: &str) {
         if let Some(reloader) = &self.reloader {
             for ext in A::EXTENSIONS {
-                let path = self.path_of(id, ext);
+                let path = self.path_of(DirEntry::File(id, ext));
                 let msg = UpdateMessage::AddAsset(AssetReloadInfos::of::<A>(path, id.into()));
                 reloader.send_update(msg);
             }

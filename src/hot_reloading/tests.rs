@@ -1,5 +1,6 @@
 use crate::{
     AssetCache,
+    source::DirEntry,
     tests::{X, Y, Z},
 };
 use std::{
@@ -47,7 +48,7 @@ macro_rules! test_scenario {
 
             test_scenario!(@leak cache $is_static);
 
-            let path = cache.source().path_of(id, "x");
+            let path = cache.source().path_of(DirEntry::File(id, "x"));
             write_i32(&path, $n)?;
 
             test_scenario!(@enhance cache $is_static);
