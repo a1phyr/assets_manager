@@ -11,7 +11,7 @@
 //!
 //! [assets]: `crate::Asset`
 
-use crate::{BoxedError, utils::SharedBytes};
+use crate::{BoxedError, utils::{SharedBytes, SharedString}};
 
 use std::{
     borrow::Cow,
@@ -189,6 +189,15 @@ impl Loader<Box<str>> for StringLoader {
     #[inline]
     fn load(content: Cow<[u8]>, ext: &str) -> Result<Box<str>, BoxedError> {
         StringLoader::load(content, ext).map(String::into_boxed_str)
+    }
+}
+impl Loader<SharedString> for StringLoader {
+    #[inline]
+    fn load(content: Cow<[u8]>, _: &str) -> Result<SharedString, BoxedError> {
+        Ok(match content {
+            Cow::Owned(o) => String::from_utf8(o)?.into(),
+            Cow::Borrowed(b) => str::from_utf8(b)?.into(),
+        })
     }
 }
 
