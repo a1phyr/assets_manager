@@ -216,8 +216,7 @@ impl AssetCache<FileSystem> {
     ///
     /// # Errors
     ///
-    /// An error will be returned if `path` is not valid readable directory or
-    /// if hot-reloading failed to start (if feature `hot-reloading` is used).
+    /// An error will be returned if `path` is not valid readable directory.
     #[inline]
     pub fn new<P: AsRef<Path>>(path: P) -> io::Result<AssetCache<FileSystem>> {
         let source = FileSystem::new(path)?;
@@ -278,12 +277,12 @@ where
         }
     }
 
-    /// Temporarily disable dependencies recording.
+    /// Temporarily prevent `Compound` dependencies to be recorded.
     ///
-    /// This function enables to explicitly disable dependencies recording in
-    /// [`Compound::load`]. Assets loaded during the given closure will not be
-    /// recorded as dependencies and the currently loading asset will not be
-    /// reloaded when they are.
+    /// This function disables dependencies recording in [`Compound::load`].
+    /// Assets loaded during the given closure will not be recorded as
+    /// dependencies and the currently loading asset will not be reloaded when
+    /// they are.
     ///
     /// When hot-reloading is disabled or if the cache's [`Source`] does not
     /// support hot-reloading, this function only returns the result of the
@@ -341,8 +340,8 @@ where
     ///
     /// # Errors
     ///
-    /// Errors can occur in several cases :
-    /// - The asset could not be loaded from the filesystem
+    /// Errors for `Asset`s can occur in several cases :
+    /// - The source could not be read
     /// - Loaded data could not be converted properly
     /// - The asset has no extension
     #[inline]
@@ -358,7 +357,7 @@ where
     /// The value does not have to be an asset, but if it is not, its type must
     /// be marked with the [`Storable`] trait.
     ///
-    /// This function does not attempt to load the asset from the source if it
+    /// This function does not attempt to load the value from the source if it
     /// is not found in the cache.
     pub fn get_cached<A: Storable>(&self, id: &str) -> Option<Handle<A>> {
         let key = &BorrowedKey::new::<A>(id);
@@ -433,6 +432,9 @@ where
     ///
     /// An error is returned if the given id does not match a valid readable
     /// directory.
+    ///
+    /// When loading a directory recursively, directories that can't be read are
+    /// ignored.
     #[inline]
     pub fn load_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> Result<DirHandle<A, S>, Error> {
         Ok(if recursive {
@@ -471,7 +473,7 @@ where
     ///
     /// Note that the asset will not be fetched from the cache nor will it be
     /// cached. In addition, hot-reloading does not affect the returned value
-    /// (if used during [`Compound::load`], it will still be registered as a
+    /// (if used during [`Compound::load`]. It will still be registered as a
     /// dependency).
     ///
     /// This can be useful if you need ownership on a non-clonable value.

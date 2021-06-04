@@ -5,12 +5,12 @@
 //!
 //! The structure [`AssetCache`] is the entry point of the crate.
 //!
-//! ## Cargo features
+//! # Cargo features
 //!
 //! - `hot-reloading`: Add hot-reloading
 //!
 //!
-//! ### Additional sources
+//! ## Additional sources
 //!
 //! These features enable to read assets from other sources than the file
 //! system. They are defined in the [`source`] module.
@@ -21,7 +21,7 @@
 //!   - `zip-bzip2`: Enable `bzip2` decompression.
 //!   - `zip-deflate`: Enable `flate2` decompression.
 //!
-//! ### Additional formats
+//! ## Additional formats
 //!
 //! These features add support for asset formats. There is one feature per
 //! format.
@@ -31,7 +31,7 @@
 //! - Audio formats (with [`rodio`] crate): `mp3`, `flac`, `vorbis`, `wav`.
 //! - Image formats (with [`image`] crate): `bmp`, `jpeg`, `png`.
 //!
-//! ### Internal features
+//! ## Internal features
 //!
 //! These features change inner data structures implementations. They usually
 //! increase performances, and are therefore enabled by default.
@@ -39,7 +39,7 @@
 //! - [`parking_lot`]: Use improved synchronization primitives.
 //! - [`ahash`]: Use a faster hashing algorithm.
 //!
-//! ## Example
+//! # Example
 //!
 //! If the file `assets/common/position.ron` contains this:
 //!
@@ -97,7 +97,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
-//! ## Borrowship model
+//! # Borrowship model
 //!
 //! You will notice that an [`Handle`] is not `'static`: its lifetime is
 //! tied to that of the [`AssetCache`] from which it was loaded. This may be
@@ -113,7 +113,7 @@
 //! Note that this also means that you need a mutable reference on a cache to
 //! remove assets from it.
 //!
-//! ## Becoming `'static`
+//! # Becoming `'static`
 //!
 //! Working with `'static` data is far easier: you don't have to care about
 //! lifetimes, they can easily be sent in other threads, etc. So, how to get
@@ -122,7 +122,7 @@
 //! Note that none of these proposals is compulsory to use this crate: you can
 //! work with non-`'static` data, or invent your own techniques.
 //!
-//! ### Getting a `&'static AssetCache`
+//! ## Getting a `&'static AssetCache`
 //!
 //! The lifetime of an `Handle` being tied to that of the `&AssetCache`,
 //! this enables you to get `'static` `Handle`s. Moreover, it enables you
@@ -138,7 +138,7 @@
 //!
 //! [leaking a `Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak
 //!
-//! ### Cloning assets
+//! ## Cloning assets
 //!
 //! Assets being `'static` themselves, cloning them is a good way to opt out of
 //! the lifetime of the cache. If cloning the asset itself is too expensive,
@@ -150,7 +150,7 @@
 //! via `Handle`s. This can also be a benefit if you need to ensure that your
 //! data does not change spuriously.
 //!
-//! ### Storing `String`s
+//! ## Storing `String`s
 //!
 //! Strings are `'static` and easy to work with, and you can use them to load
 //! an asset from the cache, which is a cheap operation if the asset is already

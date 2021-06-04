@@ -19,7 +19,7 @@ use crate::{
 /// The representation of an asset whose value cannot change.
 pub(crate) struct StaticInner<T> {
     id: Arc<str>,
-    value: T
+    value: T,
 }
 
 impl<T> StaticInner<T> {
@@ -202,6 +202,10 @@ where
 
     /// Locks the pointed asset for reading.
     ///
+    /// If `T` implements `NotHotReloaded` or if hot-reloading is disabled, no
+    /// reloading can occur so there is no actual lock. In these cases, calling
+    /// this function is cheap and do not involve synchronisation.
+    ///
     /// Returns a RAII guard which will release the lock once dropped.
     #[inline]
     pub fn read(&self) -> AssetGuard<'a, T> {
@@ -312,6 +316,7 @@ where
     /// Returns a reference to the underlying asset.
     ///
     /// This method only works if hot-reloading is disabled for the given type.
+    #[inline]
     pub fn get(&self) -> &'a A {
         let _ = A::_CHECK_NOT_HOT_RELOADED;
 
@@ -348,6 +353,7 @@ where
 }
 
 impl<A> Clone for Handle<'_, A> {
+    #[inline]
     fn clone(&self) -> Self {
         *self
     }
@@ -360,6 +366,7 @@ where
     T: PartialEq<U> + 'static,
     U: 'static,
 {
+    #[inline]
     fn eq(&self, other: &Handle<U>) -> bool {
         self.read().eq(&other.read())
     }
@@ -373,6 +380,7 @@ impl<A> serde::Serialize for Handle<'_, A>
 where
     A: serde::Serialize + 'static,
 {
+    #[inline]
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         self.read().serialize(s)
     }

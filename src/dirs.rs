@@ -62,7 +62,7 @@ use std::{
 ///     fn select_ids<S: Source + ?Sized>(source: &S, id: &str) -> std::io::Result<Vec<SharedString>> {
 ///         let mut ids = Vec::new();
 ///
-///         // Select all files with the "json" extensions (manifest files)
+///         // Select all files with "json" extension (manifest files)
 ///         source.read_dir(id, &mut |entry| {
 ///             if let DirEntry::File(id, ext) = entry {
 ///                 if ext == "json" {

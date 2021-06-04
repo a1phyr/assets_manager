@@ -1,8 +1,8 @@
 //! Generic asset loading definition
 //!
 //! This module defines a trait [`Loader`], to specify how [assets] are loaded
-//! from the file system.
-
+//! from raw bytes.
+//!
 //! It also defines loaders, ie types that implement [`Loader`], so in most
 //! cases you don't have to implement this trait yourself. These loaders work
 //! with standard traits and `serde`.
@@ -26,6 +26,8 @@ mod tests;
 /// Specifies how an asset is loaded.
 ///
 /// With this trait, you can easily specify how you want your data to be loaded.
+/// This trait is generic, so the same `Loader` type can be used to load several
+/// asset types.
 ///
 /// # Basic usage
 ///
@@ -58,13 +60,8 @@ mod tests;
 ///
 /// # Implementing `Loader`
 ///
-/// Function `load` does the conversion between raw bytes and the concrete Rust
-/// value. It takes the result of the file loading as parameter, so it is up to
-/// the loader to handle an eventual I/O error. If no I/O error happens, bytes
-/// are given as a `Cow<[u8]>` to avoid unnecessary clones.
-///
-/// The extension used to load the asset is also passed as parameter, which can
-/// be useful if an asset type uses several extensions.
+/// Function `load` does the conversion from raw bytes to the concrete Rust
+/// value.
 ///
 /// ## Example
 ///
@@ -102,14 +99,17 @@ mod tests;
 
 pub trait Loader<T> {
     /// Loads an asset from its raw bytes representation.
+    ///
+    /// The extension used to load the asset is also passed as parameter, which can
+    /// be useful to guess the format if an asset type uses several extensions.
     fn load(content: Cow<[u8]>, ext: &str) -> Result<T, BoxedError>;
 }
 
 
 /// Loads assets from another type.
 ///
-/// An example case for this is to easily load wrapper types, which is needed
-/// if the wrapped type is defined in another crate.
+/// An example case for this is to easily load wrapper types, which are needed
+/// when the wrapped type is defined in another crate.
 ///
 /// # Example
 ///
@@ -250,6 +250,7 @@ macro_rules! serde_loaders {
             pub struct $name(());
 
             #[cfg(feature = $feature)]
+            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
             impl<T> Loader<T> for $name
             where
                 T: for<'de> serde::Deserialize<'de>,

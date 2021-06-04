@@ -7,9 +7,10 @@ use std::{
 use super::{DirEntry, Source};
 
 
-/// The raw representation of embedded files. The common way to create one is the
-/// [`embed!`](`super::embed`) macro, and it is used to create an
-/// [`Embedded`](`super::Embedded`) source.
+/// The raw representation of embedded files.
+///
+/// The common way to create one is the [`embed!`](`super::embed`) macro, and it
+/// is used to create an [`Embedded`](`super::Embedded`) source.
 ///
 /// Most of the time you will want a `'static` one, but it can also borrow data
 /// from the current context;
@@ -27,8 +28,9 @@ pub struct RawEmbedded<'a> {
     pub dirs: &'a [(&'a str, &'a [DirEntry<'a>])],
 }
 
-/// A [`Source`] which is embedded in the binary. It is created using a
-/// [`RawEmbedded`] struct.
+/// A [`Source`] which is embedded in the binary.
+///
+/// It can be created using a [`RawEmbedded`] struct.
 ///
 /// ## Pros and Cons
 ///
@@ -42,7 +44,7 @@ pub struct RawEmbedded<'a> {
 /// makes it hard to edit external files (you have to recompile the program
 /// each time you edit an asset). Hot-reloading is of course impossible. For
 /// these reasons, you should only use this source for release builds. It also
-/// tends to creates large binarie, which increases memory usage.
+/// tends to creates large binaries, which increases memory usage.
 ///
 /// ## Usage
 ///
@@ -68,6 +70,7 @@ impl<'a> From<RawEmbedded<'a>> for Embedded<'a> {
     }
 }
 
+#[cfg_attr(docsrs, doc(cfg(feature = "embedded")))]
 impl<'a> Source for Embedded<'a> {
     fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
         match self.files.get(&(id, ext)) {
