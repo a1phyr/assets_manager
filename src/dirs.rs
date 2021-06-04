@@ -14,41 +14,6 @@ use std::{
     marker::PhantomData,
 };
 
-/// Helper type to implement [`DirLoadable`].
-///
-/// This type provides a way to execute a function for each file in a directory.
-pub struct Directory<'a> {
-    source: &'a dyn Source,
-    id: &'a str,
-}
-
-impl<'a> Directory<'a> {
-    /// Returns the id of the directory.
-    #[inline]
-    pub fn id(&self) -> &'a str {
-        self.id
-    }
-
-    /// Iterates over all files in the directory.
-    ///
-    /// The given closure is executed for each file in the directory, one none
-    /// if the function returns `Err`.
-    #[inline]
-    pub fn for_each_file(&self, mut f: impl FnMut(&str, &str)) -> io::Result<()> {
-        self.source.read_dir(self.id, &mut |entry| match entry {
-            DirEntry::File(id, ext) => f(id, ext),
-            DirEntry::Directory(_) => (),
-        })
-    }
-}
-
-impl fmt::Debug for Directory<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Directory")
-            .field("id", &self.id)
-            .finish()
-    }
-}
 
 /// Assets that are loadable from directories
 ///
@@ -68,8 +33,8 @@ impl fmt::Debug for Directory<'_> {
 /// use assets_manager::{
 ///     Compound, Error, AssetCache,
 ///     asset::{DirLoadable, Json, Flac},
-///     source::Source,
-///     utils::{Directory, SharedString},
+///     source::{DirEntry, Source},
+///     utils::SharedString,
 /// };
 ///
 /// /// A simple playlist, a mere ordered list of musics
@@ -94,13 +59,15 @@ impl fmt::Debug for Directory<'_> {
 ///
 /// // Specify how to get ids of playlists in a directory
 /// impl DirLoadable for Playlist {
-///     fn select_ids(dir: Directory) -> std::io::Result<Vec<SharedString>> {
+///     fn select_ids<S: Source + ?Sized>(source: &S, id: &str) -> std::io::Result<Vec<SharedString>> {
 ///         let mut ids = Vec::new();
 ///
 ///         // Select all files with the "json" extensions (manifest files)
-///         dir.for_each_file(|id, ext| {
-///             if ext == "json" {
-///                 ids.push(id.into());
+///         source.read_dir(id, &mut |entry| {
+///             if let DirEntry::File(id, ext) = entry {
+///                 if ext == "json" {
+///                     ids.push(id.into());
+///                 }
 ///             }
 ///         })?;
 ///
@@ -110,14 +77,11 @@ impl fmt::Debug for Directory<'_> {
 /// # }}
 /// ```
 pub trait DirLoadable: Compound {
-    /// Returns the ids of the assets contained in the directory.
-    ///
-    /// The list of files and the id of the directory can be retreived through
-    /// the `files` parameter.
+    /// Returns the ids of the assets contained in the directory given by `id`.
     ///
     /// Note that the order of the returned ids is not kept, and that redundant
     /// ids are removed.
-    fn select_ids(dir: Directory) -> io::Result<Vec<SharedString>>;
+    fn select_ids<S: Source + ?Sized>(source: &S, id: &str) -> io::Result<Vec<SharedString>>;
 }
 
 impl<A> DirLoadable for A
@@ -125,20 +89,22 @@ where
     A: Asset,
 {
     #[inline]
-    fn select_ids(dir: Directory) -> io::Result<Vec<SharedString>> {
-        fn inner(dir: Directory, extensions: &[&str]) -> io::Result<Vec<SharedString>> {
+    fn select_ids<S: Source + ?Sized>(source: &S, id: &str) -> io::Result<Vec<SharedString>> {
+        fn inner<S: Source + ?Sized>(source: &S, id: &str, extensions: &[&str]) -> io::Result<Vec<SharedString>> {
             let mut ids = Vec::new();
 
-            dir.for_each_file(|id, ext| {
-                if extensions.contains(&ext) {
-                    ids.push(id.into());
+            source.read_dir(id, &mut |entry| {
+                if let DirEntry::File(id, ext) = entry {
+                    if extensions.contains(&ext) {
+                        ids.push(id.into());
+                    }
                 }
             })?;
 
             Ok(ids)
         }
 
-        inner(dir, A::EXTENSIONS)
+        inner(source, id, A::EXTENSIONS)
     }
 }
 
@@ -152,8 +118,7 @@ where
     A: DirLoadable,
 {
     fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
-        let files = Directory { id, source: cache.source() };
-        let mut ids = A::select_ids(files)?;
+        let mut ids = A::select_ids(cache.source(), id)?;
 
         // Remove deduplicated entries
         ids.sort_unstable();
