@@ -196,7 +196,8 @@ pub mod source;
 #[cfg(feature = "hot-reloading")]
 mod hot_reloading;
 
-pub mod utils;
+mod utils;
+pub use utils::{SharedBytes, SharedString};
 
 #[cfg(test)]
 mod tests;

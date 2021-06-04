@@ -4,8 +4,8 @@ use crate::{
     Compound,
     Error,
     Handle,
+    SharedString,
     source::{DirEntry, Source},
-    utils::SharedString,
 };
 
 use std::{
@@ -31,10 +31,9 @@ use std::{
 /// ```no_run
 /// # cfg_if::cfg_if! { if #[cfg(all(feature = "json", feature = "flac"))] {
 /// use assets_manager::{
-///     Compound, Error, AssetCache,
+///     Compound, Error, AssetCache, SharedString,
 ///     asset::{DirLoadable, Json, Flac},
 ///     source::{DirEntry, Source},
-///     utils::SharedString,
 /// };
 ///
 /// /// A simple playlist, a mere ordered list of musics
