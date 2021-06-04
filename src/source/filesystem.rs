@@ -156,6 +156,10 @@ impl Source for FileSystem {
         Ok(())
     }
 
+    fn exists(&self, entry: DirEntry) -> bool {
+        self.path_of(entry).exists()
+    }
+
     #[cfg(feature = "hot-reloading")]
     fn _add_asset<A: Asset, P: PrivateMarker>(&self, id: &str) {
         if let Some(reloader) = &self.reloader {

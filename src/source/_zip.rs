@@ -282,6 +282,13 @@ where
         dir.iter().map(OwnedEntry::as_dir_entry).for_each(f);
         Ok(())
     }
+
+    fn exists(&self, entry: DirEntry) -> bool {
+        match entry {
+            DirEntry::File(id, ext) => self.files.contains_key(&(id, ext) as &dyn FileKey),
+            DirEntry::Directory(id) => self.dirs.contains_key(id),
+        }
+    }
 }
 
 impl<R: io::Read + io::Seek> fmt::Debug for Zip<R> {

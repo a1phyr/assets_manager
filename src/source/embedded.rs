@@ -81,4 +81,11 @@ impl<'a> Source for Embedded<'a> {
         dir.iter().copied().for_each(f);
         Ok(())
     }
+
+    fn exists(&self, entry: DirEntry) -> bool {
+        match entry {
+            DirEntry::File(id, ext) => self.files.contains_key(&(id, ext)),
+            DirEntry::Directory(id) => self.dirs.contains_key(id),
+        }
+    }
 }

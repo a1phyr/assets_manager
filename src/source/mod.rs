@@ -151,6 +151,9 @@ pub trait Source {
     /// ```
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()>;
 
+    /// Returns `true` if the entry points at an existing entity.
+    fn exists(&self, entry: DirEntry) -> bool;
+
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
     fn _add_asset<A: crate::Asset, P: PrivateMarker>(&self, _: &str) where Self: Sized {}
@@ -180,6 +183,10 @@ where
 
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
         self.as_ref().read_dir(id, f)
+    }
+
+    fn exists(&self, entry: DirEntry) -> bool {
+        self.as_ref().exists(entry)
     }
 }
 
