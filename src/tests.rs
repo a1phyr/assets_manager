@@ -172,11 +172,11 @@ mod handle {
     }
 
     #[test]
-    fn ptr_eq() {
+    fn same_handle() {
         let cache = AssetCache::new("assets").unwrap();
         let handle1 = cache.load::<X>("test.cache").unwrap();
         let handle2 = cache.load::<X>("test.cache").unwrap();
-        assert!(handle1.ptr_eq(&handle2));
+        assert!(handle1.same_handle(&handle2));
     }
 
     #[test]

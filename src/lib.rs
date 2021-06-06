@@ -92,7 +92,7 @@
 //!
 //! // Loading the same asset retreives it from the cache
 //! let other_handle = cache.load("common.position")?;
-//! assert!(other_handle.ptr_eq(&handle));
+//! assert!(other_handle.same_handle(&handle));
 //! # }}
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```

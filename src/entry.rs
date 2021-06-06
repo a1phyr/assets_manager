@@ -301,7 +301,7 @@ where
 
     /// Checks if the two handles refer to the same asset.
     #[inline]
-    pub fn ptr_eq(&self, other: &Self) -> bool {
+    pub fn same_handle(&self, other: &Self) -> bool {
         self.either(
             |s1| other.either(|s2| std::ptr::eq(s1, s2), |_| false),
             |d1| other.either(|_| false, |d2| std::ptr::eq(d1, d2)),
