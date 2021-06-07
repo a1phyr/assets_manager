@@ -77,7 +77,7 @@ pub use assets_manager_macros::embed;
 #[cfg(test)]
 mod tests;
 
-/// An entry in a directory.
+/// An entry in a source.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DirEntry<'a> {
     /// A file with an id and an extension.
@@ -100,11 +100,38 @@ impl<'a> DirEntry<'a> {
         matches!(self, DirEntry::Directory(_))
     }
 
+    /// Returns the id of the pointed entity.
     #[inline]
-    fn id(self) -> &'a str {
+    pub const fn id(self) -> &'a str {
         match self {
             DirEntry::File(id, _) => id,
             DirEntry::Directory(id) => id,
+        }
+    }
+
+    /// Returns the entry's parent's id, or `None` if it is the root.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use assets_manager::source::DirEntry;
+    ///
+    /// let entry = DirEntry::File("example.hello.world", "txt");
+    /// assert_eq!(entry.parent_id(), Some("example.hello"));
+    ///
+    /// let root = DirEntry::Directory("");
+    /// assert!(root.parent_id().is_none());
+    /// ```
+    #[inline]
+    pub fn parent_id(self) -> Option<&'a str> {
+        let id = self.id();
+        if id.is_empty() {
+            None
+        } else {
+            match id.rfind('.') {
+                Some(n) => Some(&id[..n]),
+                None => Some(""),
+            }
         }
     }
 }
