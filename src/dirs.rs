@@ -107,6 +107,17 @@ where
     }
 }
 
+impl<A> DirLoadable for std::sync::Arc<A>
+where
+    A: DirLoadable,
+{
+    #[inline]
+    fn select_ids<S: Source + ?Sized>(source: &S, id: &str) -> io::Result<Vec<SharedString>> {
+        A::select_ids(source, id)
+    }
+}
+
+/// Stores ids in a directory containing assets of type `A`
 pub(crate) struct CachedDir<A> {
     ids: Vec<SharedString>,
     _marker: PhantomData<A>,
