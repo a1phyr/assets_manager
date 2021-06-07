@@ -207,7 +207,7 @@ fn register_file(
 /// The archive can be backed by any reader that also implements `io::Seek`,
 /// such as a file or a byte buffer.
 #[cfg_attr(docsrs, doc(cfg(feature = "zip")))]
-pub struct Zip<R: io::Read + io::Seek> {
+pub struct Zip<R> {
     files: HashMap<FileDesc, usize>,
     dirs: HashMap<String, Vec<OwnedEntry>>,
     archive: Mutex<ZipArchive<R>>,
@@ -291,7 +291,7 @@ where
     }
 }
 
-impl<R: io::Read + io::Seek> fmt::Debug for Zip<R> {
+impl<R> fmt::Debug for Zip<R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Zip")
             .field("dirs", &self.dirs)
