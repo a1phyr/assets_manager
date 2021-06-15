@@ -35,6 +35,7 @@ pub(crate) struct DynamicInner<T> {
     id: Arc<str>,
     value: RwLock<T>,
     reload_global: AtomicBool,
+    #[allow(unused)]
     reload: AtomicUsize,
 }
 
@@ -155,6 +156,7 @@ impl<T> Copy for HandleInner<'_, T> {}
 /// information, see [top-level documentation](index.html#becoming-static).
 pub struct Handle<'a, T> {
     inner: HandleInner<'a, T>,
+    #[cfg(feature = "hot-reloading")]
     last_reload: usize,
 }
 
@@ -181,6 +183,7 @@ where
 
         let mut this = Self {
             inner,
+            #[cfg(feature = "hot-reloading")]
             last_reload: 0,
         };
         this.reloaded();
@@ -266,20 +269,25 @@ where
     /// # }}
     /// # Ok::<_, Box<dyn std::error::Error>>(())
     /// ```
-    #[inline]
     pub fn reloaded(&mut self) -> bool {
-        let reloaded = self.either(
-            |_| None,
-            |this| Some(this.reload.load(Ordering::Acquire)),
-        );
+        #[cfg(not(feature = "hot-reloading"))]
+        { false }
 
-        match reloaded {
-            None => false,
-            Some(last_reload) => {
-                let reloaded = last_reload > self.last_reload;
-                self.last_reload = last_reload;
-                reloaded
-            },
+        #[cfg(feature = "hot-reloading")]
+        {
+            let reloaded = self.either(
+                |_| None,
+                |this| Some(this.reload.load(Ordering::Acquire)),
+            );
+
+            match reloaded {
+                None => false,
+                Some(last_reload) => {
+                    let reloaded = last_reload > self.last_reload;
+                    self.last_reload = last_reload;
+                    reloaded
+                },
+            }
         }
     }
 
