@@ -1,6 +1,6 @@
 [package]
 name = "assets_manager"
-version = "0.4.4"
+version = "0.5.0"
 authors = ["Benoît du Garreau"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -44,7 +44,7 @@ png = ["image/png"]
 [dependencies]
 log = {version = "0.4"}
 
-assets_manager_macros = {path = "macros", version = "0.1", optional = true}
+assets_manager_macros = {path = "macros", version = "0.2", optional = true}
 
 ahash = {version = "0.7.0", default-features = false, optional = true}
 parking_lot = {version = "0.11", optional = true}
