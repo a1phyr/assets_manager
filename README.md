@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/assets_manager.svg)](https://crates.io/crates/assets_manager)
 [![Docs.rs](https://docs.rs/assets_manager/badge.svg)](https://docs.rs/assets_manager/)
-![Minimum rustc version](https://img.shields.io/badge/rustc-1.46+-lightgray.svg)
+![Minimum rustc version](https://img.shields.io/badge/rustc-1.51+-lightgray.svg)
 
 
 This crate aims at providing a filesystem abstraction to easily load external resources.
@@ -11,14 +11,14 @@ It was originally thought for games, but can of course be used in other contexts
 Original idea was inspired by [Veloren](https://gitlab.com/veloren/veloren)'s assets system.
 
 
-This crate follow semver convention and supports rustc 1.46.0 and higher.
+This crate follow semver convention and supports rustc 1.51 and higher.
 Changing this is considered a breaking change.
 
 ## Goals
 
 This crates focuses on:
 
-- **Good perfomances**:\
+- **Good performances**:\
   Crucial for perfomance-oriented applications such as games.\
   Loaded assets are cached so loading one several times is as fast as loading it once.
   This crate was thought for use with concurrency.
@@ -30,16 +30,11 @@ This crates focuses on:
 
 - **Pleasant to use**:\
   A well-documented high-level API, easy to learn.\
-  Built-in support of common formats with serde.
+  Built-in support of common formats: serialization, images, sounds.\
+  Can load assets from a file system, a zip archive, or even embed them in a binary.
 
 - **Lightness**:\
   Pay for what you take, no dependency bloat.
-
-## Non-goals
-
-- **`#[no_std]` support**:\
-  Even tough this crate support WebAssembly, there is no plan for `#[no_std]` support,
-  as such applications are not the targets of this crate
 
 ## Example
 

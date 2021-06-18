@@ -10,7 +10,7 @@
 //! - `hot-reloading`: Add hot-reloading
 //!
 //!
-//! ## Additional sources
+//! ### Additional sources
 //!
 //! These features enable to read assets from other sources than the file
 //! system. They are defined in the [`source`] module.
@@ -21,7 +21,7 @@
 //!   - `zip-bzip2`: Enable `bzip2` decompression.
 //!   - `zip-deflate`: Enable `flate2` decompression.
 //!
-//! ## Additional formats
+//! ### Additional formats
 //!
 //! These features add support for asset formats. There is one feature per
 //! format.
@@ -31,7 +31,7 @@
 //! - Audio formats (with [`rodio`] crate): `mp3`, `flac`, `vorbis`, `wav`.
 //! - Image formats (with [`image`] crate): `bmp`, `jpeg`, `png`.
 //!
-//! ## Internal features
+//! ### Internal features
 //!
 //! These features change inner data structures implementations. They usually
 //! increase performances, and are therefore enabled by default.
@@ -39,7 +39,7 @@
 //! - [`parking_lot`]: Use improved synchronization primitives.
 //! - [`ahash`]: Use a faster hashing algorithm.
 //!
-//! # Example
+//! # Basic example
 //!
 //! If the file `assets/common/position.ron` contains this:
 //!
@@ -97,7 +97,18 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
-//! # Borrowship model
+//! # Hot-reloading
+//!
+//! Hot-reloading is a major feature of `assets_manager`: when a file is edited,
+//! the values of all loaded assets that depend on this file are automatically
+//! and transparently updated.
+//!
+//! To use hot-reloading, see [`AssetCache::hot_reload`].
+//!
+//! See the [`asset`] module for a precise description of how different assets
+//! interact with hot-reloading.
+//!
+//! # Ownership model
 //!
 //! You will notice that an [`Handle`] is not `'static`: its lifetime is
 //! tied to that of the [`AssetCache`] from which it was loaded. This may be
@@ -113,44 +124,37 @@
 //! Note that this also means that you need a mutable reference on a cache to
 //! remove assets from it.
 //!
-//! # Becoming `'static`
+//! ## Getting owned data
 //!
-//! Working with `'static` data is far easier: you don't have to care about
+//! Working with owned data is far easier: you don't have to care about
 //! lifetimes, they can easily be sent in other threads, etc. So, how to get
-//! `'static` data from `Handle`s ?
+//! `'static` data from `Handle`s that borrow from an `AssetCache` ?
 //!
 //! Note that none of these proposals is compulsory to use this crate: you can
 //! work with non-`'static` data, or invent your own techniques.
 //!
-//! ## Getting a `&'static AssetCache`
+//! ### Getting a `&'static AssetCache`
 //!
-//! The lifetime of an `Handle` being tied to that of the `&AssetCache`,
-//! this enables you to get `'static` `Handle`s. Moreover, it enables you
-//! to call [`AssetCache::enhance_hot_reloading`], which is easier to work with
-//! and has better performances than the default solution.
+//! The lifetime of an `Handle` being tied to that of the `&AssetCache`, this
+//! makes possible to get `'static` `Handle`s. Moreover, it enables you to call
+//! [`AssetCache::enhance_hot_reloading`], which is easier to work with and has
+//! better performances than the default solution.
 //!
 //! You get easily get a `&'static AssetCache`, with the `lazy_static` crate,
-//! but you can also do it by [leaking a `Box`].
+//! but you can also do it by [leaking a `Box`](Box::leak).
 //!
 //! Note that using this technique prevents you from removing assets from the
 //! cache, so you have to keep them in memory for the duration of the program.
 //! This also creates global state, which you might want to avoid.
 //!
-//! [leaking a `Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak
-//!
-//! ## Cloning assets
+//! ### Cloning assets
 //!
 //! Assets being `'static` themselves, cloning them is a good way to opt out of
-//! the lifetime of the cache. If cloning the asset itself is too expensive,
-//! you can take advantage of the fact that `Arc<A>` is an asset if `A` is too:
-//! cloning an `Arc` is a rather cheap operation (at least, when compared to
-//! allocating memory).
+//! the lifetime of the cache. If cloning the asset itself is too expensive, you
+//! can take advantage of the fact that `Arc<A>` is an asset if `A` is too and
+//! that cloning an `Arc` is a rather cheap operation.
 //!
-//! However, by doing so, you explicitly opt-out hot-reloading, which is done
-//! via `Handle`s. This can also be a benefit if you need to ensure that your
-//! data does not change spuriously.
-//!
-//! ## Storing `String`s
+//! ### Storing `String`s
 //!
 //! Strings are `'static` and easy to work with, and you can use them to load
 //! an asset from the cache, which is a cheap operation if the asset is already
@@ -158,7 +162,7 @@
 //! can do so with [`AssetCache::get_cached`].
 //!
 //! If you have to clone them a lot, you may consider changing your `String`
-//! into an `Arc<str>` which is cheaper to clone.
+//! into an `Arc<str>` or a `SharedString` which is cheaper to clone.
 //!
 //! This is the technique internally used by `assets_manager` to store cached
 //! directories.

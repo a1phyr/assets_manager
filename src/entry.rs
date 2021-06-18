@@ -153,7 +153,7 @@ impl<T> Copy for HandleInner<'_, T> {}
 ///
 /// This is the structure you want to use to store a reference to an asset.
 /// However it is generally easier to work with `'static` data. For more
-/// information, see [top-level documentation](index.html#becoming-static).
+/// information, see [top-level documentation](crate#getting-owned-data).
 pub struct Handle<'a, T> {
     inner: HandleInner<'a, T>,
     #[cfg(feature = "hot-reloading")]

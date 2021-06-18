@@ -205,9 +205,9 @@ thread_local! {
 ///
 /// // Use hot-reloading
 /// loop {
-///     println!("Position: {:?}", point_handle.read());
 /// #   #[cfg(feature = "hot-reloading")]
 ///     cache.hot_reload();
+///     println!("Position: {:?}", point_handle.read());
 /// #   break;
 /// }
 ///

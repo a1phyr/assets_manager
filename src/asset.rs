@@ -1,4 +1,33 @@
 //! Values loadable from a cache.
+//!
+//! # Asset kinds
+//!
+//! In `assets_manager`, assets are stored in an [`AssetCache`], and are usually
+//! loaded from a [`Source`], a file system abstraction. Most of the I/O with
+//! the source is handled by `assets_manager`, so you can focus on the rest.
+//!
+//! This crate defines several kinds of assets, that have different use cases:
+//! - The most common, [`Asset`]s, that are loaded from a single file. An
+//!   `Asset` gives a way to get a Rust value from raw bytes.
+//! - [`Compound`] are created by loading other assets and composing them.
+//! - [`Storable`] is the widest category: everything `'static` type can fit in
+//!   it. Values of types that implement `Storable` can be inserted in a cache,
+//!   but provide no way to construct them.
+//!
+//! Additionnally, [`DirLoadable`] assets can be loaded by directory, eventually
+//! recursively. All `Asset` types implement this trait out of the box, but it
+//! can be extended to work with `Compound`s.
+//!
+//! # Hot-reloading
+//!
+//! Different asset kinds have different interactions with hot-reloading:
+//! - `Asset`s are reloaded when the file they were loaded from is edited.
+//! - `Compound`s are reloaded when any asset they depend on to build themselves
+//!   is reloaded.
+//! - Directories are never reloaded (note that individual assets in a directory
+//!   are still reloaded).
+//!
+//! Additionally, one can explicitly disable hot-reloading for a type.
 
 pub use crate::dirs::DirLoadable;
 
@@ -29,7 +58,7 @@ use std::{
 };
 
 
-/// An asset is a type loadable from a file.
+/// An asset is a type loadable from raw bytes.
 ///
 /// `Asset`s can be loaded and retrieved by an [`AssetCache`].
 ///
@@ -102,8 +131,8 @@ pub trait Asset: Sized + Send + Sync + 'static {
 
     /// Specifies a eventual default value to use if an asset fails to load. If
     /// this method returns `Ok`, the returned value is used as an asset. In
-    /// particular, if this method always returns `Ok`, all `AssetCache::load*`
-    /// (except `get_cached`) are guaranteed not to fail.
+    /// particular, if this method always returns `Ok`, `AssetCache::load` is
+    /// guaranteed not to fail.
     ///
     /// The `id` parameter is given to easily report the error.
     ///
@@ -172,16 +201,21 @@ where
 ///
 /// `Compound`s can be loaded and retrieved by an [`AssetCache`].
 ///
+/// A `Compound` often needs to reference other assets, but `Compound` requires
+/// `'static` and a `Handle` is borrowed. See [top-level documentation] for
+/// workarounds.
+///
+/// [top-level documentation]: crate#getting-owned-data
+///
+/// Note that all [`Asset`]s implement `Compound`.
+///
 /// # Hot-reloading
 ///
 /// Any asset loaded from the given cache is registered as a dependency of the
 /// Compound. When the former is reloaded, the latter will be reloaded too. An
 /// asset cannot depend on itself, or it may cause deadlocks to happen.
 ///
-/// To opt out of dependencies recording, use `AssetCache::no_record`.
-///
-/// Note that directories are not considered as dependencies at the moment, but
-/// this will come in a future (breaking) release.
+/// To opt out of dependencies recording, use [`AssetCache::no_record`].
 pub trait Compound: Sized + Send + Sync + 'static {
     /// Loads an asset from the cache.
     ///
@@ -227,6 +261,7 @@ where
     }
 
     #[inline]
+    #[doc(hidden)]
     fn _load<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
         let asset = cache.no_record(|| Self::load(cache, id))?;
 

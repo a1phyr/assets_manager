@@ -92,6 +92,7 @@ where
         fn inner<S: Source + ?Sized>(source: &S, id: &str, extensions: &[&str]) -> io::Result<Vec<SharedString>> {
             let mut ids = Vec::new();
 
+            // Select all files with an extension valid for type `A`
             source.read_dir(id, &mut |entry| {
                 if let DirEntry::File(id, ext) = entry {
                     if extensions.contains(&ext) {
@@ -130,7 +131,7 @@ where
     fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
         let mut ids = A::select_ids(cache.source(), id)?;
 
-        // Remove deduplicated entries
+        // Remove duplicated entries
         ids.sort_unstable();
         ids.dedup();
 
@@ -158,6 +159,7 @@ impl<A> fmt::Debug for CachedDir<A> {
     }
 }
 
+/// Stores ids in a recursive directory containing assets of type `A`
 pub(crate) struct CachedRecDir<A> {
     ids: Vec<SharedString>,
     _marker: PhantomData<A>,
@@ -234,7 +236,7 @@ where
 
 /// A handle on a asset directory.
 ///
-/// This type provides methods to access assets within th directory.
+/// This type provides methods to access assets within a directory.
 pub struct DirHandle<'a, A, S> {
     inner: DirHandleInner<'a, A>,
     cache: &'a AssetCache<S>,

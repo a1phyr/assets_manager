@@ -161,6 +161,7 @@ impl Source for FileSystem {
     }
 
     #[cfg(feature = "hot-reloading")]
+    #[doc(hidden)]
     fn _add_asset<A: Asset, P: PrivateMarker>(&self, id: &str) {
         if let Some(reloader) = &self.reloader {
             for ext in A::EXTENSIONS {
@@ -172,6 +173,7 @@ impl Source for FileSystem {
     }
 
     #[cfg(feature = "hot-reloading")]
+    #[doc(hidden)]
     fn _clear<P: PrivateMarker>(&mut self) {
         if let Some(reloader) = &self.reloader {
             reloader.send_update(UpdateMessage::Clear);
@@ -179,6 +181,7 @@ impl Source for FileSystem {
     }
 
     #[cfg(feature = "hot-reloading")]
+    #[doc(hidden)]
     fn _add_compound<A: Compound, P: PrivateMarker>(&self, id: &str, deps: crate::utils::DepsRecord) {
         if let Some(reloader) = &self.reloader {
             reloader.send_update(UpdateMessage::AddCompound(CompoundReloadInfos::of::<A>(id.into(), deps.0)))

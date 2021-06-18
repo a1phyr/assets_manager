@@ -37,7 +37,7 @@ use crate::utils::PrivateMarker;
 use std::{borrow::Cow, io};
 
 #[cfg(doc)]
-use crate::AssetCache;
+use crate::{asset::DirLoadable, AssetCache};
 
 mod filesystem;
 pub use filesystem::FileSystem;
@@ -138,12 +138,23 @@ impl<'a> DirEntry<'a> {
 
 /// Bytes sources to load assets from.
 ///
+/// This trait provides an abstraction over a basic filesystem, which is used to
+/// load assets independantly from the actual storage kind.
+///
+/// As a consumer of this library, you generally don't need to use this trait,
+/// exept when implementing [`DirLoadable`].
+///
 /// See [module-level documentation](super::source) for more informations.
 pub trait Source {
     /// Try reading the source given an id and an extension.
     ///
     /// If no error occurs, this function returns an `Cow`, which can be useful
     /// to avoid allocations.
+    ///
+    /// Most of the time, you won't need to use this method, directly, as it is
+    /// done for you by an [`AssetCache`] when you load [`Asset`]s.
+    ///
+    /// [`Asset`]: crate::Asset
     fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>>;
 
     /// Reads the content of a directory.
@@ -170,7 +181,7 @@ pub trait Source {
     ///     }
     /// })?;
     ///
-    /// // Order is important for equality comparison
+    /// // Sort for equality comparison
     /// dir_content.sort();
     ///
     /// assert_eq!(dir_content, ["example.monsters.giant_bat", "example.monsters.goblin"]);
@@ -179,6 +190,18 @@ pub trait Source {
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()>;
 
     /// Returns `true` if the entry points at an existing entity.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use assets_manager::source::{DirEntry, FileSystem, Source};
+    ///
+    /// let fs = FileSystem::new("assets")?;
+    ///
+    /// assert!(fs.exists(DirEntry::File("example.monsters.goblin", "ron")));
+    /// assert!(!fs.exists(DirEntry::File("example.monsters.spider", "ron")));
+    /// # Ok::<(), std::io::Error>(())
+    /// ```
     fn exists(&self, entry: DirEntry) -> bool;
 
     #[cfg(feature = "hot-reloading")]
