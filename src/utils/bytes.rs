@@ -26,14 +26,6 @@ union Inner {
 /// when created from a slice.
 pub struct SharedBytes(Inner);
 
-impl SharedBytes {
-    /// Creates a new `SharedBytes`.
-    #[inline]
-    pub fn new<T: Into<SharedBytes>>(bytes: T) -> SharedBytes {
-        bytes.into()
-    }
-}
-
 unsafe impl Send for SharedBytes {}
 unsafe impl Sync for SharedBytes {}
 
