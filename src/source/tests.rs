@@ -90,7 +90,7 @@ mod embedded {
     test_source!(Embedded::from(RAW));
 }
 
-#[cfg(feature = "embedded")]
+#[cfg(feature = "zip-deflate")]
 mod zip {
     use super::*;
 
