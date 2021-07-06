@@ -32,9 +32,9 @@ impl Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(err) => f.write_fmt(format_args!("IO error: {}", err)),
-            Self::Conversion(err) => f.write_fmt(format_args!("Conversion error: {}", err)),
-            Self::NoDefaultValue => f.pad("No default value provided"),
+            Self::Io(_) => f.pad("I/O error"),
+            Self::Conversion(_) => f.pad("conversion error"),
+            Self::NoDefaultValue => f.pad("no default value provided"),
         }
     }
 }
