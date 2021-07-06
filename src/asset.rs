@@ -351,6 +351,21 @@ where
     const HOT_RELOADED: bool = A::HOT_RELOADED;
 }
 
+macro_rules! string_assets {
+    ( $( $typ:ty, )* ) => {
+        $(
+            impl Asset for $typ {
+                const EXTENSION: &'static str = "txt";
+                type Loader = loader::StringLoader;
+            }
+        )*
+    }
+}
+
+string_assets! {
+    String, Box<str>, SharedString,
+}
+
 macro_rules! impl_storable {
     ( $( $typ:ty, )* ) => {
         $(
@@ -363,9 +378,8 @@ macro_rules! impl_storable {
 impl_storable! {
     i8, i16, i32, i64, i128, isize,
     u8, u16, u32, u64, u128, usize,
-    f32, f64, char,
-    SharedString, SharedBytes,
-    String, &'static str,
+    f32, f64, char, &'static str,
+    SharedBytes,
 }
 
 impl<A: Send + Sync + 'static> Storable for Vec<A> {}
