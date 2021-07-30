@@ -220,8 +220,8 @@ where
     #[inline]
     fn id(self) -> &'a str {
         match self {
-            Self::Simple(handle) => &handle.id(),
-            Self::Recursive(handle) => &handle.id(),
+            Self::Simple(handle) => handle.id(),
+            Self::Recursive(handle) => handle.id(),
         }
     }
 

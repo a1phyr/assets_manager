@@ -37,7 +37,7 @@ impl Deref for SharedBytes {
         unsafe {
             if let Raw { zero: 0, ptr } = self.0.vec {
                 let vec: &Vec<u8> = &*ptr;
-                &vec
+                vec
             } else {
                 &*self.0.slice
             }
@@ -76,14 +76,14 @@ impl Drop for SharedBytes {
 impl AsRef<[u8]> for SharedBytes {
     #[inline]
     fn as_ref(&self) -> &[u8] {
-        &self
+        self
     }
 }
 
 impl std::borrow::Borrow<[u8]> for SharedBytes {
     #[inline]
     fn borrow(&self) -> &[u8] {
-        &self
+        self
     }
 }
 
@@ -190,19 +190,19 @@ impl Eq for SharedBytes {}
 
 impl PartialOrd<[u8]> for SharedBytes {
     fn partial_cmp(&self, other: &[u8]) -> Option<cmp::Ordering> {
-        (**self).partial_cmp(&other)
+        (**self).partial_cmp(other)
     }
 }
 
 impl PartialOrd for SharedBytes {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        (**self).partial_cmp(&other)
+        (**self).partial_cmp(other)
     }
 }
 
 impl Ord for SharedBytes {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        (**self).cmp(&other)
+        (**self).cmp(other)
     }
 }
 
@@ -220,7 +220,7 @@ impl serde::Serialize for SharedBytes {
     where
         S: serde::Serializer
     {
-        serializer.serialize_bytes(&self)
+        serializer.serialize_bytes(self)
     }
 }
 

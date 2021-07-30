@@ -424,7 +424,7 @@ impl<A> Deref for AssetGuard<'_, A> {
     fn deref(&self) -> &A {
         match &self.inner {
             GuardInner::Ref(r) => r,
-            GuardInner::Guard(g) => &g,
+            GuardInner::Guard(g) => g,
         }
     }
 }

@@ -106,7 +106,7 @@ impl AssetDepGraph {
         };
 
         for key in iter {
-            visit(&dep_graph, &mut sort, key, false);
+            visit(dep_graph, &mut sort, key, false);
         }
 
         AssetDepGraph(sort.list)

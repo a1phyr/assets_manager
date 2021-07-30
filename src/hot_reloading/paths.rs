@@ -304,7 +304,7 @@ impl LocalCache {
     /// Update the `AssetCache` with data collected in the `LocalCache` since
     /// the last reload.
     fn update(&mut self, deps: &mut Dependencies, cache: &AssetCache) {
-        let to_update = super::dependencies::AssetDepGraph::new(&deps, self.changed.iter().map(|(k,_)| k));
+        let to_update = super::dependencies::AssetDepGraph::new(deps, self.changed.iter().map(|(k,_)| k));
 
         // Update assets
         for (key, value) in self.changed.drain() {

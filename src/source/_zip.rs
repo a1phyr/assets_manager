@@ -45,11 +45,11 @@ impl FileKey for FileDesc {
 
 impl FileKey for (&'_ str, &'_ str) {
     fn id(&self) -> &str {
-        &self.0
+        self.0
     }
 
     fn ext(&self) -> &str {
-        &self.1
+        self.1
     }
 }
 

@@ -61,7 +61,7 @@ impl Deref for SharedString {
 impl AsRef<str> for SharedString {
     #[inline]
     fn as_ref(&self) -> &str {
-        &self
+        self
     }
 }
 
@@ -89,7 +89,7 @@ impl AsRef<std::ffi::OsStr> for SharedString {
 impl std::borrow::Borrow<str> for SharedString {
     #[inline]
     fn borrow(&self) -> &str {
-        &self
+        self
     }
 }
 
@@ -171,19 +171,19 @@ impl Eq for SharedString {}
 
 impl PartialOrd<str> for SharedString {
     fn partial_cmp(&self, other: &str) -> Option<cmp::Ordering> {
-        (**self).partial_cmp(&other)
+        (**self).partial_cmp(other)
     }
 }
 
 impl PartialOrd for SharedString {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        (**self).partial_cmp(&other)
+        (**self).partial_cmp(other)
     }
 }
 
 impl Ord for SharedString {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        (**self).cmp(&other)
+        (**self).cmp(other)
     }
 }
 
@@ -207,7 +207,7 @@ impl serde::Serialize for SharedString {
     where
         S: serde::Serializer
     {
-        serializer.serialize_str(&self)
+        serializer.serialize_str(self)
     }
 }
 
