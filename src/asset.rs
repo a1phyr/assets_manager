@@ -406,10 +406,24 @@ macro_rules! serde_assets {
             /// types without a newtype wrapper (eg [`Vec`]).
             #[cfg(feature = $feature)]
             #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
-            #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+            #[derive(Debug, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
             #[serde(transparent)]
             #[repr(transparent)]
             pub struct $name<T>(pub T);
+
+            #[cfg(feature = $feature)]
+            impl<T> Clone for $name<T>
+            where
+                T: Clone
+            {
+                fn clone(&self) -> Self {
+                    Self(self.0.clone())
+                }
+
+                fn clone_from(&mut self, other: &Self) {
+                    self.0.clone_from(&other.0)
+                }
+            }
 
             #[cfg(feature = $feature)]
             impl<T> From<T> for $name<T> {
