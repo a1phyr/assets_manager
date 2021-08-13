@@ -12,9 +12,11 @@ use std::{
 
 use crate::{
     asset::NotHotReloaded,
-    utils::{RwLock, RwLockReadGuard},
+    utils::RwLock,
 };
 
+#[cfg(feature = "hot-reloading")]
+use crate::utils::RwLockReadGuard;
 
 /// The representation of an asset whose value cannot change.
 pub(crate) struct StaticInner<T> {
@@ -31,11 +33,11 @@ impl<T> StaticInner<T> {
 
 /// The representation of an asset whose value can be updated (eg through
 /// hot-reloading).
+#[allow(dead_code)]
 pub(crate) struct DynamicInner<T> {
     id: Arc<str>,
     value: RwLock<T>,
     reload_global: AtomicBool,
-    #[allow(unused)]
     reload: AtomicUsize,
 }
 
@@ -214,7 +216,10 @@ where
     pub fn read(&self) -> AssetGuard<'a, T> {
         let inner = self.either(
             |this| GuardInner::Ref(&this.value),
+            #[cfg(feature = "hot-reloading")]
             |this| GuardInner::Guard(this.value.read()),
+            #[cfg(not(feature = "hot-reloading"))]
+            |_| unimplemented!(),
         );
         AssetGuard { inner }
     }
@@ -405,6 +410,7 @@ where
 
 pub enum GuardInner<'a, T> {
     Ref(&'a T),
+    #[cfg(feature = "hot-reloading")]
     Guard(RwLockReadGuard<'a, T>),
 }
 
@@ -424,6 +430,7 @@ impl<A> Deref for AssetGuard<'_, A> {
     fn deref(&self) -> &A {
         match &self.inner {
             GuardInner::Ref(r) => r,
+            #[cfg(feature = "hot-reloading")]
             GuardInner::Guard(g) => g,
         }
     }
