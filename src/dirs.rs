@@ -273,22 +273,20 @@ where
 
     /// Returns an iterator over the assets in the directory.
     ///
-    /// This fonction does not do any I/O and assets that previously failed to
-    /// load are ignored.
+    /// This function will happily try to load all assets, even if an error
+    /// occured the last time it was tried.
     #[inline]
-    pub fn iter(self) -> impl Iterator<Item=Handle<'a, A>> {
-        self.inner.ids().iter().filter_map(move |id| self.cache.get_cached(&**id))
+    pub fn iter(self) -> impl ExactSizeIterator<Item=Result<Handle<'a, A>, Error>> {
+        self.inner.ids().iter().map(move |id| self.cache.load(&**id))
     }
 
     /// Returns an iterator over the assets in the directory.
     ///
-    /// Unlike `Self::iter`, this function will happily try to load all assets, even
-    /// if an error occured the last time it was tried.
-    ///
-    /// The iterator is a list of tuples (id, result of the `load` operation).
+    /// This fonction does not do any I/O and assets that previously failed to
+    /// load are ignored.
     #[inline]
-    pub fn iter_all(self) -> impl ExactSizeIterator<Item=(&'a str, Result<Handle<'a, A>, Error>)> {
-        self.inner.ids().iter().map(move |id| (&**id, self.cache.load(&**id)))
+    pub fn iter_cached(self) -> impl Iterator<Item=Handle<'a, A>> {
+        self.inner.ids().iter().filter_map(move |id| self.cache.get_cached(&**id))
     }
 }
 
