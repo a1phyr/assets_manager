@@ -162,14 +162,14 @@ pub struct Handle<'a, T> {
     last_reload: usize,
 }
 
-impl<'a, T> Handle<'a, T>
-where
-    T: 'static,
-{
+impl<'a, T> Handle<'a, T> {
     /// Creates a new handle.
     ///
     /// `inner` must contain a `StaticInner<T>` or a `DynamicInner<T>`.
-    fn new(inner: CacheEntryInner<'a>) -> Self {
+    fn new(inner: CacheEntryInner<'a>) -> Self
+    where
+        T: 'static,
+    {
         let inner = loop {
             if let Some(inner) = inner.0.downcast_ref::<StaticInner<T>>() {
                 break HandleInner::Static(inner);
@@ -191,7 +191,6 @@ where
         this.reloaded();
         this
     }
-
 
     #[inline]
     pub(crate) fn either<U>(&self,
@@ -342,7 +341,7 @@ where
 
 impl<A> Handle<'_, A>
 where
-    A: Copy + 'static,
+    A: Copy
 {
     /// Returns a copy of the inner asset.
     ///
@@ -356,7 +355,7 @@ where
 
 impl<A> Handle<'_, A>
 where
-    A: Clone + 'static,
+    A: Clone,
 {
     /// Returns a clone of the inner asset.
     #[inline]
@@ -376,8 +375,7 @@ impl<A> Copy for Handle<'_, A> {}
 
 impl<T, U> PartialEq<Handle<'_, U>> for Handle<'_, T>
 where
-    T: PartialEq<U> + 'static,
-    U: 'static,
+    T: PartialEq<U>,
 {
     #[inline]
     fn eq(&self, other: &Handle<U>) -> bool {
@@ -385,13 +383,13 @@ where
     }
 }
 
-impl<A> Eq for Handle<'_, A> where A: Eq + 'static {}
+impl<A> Eq for Handle<'_, A> where A: Eq {}
 
 #[cfg(feature = "serde")]
 #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 impl<A> serde::Serialize for Handle<'_, A>
 where
-    A: serde::Serialize + 'static,
+    A: serde::Serialize,
 {
     #[inline]
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
@@ -401,7 +399,7 @@ where
 
 impl<A> fmt::Debug for Handle<'_, A>
 where
-    A: fmt::Debug + 'static,
+    A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Handle").field("value", &*self.read()).finish()
