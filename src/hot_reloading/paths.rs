@@ -3,13 +3,13 @@ use std::{
     borrow::Cow,
     fs,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use crate::{
     Asset,
     AssetCache,
     Compound,
+    SharedString,
     loader::Loader,
     entry::{CacheEntry, CacheEntryInner},
     utils::{extension_of, BorrowedKey, HashMap, HashSet, OwnedKey},
@@ -20,7 +20,7 @@ use super::dependencies::Dependencies;
 
 trait AnyAsset: Any + Send + Sync {
     fn reload(self: Box<Self>, entry: CacheEntryInner);
-    fn create(self: Box<Self>, id: Arc<str>) -> CacheEntry;
+    fn create(self: Box<Self>, id: SharedString) -> CacheEntry;
 }
 
 impl<A: Asset> AnyAsset for A {
@@ -31,7 +31,7 @@ impl<A: Asset> AnyAsset for A {
         );
     }
 
-    fn create(self: Box<Self>, id: Arc<str>) -> CacheEntry {
+    fn create(self: Box<Self>, id: SharedString) -> CacheEntry {
         CacheEntry::new::<A>(*self, id, A::HOT_RELOADED)
     }
 }
@@ -78,11 +78,11 @@ fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>
 
 /// Invariant: the TypeId is the same as the one of the value returned by the
 /// LoadFn.
-pub(crate) struct AssetReloadInfos(PathBuf, Arc<str>, TypeId, LoadFn);
+pub(crate) struct AssetReloadInfos(PathBuf, SharedString, TypeId, LoadFn);
 
 impl AssetReloadInfos {
     #[inline]
-    pub fn of<A: Asset>(path: PathBuf, id: Arc<str>) -> Self {
+    pub fn of<A: Asset>(path: PathBuf, id: SharedString) -> Self {
         AssetReloadInfos(path, id, TypeId::of::<A>(), load::<A>)
     }
 }
@@ -91,7 +91,7 @@ pub(crate) struct CompoundReloadInfos(OwnedKey, HashSet<OwnedKey>, ReloadFn);
 
 impl CompoundReloadInfos {
     #[inline]
-    pub fn of<A: Compound>(id: Arc<str>, deps: HashSet<OwnedKey>) -> Self {
+    pub fn of<A: Compound>(id: SharedString, deps: HashSet<OwnedKey>) -> Self {
         let key = OwnedKey::new::<A>(id);
         CompoundReloadInfos(key, deps, reload::<A>)
     }
@@ -137,12 +137,12 @@ impl<T> Types<T> {
 
 /// A list of types associated with an id
 struct WatchedPath<T> {
-    id: Arc<str>,
+    id: SharedString,
     types: Types<T>,
 }
 
 impl<T> WatchedPath<T> {
-    const fn new(id: Arc<str>) -> Self {
+    const fn new(id: SharedString) -> Self {
         Self {
             id,
             types: Types::new(),

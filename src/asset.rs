@@ -226,7 +226,7 @@ pub trait Compound: Sized + Send + Sync + 'static {
     /// Loads an asset and registers it for hot-reloading if necessary.
     #[doc(hidden)]
     #[cfg_attr(not(feature = "hot-reloading"), inline)]
-    fn _load<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
+    fn _load<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: &SharedString) -> Result<Self, Error> {
         #[cfg(feature = "hot-reloading")]
         {
             use crate::utils::DepsRecord;
@@ -262,7 +262,7 @@ where
 
     #[inline]
     #[doc(hidden)]
-    fn _load<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
+    fn _load<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: &SharedString) -> Result<Self, Error> {
         let asset = cache.no_record(|| Self::load(cache, id))?;
 
         #[cfg(feature = "hot-reloading")]

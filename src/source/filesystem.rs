@@ -1,6 +1,6 @@
 #[cfg(feature = "hot-reloading")]
 use crate::{
-    Asset, Compound,
+    Asset, Compound, SharedString,
     hot_reloading::{
         AssetReloadInfos,
         CompoundReloadInfos,
@@ -162,11 +162,11 @@ impl Source for FileSystem {
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn _add_asset<A: Asset, P: PrivateMarker>(&self, id: &str) {
+    fn _add_asset<A: Asset, P: PrivateMarker>(&self, id: &SharedString) {
         if let Some(reloader) = &self.reloader {
             for ext in A::EXTENSIONS {
                 let path = self.path_of(DirEntry::File(id, ext));
-                let msg = UpdateMessage::AddAsset(AssetReloadInfos::of::<A>(path, id.into()));
+                let msg = UpdateMessage::AddAsset(AssetReloadInfos::of::<A>(path, id.clone()));
                 reloader.send_update(msg);
             }
         }
@@ -182,9 +182,9 @@ impl Source for FileSystem {
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn _add_compound<A: Compound, P: PrivateMarker>(&self, id: &str, deps: crate::utils::DepsRecord) {
+    fn _add_compound<A: Compound, P: PrivateMarker>(&self, id: &SharedString, deps: crate::utils::DepsRecord) {
         if let Some(reloader) = &self.reloader {
-            reloader.send_update(UpdateMessage::AddCompound(CompoundReloadInfos::of::<A>(id.into(), deps.0)))
+            reloader.send_update(UpdateMessage::AddCompound(CompoundReloadInfos::of::<A>(id.clone(), deps.0)))
         }
     }
 

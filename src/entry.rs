@@ -4,29 +4,23 @@ use std::{
     any::{Any, type_name},
     fmt,
     ops::Deref,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-    },
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-use crate::{
-    asset::NotHotReloaded,
-    utils::RwLock,
-};
+use crate::{SharedString, asset::NotHotReloaded, utils::RwLock};
 
 #[cfg(feature = "hot-reloading")]
 use crate::utils::RwLockReadGuard;
 
 /// The representation of an asset whose value cannot change.
 pub(crate) struct StaticInner<T> {
-    id: Arc<str>,
+    id: SharedString,
     value: T,
 }
 
 impl<T> StaticInner<T> {
     #[inline]
-    fn new(value: T, id: Arc<str>) -> Self {
+    fn new(value: T, id: SharedString) -> Self {
         Self { id, value }
     }
 }
@@ -35,7 +29,7 @@ impl<T> StaticInner<T> {
 /// hot-reloading).
 #[allow(dead_code)]
 pub(crate) struct DynamicInner<T> {
-    id: Arc<str>,
+    id: SharedString,
     value: RwLock<T>,
     reload_global: AtomicBool,
     reload: AtomicUsize,
@@ -44,7 +38,7 @@ pub(crate) struct DynamicInner<T> {
 #[cfg(feature = "hot-reloading")]
 impl<T> DynamicInner<T> {
     #[inline]
-    fn new(value: T, id: Arc<str>) -> Self {
+    fn new(value: T, id: SharedString) -> Self {
         Self {
             id,
             value: RwLock::new(value),
@@ -85,7 +79,7 @@ impl CacheEntry {
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new<T: Send + Sync + 'static>(asset: T, id: Arc<str>, _reloadable: bool) -> Self {
+    pub fn new<T: Send + Sync + 'static>(asset: T, id: SharedString, _reloadable: bool) -> Self {
         #[cfg(not(feature = "hot-reloading"))]
         let inner = Box::new(StaticInner::new(asset, id));
 

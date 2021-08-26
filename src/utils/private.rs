@@ -6,6 +6,8 @@
 //! - An unified API for `HashMap`s between `std` and `ahash` hashers
 //! - A marker for private APIs
 
+use crate::SharedString;
+
 #[allow(unused_imports)]
 use std::{
     any::TypeId,
@@ -59,18 +61,25 @@ impl hash::Hash for dyn Key + '_ {
 /// The key used to identify assets
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct OwnedKey {
-    id: Arc<str>,
+    id: SharedString,
     type_id: TypeId,
 }
 
 impl OwnedKey {
     /// Creates a `OwnedKey` with the given type and id.
     #[inline]
-    pub fn new<T: 'static>(id: Arc<str>) -> Self {
+    pub fn new<T: 'static>(id: SharedString) -> Self {
         Self {
             id,
             type_id: TypeId::of::<T>(),
         }
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    pub fn from_str<T: 'static>(id: &str) -> Self {
+        let id = SharedString::from(id);
+        Self::new::<T>(id)
     }
 
     #[cfg(feature = "hot-reloading")]
@@ -89,7 +98,7 @@ impl OwnedKey {
 
     #[cfg(feature = "hot-reloading")]
     #[inline]
-    pub fn into_id(self) -> Arc<str> {
+    pub fn into_id(self) -> SharedString {
         self.id
     }
 }
@@ -101,12 +110,6 @@ impl Key for OwnedKey {
 
     fn type_id(&self) -> TypeId {
         self.type_id
-    }
-}
-
-impl From<&OwnedKey> for OwnedKey {
-    fn from(key: &Self) -> Self {
-        key.clone()
     }
 }
 

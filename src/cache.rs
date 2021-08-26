@@ -1,7 +1,7 @@
 //! Definition of the cache
 
 use crate::{
-    Asset, Error, Compound, Handle,
+    Asset, Compound, Error, Handle, SharedString,
     asset::{DirLoadable, Storable},
     dirs::DirHandle,
     entry::{CacheEntry, CacheEntryInner},
@@ -17,7 +17,6 @@ use std::{
     fmt,
     io,
     path::Path,
-    sync::Arc,
 };
 
 #[cfg(feature = "hot-reloading")]
@@ -84,7 +83,7 @@ impl Map {
     pub fn get_key_entry(&self, key: BorrowedKey) -> Option<(OwnedKey, CacheEntryInner)> {
         let shard = self.get_shard(key).read();
         let (key, entry) = shard.get_key_value(&key as &dyn Key)?;
-        unsafe { Some((key.into(), entry.inner().extend_lifetime())) }
+        unsafe { Some((key.clone(), entry.inner().extend_lifetime())) }
     }
 
     fn insert(&self, key: OwnedKey, entry: CacheEntry) -> CacheEntryInner {
@@ -97,7 +96,7 @@ impl Map {
     pub fn update_or_insert<T>(
         &self, key: OwnedKey, val: T,
         on_occupied: impl FnOnce(T, &CacheEntry),
-        on_vacant: impl FnOnce(T, Arc<str>) -> CacheEntry,
+        on_vacant: impl FnOnce(T, SharedString) -> CacheEntry,
     ) {
         use std::collections::hash_map::Entry;
         let shard = &mut *self.get_shard(key.borrow()).write();
@@ -272,13 +271,13 @@ where
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub(crate) fn add_record<K: Into<OwnedKey>>(&self, key: K) {
+    pub(crate) fn add_record(&self, key: OwnedKey) {
         if S::_support_hot_reloading::<Private>(&self.source) {
             RECORDING.with(|rec| {
                 if let Some(mut recorder) = rec.get() {
                     let recorder = unsafe { recorder.as_mut() };
                     if recorder.cache == self as *const Self as usize {
-                        recorder.records.insert(key.into());
+                        recorder.records.insert(key);
                     }
                 }
             });
@@ -323,8 +322,8 @@ where
     /// Adds an asset to the cache.
     #[cold]
     fn add_asset<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
-        let asset = A::_load::<S, Private>(self, id)?;
-        let id = Arc::<str>::from(id);
+        let id = SharedString::from(id);
+        let asset = A::_load::<S, Private>(self, &id)?;
         let entry = CacheEntry::new(asset, id.clone(), A::HOT_RELOADED);
         let key = OwnedKey::new::<A>(id);
 
@@ -335,7 +334,7 @@ where
     /// Adds any value to the cache.
     #[cold]
     fn add_any<A: Send + Sync + 'static>(&self, id: &str, asset: A) -> Handle<A> {
-        let id = Arc::<str>::from(id);
+        let id = SharedString::from(id);
         let entry = CacheEntry::new(asset, id.clone(), false);
         let key = OwnedKey::new::<A>(id);
 
@@ -375,17 +374,12 @@ where
 
         #[cfg(feature = "hot-reloading")]
         let entry = if A::HOT_RELOADED {
-            match self.assets.get_key_entry(key) {
-                Some((key, entry)) => {
-                    self.add_record(key);
-                    Some(entry)
-                },
-                None => {
-                    let key = BorrowedKey::new::<A>(id);
-                    self.add_record(key);
-                    None
-                },
-            }
+            let (key, entry) = match self.assets.get_key_entry(key) {
+                Some((key, entry)) => (key, Some(entry)),
+                None => (OwnedKey::from_str::<A>(id), None),
+            };
+            self.add_record(key);
+            entry
         } else {
             self.assets.get_entry(key)
         }?;
@@ -489,9 +483,10 @@ where
     pub fn load_owned<A: Compound>(&self, id: &str) -> Result<A, Error> {
         #[cfg(feature = "hot-reloading")]
         if A::HOT_RELOADED && self.is_recording() {
-            let key = BorrowedKey::new::<A>(id);
+            let id = SharedString::from(id);
+            let key = OwnedKey::new::<A>(id.clone());
             self.add_record(key);
-            return A::_load::<S, Private>(self, id)
+            return A::_load::<S, Private>(self, &id)
         }
 
         A::load(self, id)
