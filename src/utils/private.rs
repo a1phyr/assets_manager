@@ -75,11 +75,9 @@ impl OwnedKey {
         }
     }
 
-    #[cfg(feature = "hot-reloading")]
     #[inline]
-    pub fn from_str<T: 'static>(id: &str) -> Self {
-        let id = SharedString::from(id);
-        Self::new::<T>(id)
+    pub fn new_with(id: SharedString, type_id: TypeId) -> Self {
+        Self { id, type_id }
     }
 
     #[cfg(feature = "hot-reloading")]
@@ -145,7 +143,6 @@ impl<'a> BorrowedKey<'a> {
     }
 
     #[inline]
-    #[cfg(feature = "hot-reloading")]
     pub fn new_with(id: &'a str, type_id: TypeId) -> Self {
         Self { id, type_id }
     }

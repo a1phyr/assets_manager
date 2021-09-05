@@ -72,7 +72,7 @@ impl<'a> CacheEntryInner<'a> {
 }
 
 /// An entry in the cache.
-pub(crate) struct CacheEntry(pub Box<dyn Any + Send + Sync>);
+pub struct CacheEntry(pub Box<dyn Any + Send + Sync>);
 
 impl CacheEntry {
     /// Creates a new `CacheEntry` containing an asset of type `T`.
@@ -95,7 +95,7 @@ impl CacheEntry {
 
     /// Returns a reference on the inner storage of the entry.
     #[inline]
-    pub fn inner(&self) -> CacheEntryInner {
+    pub(crate) fn inner(&self) -> CacheEntryInner {
         CacheEntryInner(self.0.as_ref())
     }
 
@@ -112,7 +112,7 @@ impl CacheEntry {
             return inner.value.into_inner();
         }
 
-        panic!("wrong handle type");
+        wrong_handle_type()
     }
 }
 
@@ -174,7 +174,7 @@ impl<'a, T> Handle<'a, T> {
                 break HandleInner::Dynamic(inner);
             }
 
-            panic!("wrong handle type");
+            wrong_handle_type()
         };
 
         let mut this = Self {
@@ -455,4 +455,9 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&**self, f)
     }
+}
+
+#[cold]
+fn wrong_handle_type() -> ! {
+    panic!("wrong handle type");
 }

@@ -13,11 +13,7 @@ use crate::{
 #[cfg(doc)]
 use crate::{AssetGuard};
 
-use std::{
-    fmt,
-    io,
-    path::Path,
-};
+use std::{any::TypeId, fmt, io, path::Path};
 
 #[cfg(feature = "hot-reloading")]
 use crate::utils::HashSet;
@@ -151,6 +147,22 @@ struct Record {
 }
 
 #[cfg(feature = "hot-reloading")]
+impl Record {
+    fn new(cache: usize) -> Record {
+        Record {
+            cache,
+            records: HashSet::new(),
+        }
+    }
+
+    fn insert(&mut self, cache: usize, key: OwnedKey) {
+        if self.cache == cache {
+            self.records.insert(key);
+        }
+    }
+}
+
+#[cfg(feature = "hot-reloading")]
 thread_local! {
     static RECORDING: Cell<Option<NonNull<Record>>> = Cell::new(None);
 }
@@ -251,10 +263,7 @@ where
 
     #[cfg(feature = "hot-reloading")]
     pub(crate) fn record_load<A: Compound>(&self, id: &str) -> Result<(A, HashSet<OwnedKey>), Error> {
-        let mut record = Record {
-            cache: self as *const Self as usize,
-            records: HashSet::new(),
-        };
+        let mut record = Record::new(self as *const Self as usize);
 
         let asset = if S::_support_hot_reloading::<Private>(&self.source) {
             RECORDING.with(|rec| {
@@ -276,9 +285,7 @@ where
             RECORDING.with(|rec| {
                 if let Some(mut recorder) = rec.get() {
                     let recorder = unsafe { recorder.as_mut() };
-                    if recorder.cache == self as *const Self as usize {
-                        recorder.records.insert(key);
-                    }
+                    recorder.insert(self as *const Self as usize, key);
                 }
             });
         }
@@ -320,25 +327,31 @@ where
 
 
     /// Adds an asset to the cache.
+    ///
+    /// This function does not not have the asset kind as generic parameter to
+    /// reduce monomorphisation.
     #[cold]
-    fn add_asset<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
+    fn add_asset(
+        &self,
+        id: &str,
+        type_id: TypeId,
+        load: fn(&Self, SharedString) -> Result<CacheEntry, Error>,
+    ) -> Result<CacheEntryInner, Error> {
         let id = SharedString::from(id);
-        let asset = A::_load::<S, Private>(self, &id)?;
-        let entry = CacheEntry::new(asset, id.clone(), A::HOT_RELOADED);
-        let key = OwnedKey::new::<A>(id);
+        let entry = load(self, id.clone())?;
+        let key = OwnedKey::new_with(id, type_id);
 
-        let handle = self.assets.insert(key, entry).handle();
-        Ok(handle)
+        Ok(self.assets.insert(key, entry))
     }
 
     /// Adds any value to the cache.
     #[cold]
-    fn add_any<A: Send + Sync + 'static>(&self, id: &str, asset: A) -> Handle<A> {
+    fn add_any<A: Send + Sync + 'static>(&self, id: &str, asset: A) -> CacheEntryInner {
         let id = SharedString::from(id);
         let entry = CacheEntry::new(asset, id.clone(), false);
         let key = OwnedKey::new::<A>(id);
 
-        self.assets.insert(key, entry).handle()
+        self.assets.insert(key, entry)
     }
 
     /// Loads an asset.
@@ -353,10 +366,16 @@ where
     /// - The asset has no extension
     #[inline]
     pub fn load<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
-        match self.get_cached(id) {
-            Some(asset) => Ok(asset),
-            None => self.add_asset(id),
-        }
+        let entry = match self.get_cached_entry::<A>(id) {
+            Some(entry) => entry,
+            None => {
+                let load = A::_load_and_record_entry::<S, Private>;
+                let type_id = TypeId::of::<A>();
+                self.add_asset(id, type_id, load)?
+            }
+        };
+
+        Ok(entry.handle())
     }
 
     /// Gets a value from the cache.
@@ -366,25 +385,33 @@ where
     ///
     /// This function does not attempt to load the value from the source if it
     /// is not found in the cache.
+    #[inline]
     pub fn get_cached<A: Storable>(&self, id: &str) -> Option<Handle<A>> {
-        let key = BorrowedKey::new::<A>(id);
+        Some(self.get_cached_entry::<A>(id)?.handle())
+    }
+
+    #[inline]
+    fn get_cached_entry<A: Storable>(&self, id: &str) -> Option<CacheEntryInner> {
+        self.get_cached_entry_inner(id, TypeId::of::<A>(), A::HOT_RELOADED)
+    }
+
+    fn get_cached_entry_inner(&self, id: &str, type_id: TypeId, _hot_reloaded: bool) -> Option<CacheEntryInner> {
+        let key = BorrowedKey::new_with(id, type_id);
 
         #[cfg(not(feature = "hot-reloading"))]
-        let entry = self.assets.get_entry(key)?;
+        { self.assets.get_entry(key) }
 
         #[cfg(feature = "hot-reloading")]
-        let entry = if A::HOT_RELOADED {
+        if _hot_reloaded {
             let (key, entry) = match self.assets.get_key_entry(key) {
                 Some((key, entry)) => (key, Some(entry)),
-                None => (OwnedKey::from_str::<A>(id), None),
+                None => (key.to_owned(), None),
             };
             self.add_record(key);
             entry
         } else {
             self.assets.get_entry(key)
-        }?;
-
-        Some(entry.handle())
+        }
     }
 
     /// Gets a value from the cache or inserts one.
@@ -392,10 +419,12 @@ where
     /// As for `get_cached`, non-assets types must be marked with [`Storable`].
     #[inline]
     pub fn get_or_insert<A: Storable>(&self, id: &str, default: A) -> Handle<A> {
-        match self.get_cached(id) {
-            Some(handle) => handle,
+        let entry = match self.get_cached_entry::<A>(id) {
+            Some(entry) => entry,
             None => self.add_any(id, default),
-        }
+        };
+
+        entry.handle()
     }
 
     /// Returns `true` if the cache contains the specified asset.
@@ -486,7 +515,7 @@ where
             let id = SharedString::from(id);
             let key = OwnedKey::new::<A>(id.clone());
             self.add_record(key);
-            return A::_load::<S, Private>(self, &id)
+            return A::_load_and_record::<S, Private>(self, &id)
         }
 
         A::load(self, id)

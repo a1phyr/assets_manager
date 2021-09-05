@@ -38,6 +38,7 @@ use crate::{
     Error,
     loader,
     cache::load_from_source,
+    entry::CacheEntry,
     source::Source,
     utils::{PrivateMarker, SharedBytes, SharedString},
 };
@@ -224,9 +225,10 @@ pub trait Compound: Sized + Send + Sync + 'static {
     fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error>;
 
     /// Loads an asset and registers it for hot-reloading if necessary.
+    ///
+    /// This method is a internal implementation detail.
     #[doc(hidden)]
-    #[cfg_attr(not(feature = "hot-reloading"), inline)]
-    fn _load<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: &SharedString) -> Result<Self, Error> {
+    fn _load_and_record<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: &SharedString) -> Result<Self, Error> {
         #[cfg(feature = "hot-reloading")]
         {
             use crate::utils::DepsRecord;
@@ -242,6 +244,13 @@ pub trait Compound: Sized + Send + Sync + 'static {
 
         #[cfg(not(feature = "hot-reloading"))]
         { Self::load(cache, id) }
+    }
+
+    #[doc(hidden)]
+    fn _load_and_record_entry<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: SharedString) -> Result<CacheEntry, Error> {
+        let asset = Self::_load_and_record::<S, P>(cache, &id)?;
+        Ok(CacheEntry::new(asset, id, Self::HOT_RELOADED))
+
     }
 
     /// If `false`, disable hot-reloading for assets of this type (`true` by
@@ -260,9 +269,8 @@ where
         load_from_source(cache.source(), id)
     }
 
-    #[inline]
     #[doc(hidden)]
-    fn _load<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: &SharedString) -> Result<Self, Error> {
+    fn _load_and_record<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: &SharedString) -> Result<Self, Error> {
         let asset = cache.no_record(|| Self::load(cache, id))?;
 
         #[cfg(feature = "hot-reloading")]
