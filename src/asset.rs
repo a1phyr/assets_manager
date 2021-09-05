@@ -249,7 +249,7 @@ pub trait Compound: Sized + Send + Sync + 'static {
     #[doc(hidden)]
     fn _load_and_record_entry<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: SharedString) -> Result<CacheEntry, Error> {
         let asset = Self::_load_and_record::<S, P>(cache, &id)?;
-        Ok(CacheEntry::new(asset, id, Self::HOT_RELOADED))
+        Ok(CacheEntry::new(asset, id))
 
     }
 

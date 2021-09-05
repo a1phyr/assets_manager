@@ -346,9 +346,9 @@ where
 
     /// Adds any value to the cache.
     #[cold]
-    fn add_any<A: Send + Sync + 'static>(&self, id: &str, asset: A) -> CacheEntryInner {
+    fn add_any<A: Storable>(&self, id: &str, asset: A) -> CacheEntryInner {
         let id = SharedString::from(id);
-        let entry = CacheEntry::new(asset, id.clone(), false);
+        let entry = CacheEntry::new(asset, id.clone());
         let key = OwnedKey::new::<A>(id);
 
         self.assets.insert(key, entry)

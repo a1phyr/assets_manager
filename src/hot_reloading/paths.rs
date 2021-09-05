@@ -32,7 +32,7 @@ impl<A: Asset> AnyAsset for A {
     }
 
     fn create(self: Box<Self>, id: SharedString) -> CacheEntry {
-        CacheEntry::new::<A>(*self, id, A::HOT_RELOADED)
+        CacheEntry::new::<A>(*self, id)
     }
 }
 

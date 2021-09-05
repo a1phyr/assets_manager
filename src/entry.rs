@@ -7,7 +7,7 @@ use std::{
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-use crate::{SharedString, asset::NotHotReloaded, utils::RwLock};
+use crate::{SharedString, asset::{NotHotReloaded, Storable}, utils::RwLock};
 
 #[cfg(feature = "hot-reloading")]
 use crate::utils::RwLockReadGuard;
@@ -79,12 +79,12 @@ impl CacheEntry {
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new<T: Send + Sync + 'static>(asset: T, id: SharedString, _reloadable: bool) -> Self {
+    pub fn new<T: Storable>(asset: T, id: SharedString) -> Self {
         #[cfg(not(feature = "hot-reloading"))]
         let inner = Box::new(StaticInner::new(asset, id));
 
         #[cfg(feature = "hot-reloading")]
-        let inner: Box<dyn Any + Send + Sync> = if _reloadable {
+        let inner: Box<dyn Any + Send + Sync> = if T::HOT_RELOADED {
             Box::new(DynamicInner::new(asset, id))
         } else {
             Box::new(StaticInner::new(asset, id))
