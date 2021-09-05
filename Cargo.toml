@@ -89,6 +89,11 @@ required-features = ["hot-reloading", "ron"]
 [workspace]
 members = [".", "macros"]
 
+[profile.dev]
+# Disabling debug info speeds up builds a bunch,
+# and we don't rely on it for debugging that much.
+debug = 0
+
 
 [package.metadata.docs.rs]
 all-features = true
