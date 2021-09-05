@@ -243,6 +243,16 @@ impl<'de> serde::Deserialize<'de> for SharedBytes {
             }
 
             #[inline]
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(SharedBytes::from(v.as_bytes()))
+            }
+
+            #[inline]
+            fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
+                Ok(SharedBytes::from(v.into_bytes()))
+            }
+
+            #[inline]
             fn visit_bytes<E: serde::de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
                 Ok(SharedBytes::from(v))
             }

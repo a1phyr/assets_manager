@@ -238,6 +238,28 @@ impl<'de> serde::Deserialize<'de> for SharedString {
             fn visit_string<E: serde::de::Error>(self, s: String) -> Result<Self::Value, E> {
                 Ok(SharedString::from(s))
             }
+
+            #[inline]
+            fn visit_bytes<E: serde::de::Error>(self, s: &[u8]) -> Result<Self::Value, E> {
+                match str::from_utf8(s) {
+                    Ok(s) => Ok(SharedString::from(s)),
+                    Err(_) => {
+                        let unexp = serde::de::Unexpected::Bytes(s);
+                        Err(E::invalid_value(unexp, &self))
+                    }
+                }
+            }
+
+            #[inline]
+            fn visit_byte_buf<E: serde::de::Error>(self, s: Vec<u8>) -> Result<Self::Value, E> {
+                match String::from_utf8(s) {
+                    Ok(s) => Ok(SharedString::from(s)),
+                    Err(e) => {
+                        let unexp = serde::de::Unexpected::Bytes(e.as_bytes());
+                        Err(E::invalid_value(unexp, &self))
+                    }
+                }
+            }
         }
 
         deserializer.deserialize_string(Visitor)
