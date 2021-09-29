@@ -40,7 +40,7 @@ pub(crate) trait Key {
 impl PartialEq for dyn Key + '_ {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id() && self.type_id() == other.type_id()
+        self.type_id() == other.type_id() && self.id() == other.id()
     }
 }
 
@@ -49,16 +49,16 @@ impl Eq for dyn Key + '_ {}
 impl hash::Hash for dyn Key + '_ {
     #[inline]
     fn hash<H: hash::Hasher>(&self, h: &mut H) {
-        self.id().hash(h);
         self.type_id().hash(h);
+        self.id().hash(h);
     }
 }
 
 /// The key used to identify assets
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct OwnedKey {
-    id: SharedString,
     type_id: TypeId,
+    id: SharedString,
 }
 
 impl OwnedKey {
@@ -123,8 +123,8 @@ impl fmt::Debug for OwnedKey {
 /// A borrowed version of [`OwnedKey`]
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct BorrowedKey<'a> {
-    id: &'a str,
     type_id: TypeId,
+    id: &'a str,
 }
 
 impl<'a> BorrowedKey<'a> {
