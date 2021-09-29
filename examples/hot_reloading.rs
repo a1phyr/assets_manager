@@ -3,9 +3,6 @@
 //! In this example, the file `assets/example/hot.x` is loaded as a integer.
 //! It is automatically updated when this file is changed (you are of course
 //! encouraged to try changing the value to see what happens).
-//!
-//! **Warning**: Text editors may add a trailing `\n`, which will create an
-//! error. Please ensure this is not not case.
 
 use assets_manager::{
     Asset, AssetCache,

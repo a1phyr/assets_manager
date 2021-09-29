@@ -201,10 +201,13 @@ impl Loader<SharedString> for StringLoader {
     }
 }
 
-/// Loads assets that can be parsed with `FromStr`.
+/// Loads assets that can be parsed with [`FromStr`].
+///
+/// Leading and trailing whitespaces are removed from the input before
+/// processing.
 ///
 /// Do not use this loader to load `String`s, prefer using [`StringLoader`],
-/// which is more efficient.
+/// which is generally more efficient and does not trim whitespaces.
 ///
 /// If you want your custom type to work with this loader, make sure that
 /// `FromStr::Err` meets the requirement.
@@ -219,7 +222,7 @@ where
 {
     #[inline]
     fn load(content: Cow<[u8]>, _: &str) -> Result<T, BoxedError> {
-        Ok(str::from_utf8(&content)?.parse()?)
+        Ok(str::from_utf8(&content)?.trim().parse()?)
     }
 }
 
