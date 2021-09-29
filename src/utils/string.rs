@@ -1,13 +1,6 @@
 use super::SharedBytes;
 
-use std::{
-    borrow::Cow,
-    cmp,
-    fmt,
-    ops::Deref,
-    str,
-    sync::Arc,
-};
+use std::{borrow::Cow, cmp, fmt, ops::Deref, str, sync::Arc};
 
 /// A string that can easily be shared.
 ///
@@ -52,9 +45,7 @@ impl Deref for SharedString {
 
     #[inline]
     fn deref(&self) -> &str {
-        unsafe {
-            str::from_utf8_unchecked(&self.bytes)
-        }
+        unsafe { str::from_utf8_unchecked(&self.bytes) }
     }
 }
 
@@ -205,7 +196,7 @@ impl serde::Serialize for SharedString {
     #[inline]
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer
+        S: serde::Serializer,
     {
         serializer.serialize_str(self)
     }
@@ -217,7 +208,7 @@ impl<'de> serde::Deserialize<'de> for SharedString {
     #[inline]
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'de>
+        D: serde::Deserializer<'de>,
     {
         struct Visitor;
 

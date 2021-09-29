@@ -6,7 +6,6 @@ use std::{
 };
 use syn::parse::{Parse, ParseStream};
 
-
 pub struct Input(PathBuf);
 
 impl Parse for Input {
@@ -15,7 +14,7 @@ impl Parse for Input {
 
         match Path::new(&lit_path.value()).canonicalize() {
             Ok(path) => Ok(Input(path)),
-            Err(e) => Err(syn::Error::new(lit_path.span(), e))
+            Err(e) => Err(syn::Error::new(lit_path.span(), e)),
         }
     }
 }
@@ -35,7 +34,6 @@ impl Input {
         }
     }
 }
-
 
 fn extension_of(path: &Path) -> Option<&str> {
     match path.extension() {
@@ -83,7 +81,6 @@ fn read_dir(path: &Path, content: &mut Content, id: Id, errors: &mut Vec<syn::Er
     }
 }
 
-
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 struct Id(String);
 
@@ -100,7 +97,6 @@ impl Id {
         self
     }
 }
-
 
 struct FileDesc(Id, String, PathBuf);
 
@@ -124,14 +120,20 @@ impl Content {
 
     fn push_file(&mut self, desc: FileDesc, dir_id: &Id) {
         let entry = DirEntry::File(desc.0.clone(), desc.1.clone());
-        self.dirs.get_mut(dir_id).expect("File without directory").push(entry);
+        self.dirs
+            .get_mut(dir_id)
+            .expect("File without directory")
+            .push(entry);
         self.files.push(desc);
     }
 
     fn push_dir(&mut self, parent: Option<&Id>, id: Id) {
         if let Some(parent) = parent {
             let entry = DirEntry::Dir(id.clone());
-            self.dirs.get_mut(parent).expect("Directory without parent").push(entry);
+            self.dirs
+                .get_mut(parent)
+                .expect("Directory without parent")
+                .push(entry);
         }
         self.dirs.insert(id, Vec::new());
     }

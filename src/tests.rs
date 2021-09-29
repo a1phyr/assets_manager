@@ -47,10 +47,9 @@ impl Compound for Z {
     }
 }
 
-
 mod asset_cache {
-    use crate::AssetCache;
     use super::X;
+    use crate::AssetCache;
 
     #[test]
     fn new_with_valid_path() {
@@ -109,7 +108,9 @@ mod asset_cache {
         let cache = AssetCache::new("assets").unwrap();
 
         assert!(!cache.contains_dir::<X>("test", false));
-        let mut loaded: Vec<_> = cache.load_dir::<X>("test", false).unwrap()
+        let mut loaded: Vec<_> = cache
+            .load_dir::<X>("test", false)
+            .unwrap()
             .iter()
             .filter_map(|x| Some(x.ok()?.read().0))
             .collect();
@@ -123,7 +124,9 @@ mod asset_cache {
     fn load_dir_all() {
         let cache = AssetCache::new("assets").unwrap();
 
-        let mut loaded: Vec<_> = cache.load_dir::<X>("test", false).unwrap()
+        let mut loaded: Vec<_> = cache
+            .load_dir::<X>("test", false)
+            .unwrap()
             .ids()
             .map(|id| (id, cache.load::<X>(id)))
             .collect();

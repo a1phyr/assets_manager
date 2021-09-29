@@ -12,16 +12,12 @@ use crate::SharedString;
 use std::{
     any::TypeId,
     borrow::Borrow,
-    collections::{
-        HashMap as StdHashMap,
-        HashSet as StdHashSet,
-    },
-    hash, fmt,
+    collections::{HashMap as StdHashMap, HashSet as StdHashSet},
+    fmt, hash,
     ops::{Deref, DerefMut},
     path::Path,
     sync::Arc,
 };
-
 
 #[inline]
 pub(crate) fn extension_of(path: &Path) -> Option<&str> {
@@ -124,7 +120,6 @@ impl fmt::Debug for OwnedKey {
     }
 }
 
-
 /// A borrowed version of [`OwnedKey`]
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct BorrowedKey<'a> {
@@ -187,14 +182,12 @@ impl fmt::Debug for BorrowedKey<'_> {
     }
 }
 
-
 #[cfg(feature = "parking_lot")]
 use parking_lot as sync;
 #[cfg(not(feature = "parking_lot"))]
 use std::sync;
 
 pub(crate) use sync::{RwLockReadGuard, RwLockWriteGuard};
-
 
 #[cfg(feature = "parking_lot")]
 #[inline]
@@ -208,7 +201,6 @@ fn wrap<T>(param: sync::LockResult<T>) -> T {
     // Just ignore poison errors
     param.unwrap_or_else(sync::PoisonError::into_inner)
 }
-
 
 /// `RwLock` from `parking_lot` and `std` have different APIs, so we use this
 /// simple wrapper to easily permit both.
@@ -244,7 +236,6 @@ impl<T: ?Sized> RwLock<T> {
     }
 }
 
-
 #[allow(unused)]
 pub(crate) struct Mutex<T: ?Sized>(sync::Mutex<T>);
 
@@ -264,7 +255,6 @@ impl<T: ?Sized> Mutex<T> {
     }
 }
 
-
 mod private_marker {
     pub trait PrivateMarker {}
     pub(crate) enum Private {}
@@ -272,7 +262,6 @@ mod private_marker {
 }
 
 pub(crate) use private_marker::{Private, PrivateMarker};
-
 
 #[cfg(feature = "ahash")]
 pub(crate) use ahash::RandomState;
@@ -297,7 +286,10 @@ impl<K, V> HashMap<K, V> {
     #[cfg(feature = "zip")]
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
-        Self(StdHashMap::with_capacity_and_hasher(capacity, RandomState::new()))
+        Self(StdHashMap::with_capacity_and_hasher(
+            capacity,
+            RandomState::new(),
+        ))
     }
 }
 
@@ -366,7 +358,6 @@ where
         self.0.fmt(f)
     }
 }
-
 
 #[cfg(feature = "hot-reloading")]
 #[derive(Debug)]

@@ -4,7 +4,6 @@ use proc_macro::TokenStream;
 
 mod embedded;
 
-
 #[proc_macro]
 pub fn embed(input: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(input as embedded::Input);

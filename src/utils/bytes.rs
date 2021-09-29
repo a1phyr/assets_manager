@@ -1,10 +1,4 @@
-use std::{
-    borrow::Cow,
-    cmp,
-    fmt,
-    ops::Deref,
-    sync::Arc,
-};
+use std::{borrow::Cow, cmp, fmt, ops::Deref, sync::Arc};
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -99,7 +93,9 @@ impl From<Arc<Vec<u8>>> for SharedBytes {
     #[inline]
     fn from(arc: Arc<Vec<u8>>) -> SharedBytes {
         let ptr = Arc::into_raw(arc);
-        SharedBytes(Inner { vec: Raw { zero: 0, ptr } })
+        SharedBytes(Inner {
+            vec: Raw { zero: 0, ptr },
+        })
     }
 }
 
@@ -144,7 +140,7 @@ impl From<&SharedBytes> for SharedBytes {
 impl std::iter::FromIterator<u8> for SharedBytes {
     fn from_iter<T>(iter: T) -> SharedBytes
     where
-        T: IntoIterator<Item = u8>
+        T: IntoIterator<Item = u8>,
     {
         let vec: Vec<_> = iter.into_iter().collect();
         SharedBytes::from(vec)
@@ -218,7 +214,7 @@ impl serde::Serialize for SharedBytes {
     #[inline]
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer
+        S: serde::Serializer,
     {
         serializer.serialize_bytes(self)
     }
@@ -230,7 +226,7 @@ impl<'de> serde::Deserialize<'de> for SharedBytes {
     #[inline]
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'de>
+        D: serde::Deserializer<'de>,
     {
         struct Visitor;
 

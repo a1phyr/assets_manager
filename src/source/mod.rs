@@ -42,12 +42,10 @@ use crate::{asset::DirLoadable, AssetCache};
 mod filesystem;
 pub use filesystem::FileSystem;
 
-
 #[cfg(feature = "embedded")]
 mod embedded;
 #[cfg(feature = "embedded")]
 pub use embedded::{Embedded, RawEmbedded};
-
 
 #[cfg(feature = "zip")]
 mod _zip;
@@ -206,19 +204,37 @@ pub trait Source {
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn _add_asset<A: crate::Asset, P: PrivateMarker>(&self, _: &SharedString) where Self: Sized {}
+    fn _add_asset<A: crate::Asset, P: PrivateMarker>(&self, _: &SharedString)
+    where
+        Self: Sized,
+    {
+    }
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn _clear<P: PrivateMarker>(&mut self) where Self: Sized {}
+    fn _clear<P: PrivateMarker>(&mut self)
+    where
+        Self: Sized,
+    {
+    }
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn _add_compound<A: crate::Compound, P: PrivateMarker>(&self, _: &SharedString, _: crate::utils::DepsRecord) where Self: Sized {}
+    fn _add_compound<A: crate::Compound, P: PrivateMarker>(
+        &self,
+        _: &SharedString,
+        _: crate::utils::DepsRecord,
+    ) where
+        Self: Sized,
+    {
+    }
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn _support_hot_reloading<P: PrivateMarker>(&self) -> bool where Self: Sized {
+    fn _support_hot_reloading<P: PrivateMarker>(&self) -> bool
+    where
+        Self: Sized,
+    {
         false
     }
 }
@@ -239,4 +255,3 @@ where
         self.as_ref().exists(entry)
     }
 }
-

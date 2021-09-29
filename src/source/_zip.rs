@@ -1,18 +1,16 @@
-use crate::utils::{extension_of, HashMap, Mutex};
 use super::{DirEntry, Source};
+use crate::utils::{extension_of, HashMap, Mutex};
 
 use std::{
     borrow::Cow,
     fmt,
     fs::File,
-    hash,
-    io,
+    hash, io,
     path::{self, Path},
     sync::Arc,
 };
 
 use zip::{read::ZipFile, ZipArchive};
-
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 struct FileDesc(Arc<(String, String)>);
@@ -20,8 +18,8 @@ struct FileDesc(Arc<(String, String)>);
 impl fmt::Debug for FileDesc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("FileDesc")
-            .field("id", &self.0.0)
-            .field("ext", &self.0.1)
+            .field("id", &self.0 .0)
+            .field("ext", &self.0 .1)
             .finish()
     }
 }
@@ -35,11 +33,11 @@ trait FileKey {
 
 impl FileKey for FileDesc {
     fn id(&self) -> &str {
-        &self.0.0
+        &self.0 .0
     }
 
     fn ext(&self) -> &str {
-        &self.0.1
+        &self.0 .1
     }
 }
 
@@ -142,7 +140,7 @@ fn register_file(
     index: usize,
     files: &mut HashMap<FileDesc, usize>,
     dirs: &mut HashMap<String, Vec<OwnedEntry>>,
-    id_builder: &mut IdBuilder
+    id_builder: &mut IdBuilder,
 ) {
     id_builder.reset();
 
@@ -151,7 +149,7 @@ fn register_file(
         Some(path) => path,
         None => {
             log::warn!("Suspicious path in zip archive: {:?}", file.name());
-            return
+            return;
         }
     };
 
@@ -195,7 +193,8 @@ fn register_file(
         dirs.entry(parent_id).or_insert_with(Vec::new).push(entry);
 
         Some(())
-    })().is_some();
+    })()
+    .is_some();
 
     if !ok {
         log::warn!("Unsupported path in zip archive: {:?}", path);
@@ -224,7 +223,7 @@ impl Zip<File> {
 
 impl<B> Zip<io::Cursor<B>>
 where
-    B: AsRef<[u8]>
+    B: AsRef<[u8]>,
 {
     /// Creates a `Zip` archive backed by a byte array in memory.
     #[inline]
@@ -252,7 +251,11 @@ where
         }
 
         let archive = Mutex::new(archive);
-        Ok(Zip { files, dirs, archive })
+        Ok(Zip {
+            files,
+            dirs,
+            archive,
+        })
     }
 }
 
@@ -293,8 +296,6 @@ where
 
 impl<R> fmt::Debug for Zip<R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Zip")
-            .field("dirs", &self.dirs)
-            .finish()
+        f.debug_struct("Zip").field("dirs", &self.dirs).finish()
     }
 }

@@ -2,10 +2,9 @@
 //!
 //! The asset is stored in RON, in the file `assets/example/monsters/goblin.ron`.
 
-use assets_manager::{Asset, AssetCache, loader};
+use assets_manager::{loader, Asset, AssetCache};
 use serde::Deserialize;
 use std::error::Error;
-
 
 #[derive(Deserialize)]
 struct Monster {
@@ -22,7 +21,6 @@ impl Asset for Monster {
     type Loader = loader::RonLoader;
 }
 
-
 fn main() -> Result<(), Box<dyn Error>> {
     // The cache used to load assets
     // Its root is directory `assets`
@@ -37,7 +35,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let goblin = goblin.read();
 
     // Use it
-    println!("A {} ({}) has {} HP", goblin.name, goblin.description, goblin.health);
+    println!(
+        "A {} ({}) has {} HP",
+        goblin.name, goblin.description, goblin.health
+    );
 
     Ok(())
 }

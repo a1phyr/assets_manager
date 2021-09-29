@@ -1,11 +1,6 @@
-use std::{
-    borrow::Cow,
-    collections::HashMap,
-    io,
-};
+use std::{borrow::Cow, collections::HashMap, io};
 
 use super::{DirEntry, Source};
-
 
 /// The raw representation of embedded files.
 ///

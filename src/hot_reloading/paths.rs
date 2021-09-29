@@ -6,17 +6,13 @@ use std::{
 };
 
 use crate::{
-    Asset,
-    AssetCache,
-    Compound,
-    SharedString,
-    loader::Loader,
     entry::{CacheEntry, CacheEntryInner},
+    loader::Loader,
     utils::{extension_of, BorrowedKey, HashMap, HashSet, OwnedKey},
+    Asset, AssetCache, Compound, SharedString,
 };
 
 use super::dependencies::Dependencies;
-
 
 trait AnyAsset: Any + Send + Sync {
     fn reload(self: Box<Self>, entry: CacheEntryInner);
@@ -26,7 +22,12 @@ trait AnyAsset: Any + Send + Sync {
 impl<A: Asset> AnyAsset for A {
     fn reload(self: Box<Self>, entry: CacheEntryInner) {
         entry.handle::<A>().either(
-            |_| log::error!("Static asset registered for hot-reloading: {}", std::any::type_name::<A>()),
+            |_| {
+                log::error!(
+                    "Static asset registered for hot-reloading: {}",
+                    std::any::type_name::<A>()
+                )
+            },
             |e| e.write(*self),
         );
     }
@@ -38,13 +39,23 @@ impl<A: Asset> AnyAsset for A {
 
 type LoadFn = fn(content: Cow<[u8]>, ext: &str, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>>;
 
-fn load<A: Asset>(content: Cow<[u8]>, ext: &str, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>> {
+fn load<A: Asset>(
+    content: Cow<[u8]>,
+    ext: &str,
+    id: &str,
+    path: &Path,
+) -> Option<Box<dyn AnyAsset>> {
     match A::Loader::load(content, ext) {
         Ok(asset) => Some(Box::new(asset)),
         Err(err) => {
-            log::warn!("Error reloading \"{}\" from \"{}\": {}", id, path.display(), err);
+            log::warn!(
+                "Error reloading \"{}\" from \"{}\": {}",
+                id,
+                path.display(),
+                err
+            );
             None
-        },
+        }
     }
 }
 
@@ -56,7 +67,10 @@ fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>
     let handle = cache.assets.get_entry(key)?.handle();
     let entry = handle.either(
         |_| {
-            log::error!("Static asset registered for hot-reloading: {}", std::any::type_name::<T>());
+            log::error!(
+                "Static asset registered for hot-reloading: {}",
+                std::any::type_name::<T>()
+            );
             None
         },
         |e| Some(e),
@@ -74,7 +88,6 @@ fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>
         }
     }
 }
-
 
 /// Invariant: the TypeId is the same as the one of the value returned by the
 /// LoadFn.
@@ -166,7 +179,10 @@ impl AssetPaths {
 
     fn add_asset(&mut self, id: AssetReloadInfos) {
         let AssetReloadInfos(path, id, type_id, load) = id;
-        let watched = self.assets.entry(path).or_insert_with(|| WatchedPath::new(id));
+        let watched = self
+            .assets
+            .entry(path)
+            .or_insert_with(|| WatchedPath::new(id));
         watched.types.insert(type_id, load);
     }
 }
@@ -199,10 +215,10 @@ impl CacheKind {
                     log::info!("Reloading \"{}\"", key.id());
                 }
                 to_reload.push(key.to_owned());
-            },
+            }
             CacheKind::Local(cache) => {
                 cache.changed.insert(key.to_owned(), asset);
-            },
+            }
         }
     }
 }
@@ -245,7 +261,12 @@ impl HotReloadingData {
             let content = match fs::read(path) {
                 Ok(content) => content,
                 Err(err) => {
-                    log::warn!("Error reloading \"{}\" from \"{}\": {}", path_infos.id, path.display(), err);
+                    log::warn!(
+                        "Error reloading \"{}\" from \"{}\": {}",
+                        path_infos.id,
+                        path.display(),
+                        err
+                    );
                     return;
                 }
             };
@@ -290,12 +311,12 @@ impl HotReloadingData {
                 if let CacheKind::Local(cache) = &mut self.cache {
                     cache.clear();
                 }
-            },
+            }
             UpdateMessage::AddAsset(infos) => self.paths.add_asset(infos),
             UpdateMessage::AddCompound(infos) => {
                 let CompoundReloadInfos(key, new_deps, reload) = infos;
                 self.deps.insert(key, new_deps, Some(reload));
-            },
+            }
         }
     }
 }
@@ -304,13 +325,16 @@ impl LocalCache {
     /// Update the `AssetCache` with data collected in the `LocalCache` since
     /// the last reload.
     fn update(&mut self, deps: &mut Dependencies, cache: &AssetCache) {
-        let to_update = super::dependencies::AssetDepGraph::new(deps, self.changed.iter().map(|(k,_)| k));
+        let to_update =
+            super::dependencies::AssetDepGraph::new(deps, self.changed.iter().map(|(k, _)| k));
 
         // Update assets
         for (key, value) in self.changed.drain() {
             log::info!("Reloading \"{}\"", key.id());
 
-            cache.assets.update_or_insert(key, value,
+            cache.assets.update_or_insert(
+                key,
+                value,
                 |value, entry| value.reload(entry.inner()),
                 |value, id| value.create(id),
             );

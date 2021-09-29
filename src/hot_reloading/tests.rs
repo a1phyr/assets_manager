@@ -1,22 +1,15 @@
 use crate::{
-    AssetCache,
     source::DirEntry,
     tests::{X, Y, Z},
+    AssetCache,
 };
-use std::{
-    fs::File,
-    io,
-    io::Write,
-    path::Path,
-    sync::Arc,
-};
+use std::{fs::File, io, io::Write, path::Path, sync::Arc};
 
 fn sleep() {
     std::thread::sleep(std::time::Duration::from_millis(100));
 }
 
 type Res = Result<(), Box<dyn std::error::Error>>;
-
 
 fn write_i32(path: &Path, n: i32) -> io::Result<()> {
     let mut file = File::create(path)?;

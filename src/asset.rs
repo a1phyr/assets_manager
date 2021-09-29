@@ -33,14 +33,12 @@ pub use crate::dirs::DirLoadable;
 
 #[allow(unused)]
 use crate::{
-    AssetCache,
-    BoxedError,
-    Error,
-    loader,
     cache::load_from_source,
     entry::CacheEntry,
+    loader,
     source::Source,
     utils::{PrivateMarker, SharedBytes, SharedString},
+    AssetCache, BoxedError, Error,
 };
 
 #[cfg(feature = "rodio")]
@@ -52,12 +50,7 @@ use rodio::decoder::{Decoder, DecoderError};
 use serde::{Deserialize, Serialize};
 
 #[allow(unused)]
-use std::{
-    borrow::Cow,
-    io,
-    sync::Arc,
-};
-
+use std::{borrow::Cow, io, sync::Arc};
 
 /// An asset is a type loadable from raw bytes.
 ///
@@ -177,7 +170,6 @@ pub trait Asset: Sized + Send + Sync + 'static {
     const HOT_RELOADED: bool = true;
 }
 
-
 impl<A> Asset for Box<A>
 where
     A: Asset,
@@ -193,10 +185,7 @@ where
     const HOT_RELOADED: bool = A::HOT_RELOADED;
 }
 
-impl<A> NotHotReloaded for Box<A>
-where
-    A: Asset + NotHotReloaded,
-{}
+impl<A> NotHotReloaded for Box<A> where A: Asset + NotHotReloaded {}
 
 /// An asset type that can load other kinds of assets.
 ///
@@ -228,14 +217,19 @@ pub trait Compound: Sized + Send + Sync + 'static {
     ///
     /// This method is a internal implementation detail.
     #[doc(hidden)]
-    fn _load_and_record<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: &SharedString) -> Result<Self, Error> {
+    fn _load_and_record<S: Source, P: PrivateMarker>(
+        cache: &AssetCache<S>,
+        id: &SharedString,
+    ) -> Result<Self, Error> {
         #[cfg(feature = "hot-reloading")]
         {
             use crate::utils::DepsRecord;
 
             if Self::HOT_RELOADED {
                 let (asset, deps) = cache.record_load(id)?;
-                cache.source()._add_compound::<Self, P>(id, DepsRecord(deps));
+                cache
+                    .source()
+                    ._add_compound::<Self, P>(id, DepsRecord(deps));
                 Ok(asset)
             } else {
                 cache.no_record(|| Self::load(cache, id))
@@ -243,14 +237,18 @@ pub trait Compound: Sized + Send + Sync + 'static {
         }
 
         #[cfg(not(feature = "hot-reloading"))]
-        { Self::load(cache, id) }
+        {
+            Self::load(cache, id)
+        }
     }
 
     #[doc(hidden)]
-    fn _load_and_record_entry<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: SharedString) -> Result<CacheEntry, Error> {
+    fn _load_and_record_entry<S: Source, P: PrivateMarker>(
+        cache: &AssetCache<S>,
+        id: SharedString,
+    ) -> Result<CacheEntry, Error> {
         let asset = Self::_load_and_record::<S, P>(cache, &id)?;
         Ok(CacheEntry::new(asset, id))
-
     }
 
     /// If `false`, disable hot-reloading for assets of this type (`true` by
@@ -258,7 +256,6 @@ pub trait Compound: Sized + Send + Sync + 'static {
     /// type to enable additional functions.
     const HOT_RELOADED: bool = true;
 }
-
 
 impl<A> Compound for A
 where
@@ -270,7 +267,10 @@ where
     }
 
     #[doc(hidden)]
-    fn _load_and_record<S: Source, P: PrivateMarker>(cache: &AssetCache<S>, id: &SharedString) -> Result<Self, Error> {
+    fn _load_and_record<S: Source, P: PrivateMarker>(
+        cache: &AssetCache<S>,
+        id: &SharedString,
+    ) -> Result<Self, Error> {
         let asset = cache.no_record(|| Self::load(cache, id))?;
 
         #[cfg(feature = "hot-reloading")]
@@ -295,10 +295,7 @@ where
     const HOT_RELOADED: bool = A::HOT_RELOADED;
 }
 
-impl<A> NotHotReloaded for Arc<A>
-where
-    A: Compound + NotHotReloaded,
-{}
+impl<A> NotHotReloaded for Arc<A> where A: Compound + NotHotReloaded {}
 
 /// Mark a type as not being hot-reloaded.
 ///
@@ -315,7 +312,6 @@ where
 ///
 /// This trait is a workaround about Rust's type system current limitations.
 pub trait NotHotReloaded: Storable {}
-
 
 /// Trait marker to store values in a cache.
 ///
@@ -353,7 +349,7 @@ pub trait Storable: Send + Sync + 'static {
 
 impl<A> Storable for A
 where
-    A: Compound
+    A: Compound,
 {
     #[doc(hidden)]
     const HOT_RELOADED: bool = A::HOT_RELOADED;
@@ -560,7 +556,6 @@ image_assets! {
         ["png"],
     );
 }
-
 
 macro_rules! sound_assets {
     (

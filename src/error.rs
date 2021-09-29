@@ -1,5 +1,4 @@
-use std::{io, fmt};
-
+use std::{fmt, io};
 
 /// A boxed error
 pub type BoxedError = Box<dyn std::error::Error + Send + Sync + 'static>;

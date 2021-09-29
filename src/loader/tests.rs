@@ -1,7 +1,6 @@
+use super::*;
 use crate::tests::X;
 use std::borrow::Cow;
-use super::*;
-
 
 fn raw(s: &str) -> Cow<[u8]> {
     s.as_bytes().into()
@@ -110,22 +109,54 @@ cfg_if::cfg_if! { if #[cfg(feature = "serde")] {
 }}
 
 #[cfg(feature = "bincode")]
-test_loader!(bincode_loader_ok, bincode_loader_err, BincodeLoader, serde_bincode::serialize);
+test_loader!(
+    bincode_loader_ok,
+    bincode_loader_err,
+    BincodeLoader,
+    serde_bincode::serialize
+);
 
 #[cfg(feature = "cbor")]
-test_loader!(cbor_loader_ok, cbor_loader_err, CborLoader, serde_cbor::to_vec);
+test_loader!(
+    cbor_loader_ok,
+    cbor_loader_err,
+    CborLoader,
+    serde_cbor::to_vec
+);
 
 #[cfg(feature = "json")]
-test_loader!(json_loader_ok, json_loader_err, JsonLoader, serde_json::to_vec);
+test_loader!(
+    json_loader_ok,
+    json_loader_err,
+    JsonLoader,
+    serde_json::to_vec
+);
 
 #[cfg(feature = "msgpack")]
-test_loader!(msgpack_loader_ok, msgpack_err, MessagePackLoader, serde_msgpack::encode::to_vec);
+test_loader!(
+    msgpack_loader_ok,
+    msgpack_err,
+    MessagePackLoader,
+    serde_msgpack::encode::to_vec
+);
 
 #[cfg(feature = "ron")]
-test_loader!(ron_loader_ok, ron_loader_err, RonLoader, |p| serde_ron::ser::to_string(p).map(String::into_bytes));
+test_loader!(ron_loader_ok, ron_loader_err, RonLoader, |p| {
+    serde_ron::ser::to_string(p).map(String::into_bytes)
+});
 
 #[cfg(feature = "toml")]
-test_loader!(toml_loader_ok, toml_loader_err, TomlLoader, serde_toml::ser::to_vec);
+test_loader!(
+    toml_loader_ok,
+    toml_loader_err,
+    TomlLoader,
+    serde_toml::ser::to_vec
+);
 
 #[cfg(feature = "yaml")]
-test_loader!(yaml_loader_ok, yaml_loader_err, YamlLoader, serde_yaml::to_vec);
+test_loader!(
+    yaml_loader_ok,
+    yaml_loader_err,
+    YamlLoader,
+    serde_yaml::to_vec
+);

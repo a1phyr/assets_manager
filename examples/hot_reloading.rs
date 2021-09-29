@@ -5,11 +5,10 @@
 //! encouraged to try changing the value to see what happens).
 
 use assets_manager::{
-    Asset, AssetCache,
     loader::{LoadFrom, ParseLoader},
+    Asset, AssetCache,
 };
 use std::{error::Error, thread::sleep, time::Duration};
-
 
 /// A simple `i32` wrapper
 struct X(i32);
@@ -27,7 +26,6 @@ impl Asset for X {
     // X: From<i32> is needed for this
     type Loader = LoadFrom<i32, ParseLoader>;
 }
-
 
 fn main() -> Result<(), Box<dyn Error>> {
     let cache = AssetCache::new("assets")?;

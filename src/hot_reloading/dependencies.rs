@@ -1,6 +1,6 @@
 use crate::{
-    AssetCache,
     utils::{HashMap, HashSet, OwnedKey},
+    AssetCache,
 };
 
 use std::collections::hash_map::Entry;
@@ -40,7 +40,12 @@ impl Dependencies {
         Dependencies(HashMap::new())
     }
 
-    pub fn insert(&mut self, asset_key: OwnedKey, deps: HashSet<OwnedKey>, reload: Option<ReloadFn>) {
+    pub fn insert(
+        &mut self,
+        asset_key: OwnedKey,
+        deps: HashSet<OwnedKey>,
+        reload: Option<ReloadFn>,
+    ) {
         for key in deps.iter() {
             let entry = self.0.entry(key.clone()).or_insert_with(AssetDeps::default);
             entry.rdeps.insert(asset_key.clone());
@@ -50,7 +55,7 @@ impl Dependencies {
             Entry::Vacant(e) => {
                 let entry = AssetDeps::new(reload, deps);
                 e.insert(entry);
-            },
+            }
             Entry::Occupied(e) => {
                 let entry = e.into_mut();
                 let removed: Vec<_> = entry.deps.difference(&deps).cloned().collect();
@@ -64,11 +69,10 @@ impl Dependencies {
                         entry.rdeps.remove(&asset_key);
                     }
                 }
-            },
+            }
         }
     }
 }
-
 
 struct TopologicalSortData {
     visited: HashSet<OwnedKey>,
@@ -97,9 +101,11 @@ fn visit(dep_graph: &Dependencies, sort: &mut TopologicalSortData, key: &OwnedKe
 
 pub(crate) struct AssetDepGraph(Vec<OwnedKey>);
 
-
 impl AssetDepGraph {
-    pub fn new<'a, I: IntoIterator<Item=&'a OwnedKey>>(dep_graph: &Dependencies, iter: I) -> Self {
+    pub fn new<'a, I: IntoIterator<Item = &'a OwnedKey>>(
+        dep_graph: &Dependencies,
+        iter: I,
+    ) -> Self {
         let mut sort = TopologicalSortData {
             visited: HashSet::new(),
             list: Vec::new(),

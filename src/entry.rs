@@ -1,13 +1,17 @@
 //! Definitions of cache entries
 
 use std::{
-    any::{Any, type_name},
+    any::{type_name, Any},
     fmt,
     ops::Deref,
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-use crate::{SharedString, asset::{NotHotReloaded, Storable}, utils::RwLock};
+use crate::{
+    asset::{NotHotReloaded, Storable},
+    utils::RwLock,
+    SharedString,
+};
 
 #[cfg(feature = "hot-reloading")]
 use crate::utils::RwLockReadGuard;
@@ -187,7 +191,8 @@ impl<'a, T> Handle<'a, T> {
     }
 
     #[inline]
-    pub(crate) fn either<U>(&self,
+    pub(crate) fn either<U>(
+        &self,
         on_static: impl FnOnce(&'a StaticInner<T>) -> U,
         _on_dynamic: impl FnOnce(&'a DynamicInner<T>) -> U,
     ) -> U {
@@ -269,14 +274,13 @@ impl<'a, T> Handle<'a, T> {
     /// ```
     pub fn reloaded(&mut self) -> bool {
         #[cfg(not(feature = "hot-reloading"))]
-        { false }
+        {
+            false
+        }
 
         #[cfg(feature = "hot-reloading")]
         {
-            let reloaded = self.either(
-                |_| None,
-                |this| Some(this.reload.load(Ordering::Acquire)),
-            );
+            let reloaded = self.either(|_| None, |this| Some(this.reload.load(Ordering::Acquire)));
 
             match reloaded {
                 None => false,
@@ -284,7 +288,7 @@ impl<'a, T> Handle<'a, T> {
                     let reloaded = last_reload > self.last_reload;
                     self.last_reload = last_reload;
                     reloaded
-                },
+                }
             }
         }
     }
@@ -328,14 +332,19 @@ where
 
         self.either(
             |this| &this.value,
-            |_| panic!("`{}` implements `NotHotReloaded` but do not disable hot-reloading", type_name::<A>()),
+            |_| {
+                panic!(
+                    "`{}` implements `NotHotReloaded` but do not disable hot-reloading",
+                    type_name::<A>()
+                )
+            },
         )
     }
 }
 
 impl<A> Handle<'_, A>
 where
-    A: Copy
+    A: Copy,
 {
     /// Returns a copy of the inner asset.
     ///
@@ -396,7 +405,9 @@ where
     A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Handle").field("value", &*self.read()).finish()
+        f.debug_struct("Handle")
+            .field("value", &*self.read())
+            .finish()
     }
 }
 
@@ -430,7 +441,7 @@ impl<A> Deref for AssetGuard<'_, A> {
 
 impl<A, U> AsRef<U> for AssetGuard<'_, A>
 where
-    A: AsRef<U>
+    A: AsRef<U>,
 {
     #[inline]
     fn as_ref(&self) -> &U {

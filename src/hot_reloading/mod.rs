@@ -5,31 +5,22 @@ pub mod dependencies;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use paths::{UpdateMessage, AssetReloadInfos, CompoundReloadInfos};
 use paths::HotReloadingData;
+pub(crate) use paths::{AssetReloadInfos, CompoundReloadInfos, UpdateMessage};
 
 use crossbeam_channel::{self as channel, Receiver, Sender};
 
-use std::{
-    fmt,
-    path::Path,
-    ptr::NonNull,
-    sync::mpsc,
-    thread,
-    time::Duration,
-};
+use std::{fmt, path::Path, ptr::NonNull, sync::mpsc, thread, time::Duration};
 
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
 
-use crate::{AssetCache, utils::Mutex};
-
+use crate::{utils::Mutex, AssetCache};
 
 enum CacheMessage {
     Ptr(NonNull<AssetCache>),
     Static(&'static AssetCache),
 }
 unsafe impl Send for CacheMessage where AssetCache: Sync {}
-
 
 fn std_crossbeam_channel<T: Send + 'static>() -> (mpsc::Sender<T>, Receiver<T>) {
     let (std_tx, std_rx) = mpsc::channel();
@@ -43,14 +34,13 @@ fn std_crossbeam_channel<T: Send + 'static>() -> (mpsc::Sender<T>, Receiver<T>) 
     (std_tx, crossbeam_rx)
 }
 
-fn workaround_channels<T: Send + 'static>(std_rx: mpsc::Receiver<T>, crossbeam_tx: Sender<T> ) {
+fn workaround_channels<T: Send + 'static>(std_rx: mpsc::Receiver<T>, crossbeam_tx: Sender<T>) {
     while let Ok(msg) = std_rx.recv() {
         if crossbeam_tx.send(msg).is_err() {
             break;
         }
     }
 }
-
 
 struct Client {
     sender: Sender<CacheMessage>,
@@ -89,7 +79,13 @@ impl HotReloader {
     }
 
     // this is done in a new thread
-    fn hot_reloading_thread(watcher: notify::RecommendedWatcher, notify_rx: Receiver<DebouncedEvent>, ptr_rx: Receiver<CacheMessage>, answer_tx: Sender<()>, updates_rx: Receiver<UpdateMessage>) {
+    fn hot_reloading_thread(
+        watcher: notify::RecommendedWatcher,
+        notify_rx: Receiver<DebouncedEvent>,
+        ptr_rx: Receiver<CacheMessage>,
+        answer_tx: Sender<()>,
+        updates_rx: Receiver<UpdateMessage>,
+    ) {
         log::trace!("Starting hot-reloading");
 
         // Keep the notify Watcher alive as long as the thread is running
@@ -118,11 +114,11 @@ impl HotReloader {
                         // be valid until we reply back
                         cache.update_if_local(unsafe { ptr.as_ref() });
                         answer_tx.send(()).unwrap();
-                    },
+                    }
                     Ok(CacheMessage::Static(asset_cache)) => {
                         cache.use_static_ref(asset_cache);
                         select.remove(0);
-                    },
+                    }
                     Err(_) => (),
                 },
 
@@ -133,13 +129,13 @@ impl HotReloader {
                         | DebouncedEvent::Rename(_, path)
                         | DebouncedEvent::Create(path) => {
                             cache.load(path);
-                        },
+                        }
                         _ => (),
                     },
                     Err(_) => {
                         log::error!("Notify panicked, hot-reloading stopped");
                         break;
-                    },
+                    }
                 },
 
                 2 => match ready.recv(&updates_rx) {

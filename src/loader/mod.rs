@@ -19,7 +19,6 @@ use std::{
     str::{self, FromStr},
 };
 
-
 #[cfg(test)]
 mod tests;
 
@@ -104,7 +103,6 @@ pub trait Loader<T> {
     /// be useful to guess the format if an asset type uses several extensions.
     fn load(content: Cow<[u8]>, ext: &str) -> Result<T, BoxedError>;
 }
-
 
 /// Loads assets from another type.
 ///
@@ -218,7 +216,7 @@ pub struct ParseLoader(());
 impl<T> Loader<T> for ParseLoader
 where
     T: FromStr,
-    BoxedError: From<<T as FromStr>::Err>
+    BoxedError: From<<T as FromStr>::Err>,
 {
     #[inline]
     fn load(content: Cow<[u8]>, _: &str) -> Result<T, BoxedError> {

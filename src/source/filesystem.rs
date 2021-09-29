@@ -1,13 +1,8 @@
 #[cfg(feature = "hot-reloading")]
 use crate::{
+    hot_reloading::{AssetReloadInfos, CompoundReloadInfos, HotReloader, UpdateMessage},
+    utils::PrivateMarker,
     Asset, Compound, SharedString,
-    hot_reloading::{
-        AssetReloadInfos,
-        CompoundReloadInfos,
-        HotReloader,
-        UpdateMessage,
-    },
-    utils::{PrivateMarker},
 };
 
 use crate::utils::extension_of;
@@ -17,14 +12,11 @@ use crate::AssetCache;
 
 use std::{
     borrow::Cow,
-    fmt,
-    fs,
-    io,
+    fmt, fs, io,
     path::{Path, PathBuf},
 };
 
 use super::{DirEntry, Source};
-
 
 /// A [`Source`] to load assets from a directory in the file system.
 ///
@@ -182,9 +174,16 @@ impl Source for FileSystem {
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn _add_compound<A: Compound, P: PrivateMarker>(&self, id: &SharedString, deps: crate::utils::DepsRecord) {
+    fn _add_compound<A: Compound, P: PrivateMarker>(
+        &self,
+        id: &SharedString,
+        deps: crate::utils::DepsRecord,
+    ) {
         if let Some(reloader) = &self.reloader {
-            reloader.send_update(UpdateMessage::AddCompound(CompoundReloadInfos::of::<A>(id.clone(), deps.0)))
+            reloader.send_update(UpdateMessage::AddCompound(CompoundReloadInfos::of::<A>(
+                id.clone(),
+                deps.0,
+            )))
         }
     }
 
@@ -197,6 +196,8 @@ impl Source for FileSystem {
 
 impl fmt::Debug for FileSystem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("FileSystem").field("root", &self.path).finish()
+        f.debug_struct("FileSystem")
+            .field("root", &self.path)
+            .finish()
     }
 }

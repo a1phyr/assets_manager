@@ -1,19 +1,9 @@
 use crate::{
-    Asset,
-    AssetCache,
-    Compound,
-    Error,
-    Handle,
-    SharedString,
     source::{DirEntry, Source},
+    Asset, AssetCache, Compound, Error, Handle, SharedString,
 };
 
-use std::{
-    io,
-    fmt,
-    marker::PhantomData,
-};
-
+use std::{fmt, io, marker::PhantomData};
 
 /// Assets that are loadable from directories
 ///
@@ -89,7 +79,11 @@ where
 {
     #[inline]
     fn select_ids<S: Source + ?Sized>(source: &S, id: &str) -> io::Result<Vec<SharedString>> {
-        fn inner<S: Source + ?Sized>(source: &S, id: &str, extensions: &[&str]) -> io::Result<Vec<SharedString>> {
+        fn inner<S: Source + ?Sized>(
+            source: &S,
+            id: &str,
+            extensions: &[&str],
+        ) -> io::Result<Vec<SharedString>> {
             let mut ids = Vec::new();
 
             // Select all files with an extension valid for type `A`
@@ -267,7 +261,7 @@ where
 
     /// Returns an iterator over the ids of the assets in the directory.
     #[inline]
-    pub fn ids(self) -> impl ExactSizeIterator<Item=&'a str> {
+    pub fn ids(self) -> impl ExactSizeIterator<Item = &'a str> {
         self.inner.ids().iter().map(|id| &**id)
     }
 
@@ -276,8 +270,11 @@ where
     /// This function will happily try to load all assets, even if an error
     /// occured the last time it was tried.
     #[inline]
-    pub fn iter(self) -> impl ExactSizeIterator<Item=Result<Handle<'a, A>, Error>> {
-        self.inner.ids().iter().map(move |id| self.cache.load(&**id))
+    pub fn iter(self) -> impl ExactSizeIterator<Item = Result<Handle<'a, A>, Error>> {
+        self.inner
+            .ids()
+            .iter()
+            .map(move |id| self.cache.load(&**id))
     }
 
     /// Returns an iterator over the assets in the directory.
@@ -285,8 +282,11 @@ where
     /// This fonction does not do any I/O and assets that previously failed to
     /// load are ignored.
     #[inline]
-    pub fn iter_cached(self) -> impl Iterator<Item=Handle<'a, A>> {
-        self.inner.ids().iter().filter_map(move |id| self.cache.get_cached(&**id))
+    pub fn iter_cached(self) -> impl Iterator<Item = Handle<'a, A>> {
+        self.inner
+            .ids()
+            .iter()
+            .filter_map(move |id| self.cache.get_cached(&**id))
     }
 }
 
@@ -303,6 +303,8 @@ where
     A: DirLoadable,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("DirHandle").field("ids", &self.inner.ids()).finish()
+        f.debug_struct("DirHandle")
+            .field("ids", &self.inner.ids())
+            .finish()
     }
 }
