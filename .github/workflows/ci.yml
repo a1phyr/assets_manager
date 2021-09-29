@@ -32,3 +32,19 @@ jobs:
 
       - name: cargo test --all-features
         run: cargo test --all-features
+
+  fmt:
+    name: Check formatting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: cargo fmt -- --check
+        run: cargo fmt -- --check
