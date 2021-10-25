@@ -482,8 +482,17 @@ where
     #[inline]
     #[track_caller]
     pub fn load_expect<A: Compound>(&self, id: &str) -> Handle<A> {
-        self.load(id)
-            .unwrap_or_else(|err| panic!("Failed to load essential asset \"{}\": {}", id, err))
+        #[cold]
+        #[track_caller]
+        fn expect_failed(id: &str, err: Error) -> ! {
+            panic!("Failed to load essential asset \"{}\": {}", id, err)
+        }
+
+        // Do not use `unwrap_or_else` as closures do not have #[track_caller]
+        match self.load(id) {
+            Ok(h) => h,
+            Err(err) => expect_failed(id, err),
+        }
     }
 
     /// Loads all assets of a given type from a directory.
