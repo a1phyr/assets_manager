@@ -246,10 +246,7 @@ impl AssetCache<FileSystem> {
     }
 }
 
-impl<S> AssetCache<S>
-where
-    S: Source,
-{
+impl<S> AssetCache<S> {
     /// Creates a cache that loads assets from the given source.
     pub fn with_source(source: S) -> AssetCache<S> {
         AssetCache {
@@ -265,36 +262,13 @@ where
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub(crate) fn record_load<A: Compound>(
-        &self,
-        id: &str,
-    ) -> Result<(A, HashSet<OwnedKey>), Error> {
-        let mut record = Record::new(self as *const Self as usize);
-
-        let asset = if S::_support_hot_reloading::<Private>(&self.source) {
-            RECORDING.with(|rec| {
-                let old_rec = rec.replace(Some(NonNull::from(&mut record)));
-                let result = A::load(self, id);
-                rec.set(old_rec);
-                result
-            })
-        } else {
-            A::load(self, id)
-        };
-
-        Ok((asset?, record.records))
-    }
-
-    #[cfg(feature = "hot-reloading")]
     pub(crate) fn add_record(&self, key: OwnedKey) {
-        if S::_support_hot_reloading::<Private>(&self.source) {
-            RECORDING.with(|rec| {
-                if let Some(mut recorder) = rec.get() {
-                    let recorder = unsafe { recorder.as_mut() };
-                    recorder.insert(self as *const Self as usize, key);
-                }
-            });
-        }
+        RECORDING.with(|rec| {
+            if let Some(mut recorder) = rec.get() {
+                let recorder = unsafe { recorder.as_mut() };
+                recorder.insert(self as *const Self as usize, key);
+            }
+        });
     }
 
     /// Temporarily prevent `Compound` dependencies to be recorded.
@@ -310,15 +284,13 @@ where
     #[inline]
     pub fn no_record<T, F: FnOnce() -> T>(&self, f: F) -> T {
         #[cfg(feature = "hot-reloading")]
-        if S::_support_hot_reloading::<Private>(&self.source) {
+        {
             RECORDING.with(|rec| {
                 let old_rec = rec.replace(None);
                 let result = f();
                 rec.set(old_rec);
                 result
             })
-        } else {
-            f()
         }
 
         #[cfg(not(feature = "hot-reloading"))]
@@ -359,30 +331,6 @@ where
         let key = OwnedKey::new::<A>(id);
 
         self.assets.insert(key, entry)
-    }
-
-    /// Loads an asset.
-    ///
-    /// If the asset is not found in the cache, it is loaded from the source.
-    ///
-    /// # Errors
-    ///
-    /// Errors for `Asset`s can occur in several cases :
-    /// - The source could not be read
-    /// - Loaded data could not be converted properly
-    /// - The asset has no extension
-    #[inline]
-    pub fn load<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
-        let entry = match self.get_cached_entry::<A>(id) {
-            Some(entry) => entry,
-            None => {
-                let load = A::_load_and_record_entry::<S, Private>;
-                let type_id = TypeId::of::<A>();
-                self.add_asset(id, type_id, load)?
-            }
-        };
-
-        Ok(entry.handle())
     }
 
     /// Gets a value from the cache.
@@ -448,6 +396,82 @@ where
         self.assets.contains_key(key)
     }
 
+    /// Loads an directory from the cache.
+    ///
+    /// This function does not attempt to load the it from the source if it is
+    /// not found in the cache.
+    #[inline]
+    pub fn get_cached_dir<A: DirLoadable>(
+        &self,
+        id: &str,
+        recursive: bool,
+    ) -> Option<DirHandle<A, S>> {
+        Some(if recursive {
+            let handle = self.get_cached(id)?;
+            DirHandle::new_rec(handle, self)
+        } else {
+            let handle = self.get_cached(id)?;
+            DirHandle::new(handle, self)
+        })
+    }
+
+    /// Returns `true` if the cache contains the specified directory with the
+    /// given `recursive` parameter.
+    #[inline]
+    pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
+        self.get_cached_dir::<A>(id, recursive).is_some()
+    }
+}
+
+impl<S> AssetCache<S>
+where
+    S: Source,
+{
+    #[cfg(feature = "hot-reloading")]
+    pub(crate) fn record_load<A: Compound>(
+        &self,
+        id: &str,
+    ) -> Result<(A, HashSet<OwnedKey>), Error> {
+        let mut record = Record::new(self as *const Self as usize);
+
+        let asset = if S::_support_hot_reloading::<Private>(&self.source) {
+            RECORDING.with(|rec| {
+                let old_rec = rec.replace(Some(NonNull::from(&mut record)));
+                let result = A::load(self, id);
+                rec.set(old_rec);
+                result
+            })
+        } else {
+            A::load(self, id)
+        };
+
+        Ok((asset?, record.records))
+    }
+
+    /// Loads an asset.
+    ///
+    /// If the asset is not found in the cache, it is loaded from the source.
+    ///
+    /// # Errors
+    ///
+    /// Errors for `Asset`s can occur in several cases :
+    /// - The source could not be read
+    /// - Loaded data could not be converted properly
+    /// - The asset has no extension
+    #[inline]
+    pub fn load<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
+        let entry = match self.get_cached_entry::<A>(id) {
+            Some(entry) => entry,
+            None => {
+                let load = A::_load_and_record_entry::<S, Private>;
+                let type_id = TypeId::of::<A>();
+                self.add_asset(id, type_id, load)?
+            }
+        };
+
+        Ok(entry.handle())
+    }
+
     /// Loads an asset and panic if an error happens.
     ///
     /// # Panics
@@ -492,32 +516,6 @@ where
             let handle = self.load(id)?;
             DirHandle::new(handle, self)
         })
-    }
-
-    /// Loads an directory from the cache.
-    ///
-    /// This function does not attempt to load the it from the source if it is
-    /// not found in the cache.
-    #[inline]
-    pub fn get_cached_dir<A: DirLoadable>(
-        &self,
-        id: &str,
-        recursive: bool,
-    ) -> Option<DirHandle<A, S>> {
-        Some(if recursive {
-            let handle = self.get_cached(id)?;
-            DirHandle::new_rec(handle, self)
-        } else {
-            let handle = self.get_cached(id)?;
-            DirHandle::new(handle, self)
-        })
-    }
-
-    /// Returns `true` if the cache contains the specified directory with the
-    /// given `recursive` parameter.
-    #[inline]
-    pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
-        self.get_cached_dir::<A>(id, recursive).is_some()
     }
 
     /// Loads an owned version of an asset

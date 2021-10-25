@@ -239,7 +239,6 @@ pub struct DirHandle<'a, A, S> {
 impl<'a, A, S> DirHandle<'a, A, S>
 where
     A: DirLoadable,
-    S: Source,
 {
     #[inline]
     pub(crate) fn new(handle: Handle<'a, CachedDir<A>>, cache: &'a AssetCache<S>) -> Self {
@@ -267,18 +266,6 @@ where
 
     /// Returns an iterator over the assets in the directory.
     ///
-    /// This function will happily try to load all assets, even if an error
-    /// occured the last time it was tried.
-    #[inline]
-    pub fn iter(self) -> impl ExactSizeIterator<Item = Result<Handle<'a, A>, Error>> {
-        self.inner
-            .ids()
-            .iter()
-            .map(move |id| self.cache.load(&**id))
-    }
-
-    /// Returns an iterator over the assets in the directory.
-    ///
     /// This fonction does not do any I/O and assets that previously failed to
     /// load are ignored.
     #[inline]
@@ -287,6 +274,24 @@ where
             .ids()
             .iter()
             .filter_map(move |id| self.cache.get_cached(&**id))
+    }
+}
+
+impl<'a, A, S> DirHandle<'a, A, S>
+where
+    A: DirLoadable,
+    S: Source,
+{
+    /// Returns an iterator over the assets in the directory.
+    ///
+    /// This function will happily try to load all assets, even if an error
+    /// occured the last time it was tried.
+    #[inline]
+    pub fn iter(self) -> impl ExactSizeIterator<Item = Result<Handle<'a, A>, Error>> {
+        self.inner
+            .ids()
+            .iter()
+            .map(move |id| self.cache.load(&**id))
     }
 }
 
