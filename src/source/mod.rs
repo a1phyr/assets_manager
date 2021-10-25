@@ -255,3 +255,26 @@ where
         self.as_ref().exists(entry)
     }
 }
+
+/// A [`Source`] that contains nothing.
+///
+/// Calling `read` or `read_dir` from this source will always return an error.
+#[derive(Debug)]
+pub struct Empty;
+
+impl Source for Empty {
+    #[inline]
+    fn read(&self, _id: &str, _ext: &str) -> io::Result<Cow<[u8]>> {
+        Err(io::Error::from(io::ErrorKind::NotFound))
+    }
+
+    #[inline]
+    fn read_dir(&self, _id: &str, _f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+        Err(io::Error::from(io::ErrorKind::NotFound))
+    }
+
+    #[inline]
+    fn exists(&self, _entry: DirEntry) -> bool {
+        false
+    }
+}
