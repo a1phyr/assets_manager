@@ -5,8 +5,8 @@ pub mod dependencies;
 #[cfg(test)]
 mod tests;
 
-use paths::HotReloadingData;
-pub(crate) use paths::{AssetReloadInfos, CompoundReloadInfos, UpdateMessage};
+pub(crate) use paths::PublicUpdateMessage;
+use paths::{HotReloadingData, UpdateMessage};
 
 use crossbeam_channel::{self as channel, Receiver, Sender};
 

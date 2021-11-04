@@ -222,18 +222,17 @@ pub trait Compound: Sized + Send + Sync + 'static {
         id: &SharedString,
     ) -> Result<Self, Error> {
         #[cfg(feature = "hot-reloading")]
-        {
-            use crate::utils::DepsRecord;
+        if Self::HOT_RELOADED {
+            use crate::hot_reloading::PublicUpdateMessage;
 
-            if Self::HOT_RELOADED {
-                let (asset, deps) = cache.record_load(id)?;
-                cache
-                    .source()
-                    ._add_compound::<Self, P>(id, DepsRecord(deps));
-                Ok(asset)
-            } else {
-                cache.no_record(|| Self::load(cache, id))
+            let (asset, deps) = cache.record_load(id)?;
+            if cache.source()._private_supports_hot_reloading() {
+                let msg = PublicUpdateMessage::add_compound::<Self>(id.clone(), deps);
+                cache.source()._private_send_message(msg);
             }
+            Ok(asset)
+        } else {
+            cache.no_record(|| Self::load(cache, id))
         }
 
         #[cfg(not(feature = "hot-reloading"))]
@@ -275,7 +274,17 @@ where
 
         #[cfg(feature = "hot-reloading")]
         if A::HOT_RELOADED {
-            cache.source()._add_asset::<A, P>(id);
+            use crate::hot_reloading::PublicUpdateMessage;
+
+            let source = cache.source();
+
+            if source._private_supports_hot_reloading() {
+                for ext in A::EXTENSIONS {
+                    let path = source._private_path_of(crate::source::DirEntry::File(id, ext));
+                    let msg = PublicUpdateMessage::add_asset::<Self>(path, id.clone());
+                    source._private_send_message(msg);
+                }
+            }
         }
 
         Ok(asset)

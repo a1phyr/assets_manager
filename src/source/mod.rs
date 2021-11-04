@@ -31,9 +31,6 @@
 //! # Ok::<(), std::io::Error>(())
 //! ```
 
-#[cfg(feature = "hot-reloading")]
-use crate::{utils::PrivateMarker, SharedString};
-
 use std::{borrow::Cow, io};
 
 #[cfg(doc)]
@@ -204,37 +201,17 @@ pub trait Source {
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn _add_asset<A: crate::Asset, P: PrivateMarker>(&self, _: &SharedString)
-    where
-        Self: Sized,
-    {
+    fn _private_path_of(&self, _: DirEntry) -> std::path::PathBuf {
+        unimplemented!()
     }
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn _clear<P: PrivateMarker>(&mut self)
-    where
-        Self: Sized,
-    {
-    }
+    fn _private_send_message(&self, _: crate::hot_reloading::PublicUpdateMessage) {}
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn _add_compound<A: crate::Compound, P: PrivateMarker>(
-        &self,
-        _: &SharedString,
-        _: crate::utils::DepsRecord,
-    ) where
-        Self: Sized,
-    {
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    #[doc(hidden)]
-    fn _support_hot_reloading<P: PrivateMarker>(&self) -> bool
-    where
-        Self: Sized,
-    {
+    fn _private_supports_hot_reloading(&self) -> bool {
         false
     }
 }

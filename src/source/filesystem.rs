@@ -1,10 +1,5 @@
 #[cfg(feature = "hot-reloading")]
-use crate::{
-    hot_reloading::{AssetReloadInfos, CompoundReloadInfos, HotReloader, UpdateMessage},
-    utils::PrivateMarker,
-    Asset, Compound, SharedString,
-};
-
+use crate::hot_reloading::HotReloader;
 use crate::utils::extension_of;
 
 #[cfg(doc)]
@@ -153,43 +148,20 @@ impl Source for FileSystem {
     }
 
     #[cfg(feature = "hot-reloading")]
-    #[doc(hidden)]
-    fn _add_asset<A: Asset, P: PrivateMarker>(&self, id: &SharedString) {
+    fn _private_path_of(&self, entry: DirEntry) -> PathBuf {
+        self.path_of(entry)
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    fn _private_send_message(&self, msg: crate::hot_reloading::PublicUpdateMessage) {
         if let Some(reloader) = &self.reloader {
-            for ext in A::EXTENSIONS {
-                let path = self.path_of(DirEntry::File(id, ext));
-                let msg = UpdateMessage::AddAsset(AssetReloadInfos::of::<A>(path, id.clone()));
-                reloader.send_update(msg);
-            }
+            reloader.send_update(msg.0);
         }
     }
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn _clear<P: PrivateMarker>(&mut self) {
-        if let Some(reloader) = &self.reloader {
-            reloader.send_update(UpdateMessage::Clear);
-        }
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    #[doc(hidden)]
-    fn _add_compound<A: Compound, P: PrivateMarker>(
-        &self,
-        id: &SharedString,
-        deps: crate::utils::DepsRecord,
-    ) {
-        if let Some(reloader) = &self.reloader {
-            reloader.send_update(UpdateMessage::AddCompound(CompoundReloadInfos::of::<A>(
-                id.clone(),
-                deps.0,
-            )))
-        }
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    #[doc(hidden)]
-    fn _support_hot_reloading<P: PrivateMarker>(&self) -> bool {
+    fn _private_supports_hot_reloading(&self) -> bool {
         self.reloader.is_some()
     }
 }

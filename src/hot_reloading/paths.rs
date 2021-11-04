@@ -93,22 +93,7 @@ fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>
 /// LoadFn.
 pub(crate) struct AssetReloadInfos(PathBuf, SharedString, TypeId, LoadFn);
 
-impl AssetReloadInfos {
-    #[inline]
-    pub fn of<A: Asset>(path: PathBuf, id: SharedString) -> Self {
-        AssetReloadInfos(path, id, TypeId::of::<A>(), load::<A>)
-    }
-}
-
 pub(crate) struct CompoundReloadInfos(OwnedKey, HashSet<OwnedKey>, ReloadFn);
-
-impl CompoundReloadInfos {
-    #[inline]
-    pub fn of<A: Compound>(id: SharedString, deps: HashSet<OwnedKey>) -> Self {
-        let key = OwnedKey::new::<A>(id);
-        CompoundReloadInfos(key, deps, reload::<A>)
-    }
-}
 
 /// A update to the list of watched paths
 #[non_exhaustive]
@@ -116,6 +101,36 @@ pub(crate) enum UpdateMessage {
     Clear,
     AddAsset(AssetReloadInfos),
     AddCompound(CompoundReloadInfos),
+}
+
+#[allow(missing_debug_implementations)]
+pub struct PublicUpdateMessage(pub(crate) UpdateMessage);
+
+impl PublicUpdateMessage {
+    #[inline]
+    pub(crate) fn add_asset<A: Asset>(path: PathBuf, id: SharedString) -> Self {
+        Self(UpdateMessage::AddAsset(AssetReloadInfos(
+            path,
+            id,
+            TypeId::of::<A>(),
+            load::<A>,
+        )))
+    }
+
+    #[inline]
+    pub(crate) fn add_compound<A: Compound>(id: SharedString, deps: HashSet<OwnedKey>) -> Self {
+        let key = OwnedKey::new::<A>(id);
+        Self(UpdateMessage::AddCompound(CompoundReloadInfos(
+            key,
+            deps,
+            reload::<A>,
+        )))
+    }
+
+    #[inline]
+    pub(crate) fn clear() -> Self {
+        Self(UpdateMessage::Clear)
+    }
 }
 
 /// A map type -> `T`

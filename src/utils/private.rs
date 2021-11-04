@@ -358,7 +358,3 @@ where
         self.0.fmt(f)
     }
 }
-
-#[cfg(feature = "hot-reloading")]
-#[derive(Debug)]
-pub struct DepsRecord(pub(crate) HashSet<OwnedKey>);
