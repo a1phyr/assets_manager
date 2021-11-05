@@ -228,9 +228,9 @@ thread_local! {
 /// # }}
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub struct AssetCache<S = FileSystem> {
-    source: S,
+pub struct AssetCache<S: ?Sized = FileSystem> {
     pub(crate) assets: Map,
+    source: S,
 }
 
 impl AssetCache<FileSystem> {
@@ -254,7 +254,12 @@ impl<S> AssetCache<S> {
             source,
         }
     }
+}
 
+impl<S> AssetCache<S>
+where
+    S: ?Sized,
+{
     /// Returns a reference to the cache's [`Source`].
     #[inline]
     pub fn source(&self) -> &S {
@@ -266,7 +271,7 @@ impl<S> AssetCache<S> {
         RECORDING.with(|rec| {
             if let Some(mut recorder) = rec.get() {
                 let recorder = unsafe { recorder.as_mut() };
-                recorder.insert(self as *const Self as usize, key);
+                recorder.insert(self as *const Self as *const () as usize, key);
             }
         });
     }
@@ -425,16 +430,16 @@ impl<S> AssetCache<S> {
 
 impl<S> AssetCache<S>
 where
-    S: Source,
+    S: Source + ?Sized,
 {
     #[cfg(feature = "hot-reloading")]
     pub(crate) fn record_load<A: Compound>(
         &self,
         id: &str,
     ) -> Result<(A, HashSet<OwnedKey>), Error> {
-        let mut record = Record::new(self as *const Self as usize);
+        let mut record = Record::new(self as *const Self as *const () as usize);
 
-        let asset = if S::_private_supports_hot_reloading(&self.source) {
+        let asset = if self.source._private_supports_hot_reloading() {
             RECORDING.with(|rec| {
                 let old_rec = rec.replace(Some(NonNull::from(&mut record)));
                 let result = A::load(self, id);
@@ -629,7 +634,10 @@ impl AssetCache<FileSystem> {
     }
 }
 
-impl<S> fmt::Debug for AssetCache<S> {
+impl<S> fmt::Debug for AssetCache<S>
+where
+    S: ?Sized,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AssetCache")
             .field("assets", &self.assets)
@@ -638,13 +646,21 @@ impl<S> fmt::Debug for AssetCache<S> {
 }
 
 #[inline]
-fn load_single<A: Asset, S: Source>(source: &S, id: &str, ext: &str) -> Result<A, Error> {
+fn load_single<A, S>(source: &S, id: &str, ext: &str) -> Result<A, Error>
+where
+    A: Asset,
+    S: Source + ?Sized,
+{
     let content = source.read(id, ext)?;
     let asset = A::Loader::load(content, ext)?;
     Ok(asset)
 }
 
-pub(crate) fn load_from_source<A: Asset, S: Source>(source: &S, id: &str) -> Result<A, Error> {
+pub(crate) fn load_from_source<A, S>(source: &S, id: &str) -> Result<A, Error>
+where
+    A: Asset,
+    S: Source + ?Sized,
+{
     let mut error = Error::NoDefaultValue;
 
     for ext in A::EXTENSIONS {

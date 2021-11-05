@@ -1,11 +1,5 @@
 use super::*;
 
-#[test]
-fn source_object_safe() {
-    let s = FileSystem::new(".").unwrap();
-    let _: &dyn Source = &Box::new(s);
-}
-
 macro_rules! test_source {
     ($source:expr) => {
         #[test]

@@ -211,13 +211,13 @@ pub trait Compound: Sized + Send + Sync + 'static {
     ///
     /// This function should not perform any kind of I/O: such concern should be
     /// delegated to [`Asset`]s.
-    fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error>;
+    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error>;
 
     /// Loads an asset and registers it for hot-reloading if necessary.
     ///
     /// This method is a internal implementation detail.
     #[doc(hidden)]
-    fn _load_and_record<S: Source, P: PrivateMarker>(
+    fn _load_and_record<S: Source + ?Sized, P: PrivateMarker>(
         cache: &AssetCache<S>,
         id: &SharedString,
     ) -> Result<Self, Error> {
@@ -242,7 +242,7 @@ pub trait Compound: Sized + Send + Sync + 'static {
     }
 
     #[doc(hidden)]
-    fn _load_and_record_entry<S: Source, P: PrivateMarker>(
+    fn _load_and_record_entry<S: Source + ?Sized, P: PrivateMarker>(
         cache: &AssetCache<S>,
         id: SharedString,
     ) -> Result<CacheEntry, Error> {
@@ -261,12 +261,12 @@ where
     A: Asset,
 {
     #[inline]
-    fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
+    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
         load_from_source(cache.source(), id)
     }
 
     #[doc(hidden)]
-    fn _load_and_record<S: Source, P: PrivateMarker>(
+    fn _load_and_record<S: Source + ?Sized, P: PrivateMarker>(
         cache: &AssetCache<S>,
         id: &SharedString,
     ) -> Result<Self, Error> {
@@ -297,7 +297,7 @@ impl<A> Compound for Arc<A>
 where
     A: Compound,
 {
-    fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
+    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
         cache.load_owned::<A>(id).map(Arc::new)
     }
 

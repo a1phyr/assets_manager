@@ -51,7 +51,7 @@ struct Level {
 /// a Compound depends on. When a dependency is reloading, the Coumpound is also
 /// reloaded. You don't have to write hot-reloading-specific code.
 impl Compound for Level {
-    fn load<S: source::Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
+    fn load<S: source::Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
         // Load the manifest
         let raw_level = cache.load::<LevelManifest>(id)?.read();
 

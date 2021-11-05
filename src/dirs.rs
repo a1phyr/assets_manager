@@ -122,7 +122,7 @@ impl<A> Compound for CachedDir<A>
 where
     A: DirLoadable,
 {
-    fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
+    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
         let mut ids = A::select_ids(cache.source(), id)?;
 
         // Remove duplicated entries
@@ -163,7 +163,7 @@ impl<A> Compound for CachedRecDir<A>
 where
     A: DirLoadable,
 {
-    fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
+    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
         // Load the current directory
         let this = cache.load::<CachedDir<A>>(id)?;
         let mut ids = this.get().ids.clone();
@@ -231,7 +231,7 @@ where
 /// A handle on a asset directory.
 ///
 /// This type provides methods to access assets within a directory.
-pub struct DirHandle<'a, A, S> {
+pub struct DirHandle<'a, A, S: ?Sized> {
     inner: DirHandleInner<'a, A>,
     cache: &'a AssetCache<S>,
 }
@@ -239,6 +239,7 @@ pub struct DirHandle<'a, A, S> {
 impl<'a, A, S> DirHandle<'a, A, S>
 where
     A: DirLoadable,
+    S: ?Sized,
 {
     #[inline]
     pub(crate) fn new(handle: Handle<'a, CachedDir<A>>, cache: &'a AssetCache<S>) -> Self {
@@ -280,7 +281,7 @@ where
 impl<'a, A, S> DirHandle<'a, A, S>
 where
     A: DirLoadable,
-    S: Source,
+    S: Source + ?Sized,
 {
     /// Returns an iterator over the assets in the directory.
     ///
@@ -295,17 +296,18 @@ where
     }
 }
 
-impl<A, S> Clone for DirHandle<'_, A, S> {
+impl<A, S: ?Sized> Clone for DirHandle<'_, A, S> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<A, S> Copy for DirHandle<'_, A, S> {}
+impl<A, S: ?Sized> Copy for DirHandle<'_, A, S> {}
 
 impl<A, S> fmt::Debug for DirHandle<'_, A, S>
 where
     A: DirLoadable,
+    S: ?Sized,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DirHandle")
