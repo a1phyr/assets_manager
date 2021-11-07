@@ -33,7 +33,7 @@ use std::{fmt, io, marker::PhantomData};
 ///
 /// // Specify how to load a playlist
 /// impl Compound for Playlist {
-///     fn load<S: Source>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
+///     fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
 ///         // Read the manifest (a list of ids)
 ///         let manifest = cache.load::<Json<Vec<String>>>(id)?.read();
 ///
