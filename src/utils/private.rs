@@ -6,7 +6,7 @@
 //! - An unified API for `HashMap`s between `std` and `ahash` hashers
 //! - A marker for private APIs
 
-use crate::SharedString;
+use crate::{source::DirEntry, SharedString};
 
 #[allow(unused_imports)]
 use std::{
@@ -15,9 +15,26 @@ use std::{
     collections::{HashMap as StdHashMap, HashSet as StdHashSet},
     fmt, hash,
     ops::{Deref, DerefMut},
-    path::Path,
-    sync::Arc,
+    path::{Path, PathBuf},
 };
+
+pub fn path_of_entry(root: &Path, entry: DirEntry) -> PathBuf {
+    let (id, ext) = match entry {
+        DirEntry::File(id, ext) => (id, Some(ext)),
+        DirEntry::Directory(id) => (id, None),
+    };
+
+    let capacity = root.as_os_str().len() + id.len() + ext.map_or(0, |ext| ext.len()) + 2;
+    let mut path = PathBuf::with_capacity(capacity);
+
+    path.push(root);
+    path.extend(id.split('.'));
+    if let Some(ext) = ext {
+        path.set_extension(ext);
+    }
+
+    path
+}
 
 #[inline]
 pub(crate) fn extension_of(path: &Path) -> Option<&str> {

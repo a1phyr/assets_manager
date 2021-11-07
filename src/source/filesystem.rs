@@ -92,13 +92,9 @@ impl FileSystem {
     }
 
     /// Returns the path that the directory entry would have if it exists.
+    #[inline]
     pub fn path_of(&self, entry: DirEntry) -> PathBuf {
-        let mut path = self.path.clone();
-        path.extend(entry.id().split('.'));
-        if let DirEntry::File(_, ext) = entry {
-            path.set_extension(ext);
-        }
-        path
+        crate::utils::path_of_entry(&self.path, entry)
     }
 }
 
