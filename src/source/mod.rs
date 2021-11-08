@@ -227,6 +227,46 @@ where
     }
 }
 
+impl<S> Source for &S
+where
+    S: Source + ?Sized,
+{
+    #[inline]
+    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
+        (**self).read(id, ext)
+    }
+
+    #[inline]
+    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+        (**self).read_dir(id, f)
+    }
+
+    #[inline]
+    fn exists(&self, entry: DirEntry) -> bool {
+        (**self).exists(entry)
+    }
+}
+
+impl<S> Source for std::sync::Arc<S>
+where
+    S: Source + ?Sized,
+{
+    #[inline]
+    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
+        self.as_ref().read(id, ext)
+    }
+
+    #[inline]
+    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+        self.as_ref().read_dir(id, f)
+    }
+
+    #[inline]
+    fn exists(&self, entry: DirEntry) -> bool {
+        self.as_ref().exists(entry)
+    }
+}
+
 /// A [`Source`] that contains nothing.
 ///
 /// Calling `read` or `read_dir` from this source will always return an error.
