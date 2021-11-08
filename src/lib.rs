@@ -189,6 +189,8 @@ pub mod loader;
 mod entry;
 pub use entry::{AssetGuard, Handle};
 
+mod key;
+
 pub mod source;
 
 #[cfg(feature = "hot-reloading")]

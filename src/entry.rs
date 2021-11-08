@@ -39,9 +39,9 @@ pub(crate) struct DynamicInner<T> {
     reload: AtomicUsize,
 }
 
-#[cfg(feature = "hot-reloading")]
 impl<T> DynamicInner<T> {
     #[inline]
+    #[cfg(feature = "hot-reloading")]
     fn new(value: T, id: SharedString) -> Self {
         Self {
             id,

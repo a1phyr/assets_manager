@@ -1,63 +1,13 @@
-use std::{
-    any::{Any, TypeId},
-    borrow::Cow,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::PathBuf;
 
 use crate::{
-    entry::{CacheEntry, CacheEntryInner},
-    loader::Loader,
-    utils::{extension_of, BorrowedKey, HashMap, HashSet, OwnedKey},
-    Asset, AssetCache, Compound, SharedString,
+    key::{AnyAsset, AssetKey},
+    source::FileSystem,
+    utils::{BorrowedKey, HashMap, HashSet, OwnedKey},
+    AssetCache, Compound, SharedString,
 };
 
 use super::dependencies::Dependencies;
-
-trait AnyAsset: Any + Send + Sync {
-    fn reload(self: Box<Self>, entry: CacheEntryInner);
-    fn create(self: Box<Self>, id: SharedString) -> CacheEntry;
-}
-
-impl<A: Asset> AnyAsset for A {
-    fn reload(self: Box<Self>, entry: CacheEntryInner) {
-        entry.handle::<A>().either(
-            |_| {
-                log::error!(
-                    "Static asset registered for hot-reloading: {}",
-                    std::any::type_name::<A>()
-                )
-            },
-            |e| e.write(*self),
-        );
-    }
-
-    fn create(self: Box<Self>, id: SharedString) -> CacheEntry {
-        CacheEntry::new::<A>(*self, id)
-    }
-}
-
-type LoadFn = fn(content: Cow<[u8]>, ext: &str, id: &str, path: &Path) -> Option<Box<dyn AnyAsset>>;
-
-fn load<A: Asset>(
-    content: Cow<[u8]>,
-    ext: &str,
-    id: &str,
-    path: &Path,
-) -> Option<Box<dyn AnyAsset>> {
-    match A::Loader::load(content, ext) {
-        Ok(asset) => Some(Box::new(asset)),
-        Err(err) => {
-            log::warn!(
-                "Error reloading \"{}\" from \"{}\": {}",
-                id,
-                path.display(),
-                err
-            );
-            None
-        }
-    }
-}
 
 pub(crate) type ReloadFn = fn(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>>;
 
@@ -89,128 +39,19 @@ fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>
     }
 }
 
-/// Invariant: the TypeId is the same as the one of the value returned by the
-/// LoadFn.
-pub(crate) struct AssetReloadInfos(PathBuf, SharedString, TypeId, LoadFn);
-
 pub(crate) struct CompoundReloadInfos(OwnedKey, HashSet<OwnedKey>, ReloadFn);
 
-/// A update to the list of watched paths
-#[non_exhaustive]
-pub(crate) enum UpdateMessage {
-    Clear,
-    AddAsset(AssetReloadInfos),
-    AddCompound(CompoundReloadInfos),
-}
-
-#[allow(missing_debug_implementations)]
-pub struct PublicUpdateMessage(pub(crate) UpdateMessage);
-
-impl PublicUpdateMessage {
+impl CompoundReloadInfos {
     #[inline]
-    pub(crate) fn add_asset<A: Asset>(path: PathBuf, id: SharedString) -> Self {
-        Self(UpdateMessage::AddAsset(AssetReloadInfos(
-            path,
-            id,
-            TypeId::of::<A>(),
-            load::<A>,
-        )))
-    }
-
-    #[inline]
-    pub(crate) fn add_compound<A: Compound>(id: SharedString, deps: HashSet<OwnedKey>) -> Self {
+    pub(crate) fn of<A: Compound>(id: SharedString, deps: HashSet<OwnedKey>) -> Self {
         let key = OwnedKey::new::<A>(id);
-        Self(UpdateMessage::AddCompound(CompoundReloadInfos(
-            key,
-            deps,
-            reload::<A>,
-        )))
-    }
-
-    #[inline]
-    pub(crate) fn clear() -> Self {
-        Self(UpdateMessage::Clear)
-    }
-}
-
-/// A map type -> `T`
-///
-/// We could use a `HashMap` here, but the length of this `Vec` is unlikely to
-/// exceed 2 or 3. It would mean that the same file is used to load several
-/// assets types, which is uncommon but possible.
-struct Types<T>(Vec<(TypeId, T)>);
-
-impl<T> Types<T> {
-    #[inline]
-    const fn new() -> Self {
-        Types(Vec::new())
-    }
-
-    fn get(&self, type_id: TypeId) -> Option<&T> {
-        for (id, t) in &self.0 {
-            if *id == type_id {
-                return Some(t);
-            }
-        }
-        None
-    }
-
-    #[inline]
-    fn insert(&mut self, type_id: TypeId, t: T) {
-        if self.get(type_id).is_none() {
-            self.0.push((type_id, t));
-        }
-    }
-}
-
-/// A list of types associated with an id
-struct WatchedPath<T> {
-    id: SharedString,
-    types: Types<T>,
-}
-
-impl<T> WatchedPath<T> {
-    const fn new(id: SharedString) -> Self {
-        Self {
-            id,
-            types: Types::new(),
-        }
-    }
-}
-
-/// The list of watched paths.
-///
-/// Each type is associated with the function to load an asset of this type.
-/// This is kept up to date by the matching `AssetCache`, which sends messages
-/// when an asset or a directory is added.
-pub struct AssetPaths {
-    assets: HashMap<PathBuf, WatchedPath<LoadFn>>,
-}
-
-impl AssetPaths {
-    fn clear(&mut self) {
-        self.assets.clear();
-    }
-
-    fn add_asset(&mut self, id: AssetReloadInfos) {
-        let AssetReloadInfos(path, id, type_id, load) = id;
-        let watched = self
-            .assets
-            .entry(path)
-            .or_insert_with(|| WatchedPath::new(id));
-        watched.types.insert(type_id, load);
+        Self(key, deps, reload::<A>)
     }
 }
 
 /// Store assets until we can sync with the `AssetCache`.
 pub struct LocalCache {
     changed: HashMap<OwnedKey, Box<dyn AnyAsset>>,
-}
-
-impl LocalCache {
-    fn clear(&mut self) {
-        self.changed.clear();
-    }
 }
 
 enum CacheKind {
@@ -222,76 +63,48 @@ impl CacheKind {
     /// Reloads an asset
     ///
     /// `key.type_id == asset.type_id()`
-    fn update(&mut self, key: BorrowedKey, asset: Box<dyn AnyAsset>) {
+    fn update(&mut self, key: OwnedKey, asset: Box<dyn AnyAsset>) {
         match self {
             CacheKind::Static(cache, to_reload) => {
-                if let Some(entry) = cache.assets.get_entry(key) {
+                if let Some(entry) = cache.assets.get_entry(key.borrow()) {
                     asset.reload(entry);
                     log::info!("Reloading \"{}\"", key.id());
                 }
-                to_reload.push(key.to_owned());
+                to_reload.push(key);
             }
             CacheKind::Local(cache) => {
-                cache.changed.insert(key.to_owned(), asset);
+                cache.changed.insert(key, asset);
             }
         }
     }
 }
 
 pub(crate) struct HotReloadingData {
-    paths: AssetPaths,
+    fs: FileSystem,
     cache: CacheKind,
     deps: Dependencies,
 }
 
 impl HotReloadingData {
-    pub fn new() -> Self {
+    pub fn new(root: PathBuf) -> Self {
         let cache = LocalCache {
             changed: HashMap::new(),
         };
 
         HotReloadingData {
-            paths: AssetPaths {
-                assets: HashMap::new(),
-            },
-
+            fs: FileSystem::without_hot_reloading(root).unwrap(),
             cache: CacheKind::Local(cache),
             deps: Dependencies::new(),
         }
     }
 
-    /// A file was changed
-    pub fn load(&mut self, path: PathBuf) -> Option<()> {
-        let file_ext = extension_of(&path)?;
-
-        self.load_asset(&path, file_ext);
-
-        self.update_if_static();
-
-        Some(())
-    }
-
-    fn load_asset(&mut self, path: &Path, file_ext: &str) {
-        if let Some(path_infos) = self.paths.assets.get(path) {
-            let content = match fs::read(path) {
-                Ok(content) => content,
-                Err(err) => {
-                    log::warn!(
-                        "Error reloading \"{}\" from \"{}\": {}",
-                        path_infos.id,
-                        path.display(),
-                        err
-                    );
-                    return;
-                }
-            };
-
-            for (type_id, load) in &path_infos.types.0 {
-                if let Some(asset) = load(Cow::Borrowed(&content), file_ext, &path_infos.id, path) {
-                    let key = BorrowedKey::new_with(&path_infos.id, *type_id);
-                    self.cache.update(key, asset);
-                }
+    pub fn load_asset(&mut self, key: AssetKey) {
+        match key.typ.load(&self.fs, &key.id) {
+            Ok(asset) => {
+                self.cache.update(key.into_owned_key(), asset);
+                self.update_if_static();
             }
+            Err(err) => log::warn!("Error reloading \"{}\": {}", key.id, err),
         }
     }
 
@@ -319,19 +132,14 @@ impl HotReloadingData {
         }
     }
 
-    pub fn recv_update(&mut self, message: UpdateMessage) {
-        match message {
-            UpdateMessage::Clear => {
-                self.paths.clear();
-                if let CacheKind::Local(cache) = &mut self.cache {
-                    cache.clear();
-                }
-            }
-            UpdateMessage::AddAsset(infos) => self.paths.add_asset(infos),
-            UpdateMessage::AddCompound(infos) => {
-                let CompoundReloadInfos(key, new_deps, reload) = infos;
-                self.deps.insert(key, new_deps, Some(reload));
-            }
+    pub fn add_compound(&mut self, infos: CompoundReloadInfos) {
+        let CompoundReloadInfos(key, new_deps, reload) = infos;
+        self.deps.insert(key, new_deps, Some(reload));
+    }
+
+    pub fn clear_local_cache(&mut self) {
+        if let CacheKind::Local(cache) = &mut self.cache {
+            cache.changed.clear();
         }
     }
 }

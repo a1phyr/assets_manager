@@ -201,18 +201,9 @@ pub trait Source {
 
     #[cfg(feature = "hot-reloading")]
     #[doc(hidden)]
-    fn _private_path_of(&self, _: DirEntry) -> std::path::PathBuf {
-        unimplemented!()
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    #[doc(hidden)]
-    fn _private_send_message(&self, _: crate::hot_reloading::PublicUpdateMessage) {}
-
-    #[cfg(feature = "hot-reloading")]
-    #[doc(hidden)]
-    fn _private_supports_hot_reloading(&self) -> bool {
-        false
+    #[inline]
+    fn _private_hot_reloader(&self) -> Option<&crate::hot_reloading::HotReloader> {
+        None
     }
 }
 
@@ -220,14 +211,17 @@ impl<S> Source for Box<S>
 where
     S: Source + ?Sized,
 {
+    #[inline]
     fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
         self.as_ref().read(id, ext)
     }
 
+    #[inline]
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
         self.as_ref().read_dir(id, f)
     }
 
+    #[inline]
     fn exists(&self, entry: DirEntry) -> bool {
         self.as_ref().exists(entry)
     }

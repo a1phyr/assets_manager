@@ -144,6 +144,7 @@ pub(crate) struct BorrowedKey<'a> {
     id: &'a str,
 }
 
+#[allow(dead_code)]
 impl<'a> BorrowedKey<'a> {
     /// Creates an Key for the given type and id.
     #[inline]
@@ -159,7 +160,6 @@ impl<'a> BorrowedKey<'a> {
         Self { id, type_id }
     }
 
-    #[cfg(feature = "hot-reloading")]
     #[inline]
     pub fn id(self) -> &'a str {
         self.id
@@ -375,3 +375,7 @@ where
         self.0.fmt(f)
     }
 }
+
+#[cfg(feature = "hot-reloading")]
+#[derive(Debug)]
+pub struct DepsRecord(pub(crate) HashSet<OwnedKey>);

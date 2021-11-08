@@ -223,12 +223,9 @@ pub trait Compound: Sized + Send + Sync + 'static {
     ) -> Result<Self, Error> {
         #[cfg(feature = "hot-reloading")]
         if Self::HOT_RELOADED {
-            use crate::hot_reloading::PublicUpdateMessage;
-
             let (asset, deps) = cache.record_load(id)?;
-            if cache.source()._private_supports_hot_reloading() {
-                let msg = PublicUpdateMessage::add_compound::<Self>(id.clone(), deps);
-                cache.source()._private_send_message(msg);
+            if let Some(reloader) = cache.source()._private_hot_reloader() {
+                reloader.add_compound::<Self>(id.clone(), deps);
             }
             Ok(asset)
         } else {
@@ -274,16 +271,8 @@ where
 
         #[cfg(feature = "hot-reloading")]
         if A::HOT_RELOADED {
-            use crate::hot_reloading::PublicUpdateMessage;
-
-            let source = cache.source();
-
-            if source._private_supports_hot_reloading() {
-                for ext in A::EXTENSIONS {
-                    let path = source._private_path_of(crate::source::DirEntry::File(id, ext));
-                    let msg = PublicUpdateMessage::add_asset::<Self>(path, id.clone());
-                    source._private_send_message(msg);
-                }
+            if let Some(reloader) = cache.source()._private_hot_reloader() {
+                reloader.add_asset::<Self>(id.clone());
             }
         }
 

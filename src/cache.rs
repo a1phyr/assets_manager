@@ -439,7 +439,7 @@ where
     ) -> Result<(A, HashSet<OwnedKey>), Error> {
         let mut record = Record::new(self as *const Self as *const () as usize);
 
-        let asset = if self.source._private_supports_hot_reloading() {
+        let asset = if self.source._private_hot_reloader().is_some() {
             RECORDING.with(|rec| {
                 let old_rec = rec.replace(Some(NonNull::from(&mut record)));
                 let result = A::load(self, id);
@@ -581,8 +581,9 @@ where
         self.assets.clear();
 
         #[cfg(feature = "hot-reloading")]
-        self.source
-            ._private_send_message(crate::hot_reloading::PublicUpdateMessage::clear());
+        if let Some(reloader) = self.source._private_hot_reloader() {
+            reloader.clear();
+        }
     }
 }
 

@@ -1,95 +1,74 @@
-mod paths;
-
 pub mod dependencies;
+mod paths;
+mod watcher;
 
 #[cfg(test)]
 mod tests;
 
-pub(crate) use paths::PublicUpdateMessage;
-use paths::{HotReloadingData, UpdateMessage};
+use paths::{CompoundReloadInfos, HotReloadingData};
 
 use crossbeam_channel::{self as channel, Receiver, Sender};
+use std::{fmt, path::PathBuf, ptr::NonNull, thread};
 
-use std::{fmt, path::Path, ptr::NonNull, sync::mpsc, thread, time::Duration};
+use crate::{
+    utils::{HashSet, OwnedKey},
+    AssetCache, SharedString,
+};
 
-use notify::{DebouncedEvent, RecursiveMode, Watcher};
+use crate::key::AssetKey;
 
-use crate::{utils::Mutex, AssetCache};
+#[non_exhaustive]
+enum UpdateMessage {
+    AddAsset(AssetKey),
+    Clear,
+}
 
 enum CacheMessage {
     Ptr(NonNull<AssetCache>),
     Static(&'static AssetCache),
+
+    Clear,
+    AddCompound(CompoundReloadInfos),
 }
 unsafe impl Send for CacheMessage where AssetCache: Sync {}
 
-fn std_crossbeam_channel<T: Send + 'static>() -> (mpsc::Sender<T>, Receiver<T>) {
-    let (std_tx, std_rx) = mpsc::channel();
-    let (crossbeam_tx, crossbeam_rx) = channel::unbounded();
-
-    thread::Builder::new()
-        .name("assets_workaround".to_string())
-        .spawn(|| workaround_channels(std_rx, crossbeam_tx))
-        .unwrap();
-
-    (std_tx, crossbeam_rx)
-}
-
-fn workaround_channels<T: Send + 'static>(std_rx: mpsc::Receiver<T>, crossbeam_tx: Sender<T>) {
-    while let Ok(msg) = std_rx.recv() {
-        if crossbeam_tx.send(msg).is_err() {
-            break;
-        }
-    }
-}
-
-struct Client {
+pub struct HotReloader {
     sender: Sender<CacheMessage>,
     receiver: Receiver<()>,
-}
-
-pub(crate) struct HotReloader {
-    channel: Mutex<Option<Client>>,
     updates: Sender<UpdateMessage>,
 }
 
 impl HotReloader {
-    pub fn start(path: &Path) -> Result<Self, notify::Error> {
-        let (notify_tx, notify_rx) = std_crossbeam_channel();
-
-        let (ptr_tx, ptr_rx) = channel::unbounded();
+    pub fn start(path: PathBuf) -> Result<Self, notify::Error> {
+        let (msg_tx, msg_rx) = channel::unbounded();
         let (answer_tx, answer_rx) = channel::unbounded();
         let (updates_tx, updates_rx) = channel::unbounded();
 
-        let mut watcher = notify::watcher(notify_tx, Duration::from_millis(50))?;
-        watcher.watch(path, RecursiveMode::Recursive)?;
+        let (watcher, events_rx) = watcher::make(path.clone(), updates_rx)?;
 
         thread::Builder::new()
             .name("assets_hot_reload".to_string())
-            .spawn(|| Self::hot_reloading_thread(watcher, notify_rx, ptr_rx, answer_tx, updates_rx))
+            .spawn(|| Self::hot_reloading_thread(path, watcher, events_rx, msg_rx, answer_tx))
             .unwrap();
 
         Ok(HotReloader {
             updates: updates_tx,
-
-            channel: Mutex::new(Some(Client {
-                sender: ptr_tx,
-                receiver: answer_rx,
-            })),
+            sender: msg_tx,
+            receiver: answer_rx,
         })
     }
 
     // this is done in a new thread
     fn hot_reloading_thread(
-        watcher: notify::RecommendedWatcher,
-        notify_rx: Receiver<DebouncedEvent>,
+        root: PathBuf,
+        _watcher: notify::RecommendedWatcher,
+        events_rx: Receiver<AssetKey>,
         ptr_rx: Receiver<CacheMessage>,
         answer_tx: Sender<()>,
-        updates_rx: Receiver<UpdateMessage>,
     ) {
         log::trace!("Starting hot-reloading");
 
-        // Keep the notify Watcher alive as long as the thread is running
-        let _watcher = watcher;
+        let mut cache = HotReloadingData::new(root);
 
         // At the beginning, we select over three channels:
         // - One to notify that we can update the `AssetCache` or that we
@@ -100,10 +79,7 @@ impl HotReloader {
         //   changes
         let mut select = channel::Select::new();
         select.recv(&ptr_rx);
-        select.recv(&notify_rx);
-        select.recv(&updates_rx);
-
-        let mut cache = HotReloadingData::new();
+        select.recv(&events_rx);
 
         loop {
             let ready = select.select();
@@ -115,32 +91,18 @@ impl HotReloader {
                         cache.update_if_local(unsafe { ptr.as_ref() });
                         answer_tx.send(()).unwrap();
                     }
-                    Ok(CacheMessage::Static(asset_cache)) => {
-                        cache.use_static_ref(asset_cache);
-                        select.remove(0);
-                    }
+                    Ok(CacheMessage::Static(asset_cache)) => cache.use_static_ref(asset_cache),
+                    Ok(CacheMessage::Clear) => cache.clear_local_cache(),
+                    Ok(CacheMessage::AddCompound(infos)) => cache.add_compound(infos),
                     Err(_) => (),
                 },
 
-                1 => match ready.recv(&notify_rx) {
-                    Ok(event) => match event {
-                        DebouncedEvent::Write(path)
-                        | DebouncedEvent::Chmod(path)
-                        | DebouncedEvent::Rename(_, path)
-                        | DebouncedEvent::Create(path) => {
-                            cache.load(path);
-                        }
-                        _ => (),
-                    },
+                1 => match ready.recv(&events_rx) {
+                    Ok(msg) => cache.load_asset(msg),
                     Err(_) => {
                         log::error!("Notify panicked, hot-reloading stopped");
                         break;
                     }
-                },
-
-                2 => match ready.recv(&updates_rx) {
-                    Ok(msg) => cache.recv_update(msg),
-                    Err(_) => break,
                 },
 
                 _ => unreachable!(),
@@ -152,26 +114,33 @@ impl HotReloader {
     // without hot-reloading if it stopped, and an error should have already
     // been logged.
 
-    pub fn send_update(&self, msg: UpdateMessage) {
-        let _ = self.updates.send(msg);
+    pub(crate) fn add_asset<A: crate::Asset>(&self, id: SharedString) {
+        let _ = self
+            .updates
+            .send(UpdateMessage::AddAsset(AssetKey::new::<A>(id)));
     }
 
-    pub fn reload(&self, cache: &AssetCache) {
-        let lock = self.channel.lock();
-
-        if let Some(Client { sender, receiver }) = &*lock {
-            let _ = sender.send(CacheMessage::Ptr(cache.into()));
-            let _ = receiver.recv();
-        }
+    pub(crate) fn add_compound<A: crate::Compound>(
+        &self,
+        id: SharedString,
+        deps: HashSet<OwnedKey>,
+    ) {
+        let infos = CompoundReloadInfos::of::<A>(id, deps);
+        let _ = self.sender.send(CacheMessage::AddCompound(infos));
     }
 
-    pub fn send_static(&self, cache: &'static AssetCache) {
-        let mut lock = self.channel.lock();
+    pub(crate) fn clear(&self) {
+        let _ = self.sender.send(CacheMessage::Clear);
+        let _ = self.updates.send(UpdateMessage::Clear);
+    }
 
-        if let Some(Client { sender, .. }) = &mut *lock {
-            let _ = sender.send(CacheMessage::Static(cache));
-            *lock = None;
-        }
+    pub(crate) fn reload(&self, cache: &AssetCache) {
+        let _ = self.sender.send(CacheMessage::Ptr(cache.into()));
+        let _ = self.receiver.recv();
+    }
+
+    pub(crate) fn send_static(&self, cache: &'static AssetCache) {
+        let _ = self.sender.send(CacheMessage::Static(cache));
     }
 }
 

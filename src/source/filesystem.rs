@@ -64,7 +64,7 @@ impl FileSystem {
 
         #[cfg(feature = "hot-reloading")]
         let reloader = if _hot_reloading {
-            match HotReloader::start(&path) {
+            match HotReloader::start(path.to_owned()) {
                 Ok(r) => Some(r),
                 Err(err) => {
                     log::error!("Unable to start hot-reloading: {}", err);
@@ -144,21 +144,9 @@ impl Source for FileSystem {
     }
 
     #[cfg(feature = "hot-reloading")]
-    fn _private_path_of(&self, entry: DirEntry) -> PathBuf {
-        self.path_of(entry)
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    fn _private_send_message(&self, msg: crate::hot_reloading::PublicUpdateMessage) {
-        if let Some(reloader) = &self.reloader {
-            reloader.send_update(msg.0);
-        }
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    #[doc(hidden)]
-    fn _private_supports_hot_reloading(&self) -> bool {
-        self.reloader.is_some()
+    #[inline]
+    fn _private_hot_reloader(&self) -> Option<&crate::hot_reloading::HotReloader> {
+        self.reloader.as_ref()
     }
 }
 
