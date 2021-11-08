@@ -29,6 +29,9 @@
 //!
 //! Additionally, one can explicitly disable hot-reloading for a type.
 
+#[cfg(test)]
+mod tests;
+
 pub use crate::dirs::DirLoadable;
 
 #[allow(unused)]
