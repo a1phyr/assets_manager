@@ -35,6 +35,7 @@ use std::{borrow::Cow, io};
 
 #[cfg(doc)]
 use crate::{asset::DirLoadable, AssetCache};
+use crate::{hot_reloading::HotReloader, BoxedError};
 
 mod filesystem;
 pub use filesystem::FileSystem;
@@ -199,11 +200,15 @@ pub trait Source {
     /// ```
     fn exists(&self, entry: DirEntry) -> bool;
 
-    #[cfg(feature = "hot-reloading")]
-    #[doc(hidden)]
+    /// Configures hot-reloading.
+    ///
+    /// Returns:
+    /// - `Ok(None)` if hot-reloading is disabled or not supported (default).
+    /// - `Ok(Some(_))` if hot-reloading started successfully.
+    /// - `Err(_)` if hot-reloading failed to start.
     #[inline]
-    fn _private_hot_reloader(&self) -> Option<&crate::hot_reloading::HotReloader> {
-        None
+    fn configure_hot_reloading(&self) -> Result<Option<HotReloader>, BoxedError> {
+        Ok(None)
     }
 }
 
@@ -225,6 +230,11 @@ where
     fn exists(&self, entry: DirEntry) -> bool {
         self.as_ref().exists(entry)
     }
+
+    #[inline]
+    fn configure_hot_reloading(&self) -> Result<Option<HotReloader>, BoxedError> {
+        self.as_ref().configure_hot_reloading()
+    }
 }
 
 impl<S> Source for &S
@@ -245,6 +255,11 @@ where
     fn exists(&self, entry: DirEntry) -> bool {
         (**self).exists(entry)
     }
+
+    #[inline]
+    fn configure_hot_reloading(&self) -> Result<Option<HotReloader>, BoxedError> {
+        (**self).configure_hot_reloading()
+    }
 }
 
 impl<S> Source for std::sync::Arc<S>
@@ -264,6 +279,11 @@ where
     #[inline]
     fn exists(&self, entry: DirEntry) -> bool {
         self.as_ref().exists(entry)
+    }
+
+    #[inline]
+    fn configure_hot_reloading(&self) -> Result<Option<HotReloader>, BoxedError> {
+        self.as_ref().configure_hot_reloading()
     }
 }
 

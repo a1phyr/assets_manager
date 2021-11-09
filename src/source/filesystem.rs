@@ -1,6 +1,4 @@
-#[cfg(feature = "hot-reloading")]
-use crate::hot_reloading::HotReloader;
-use crate::utils::extension_of;
+use crate::{hot_reloading::HotReloader, utils::extension_of};
 
 #[cfg(doc)]
 use crate::AssetCache;
@@ -26,11 +24,9 @@ use super::{DirEntry, Source};
 ///
 /// This source does not work in WebAssembly, because there is no file system.
 /// When called, it always returns an error.
+#[derive(Clone)]
 pub struct FileSystem {
     path: PathBuf,
-
-    #[cfg(feature = "hot-reloading")]
-    pub(crate) reloader: Option<HotReloader>,
 }
 
 impl FileSystem {
@@ -43,44 +39,11 @@ impl FileSystem {
     /// # Errors
     ///
     /// An error can occur if `path` is not a valid readable directory.
-    ///
-    /// If hot-reloading fails to start (if feature `hot-reloading` is used),
-    /// an error is logged and this function returns `Ok`.
     pub fn new<P: AsRef<Path>>(path: P) -> io::Result<FileSystem> {
-        Self::_new(path.as_ref(), true)
-    }
-
-    /// Same as `new`, but does not start hot-reloading.
-    ///
-    /// If feature `hot-reloading` is not enabled, this function is equivalent
-    /// to `new`.
-    pub fn without_hot_reloading<P: AsRef<Path>>(path: P) -> io::Result<FileSystem> {
-        Self::_new(path.as_ref(), false)
-    }
-
-    fn _new(path: &Path, _hot_reloading: bool) -> io::Result<FileSystem> {
-        let path = path.canonicalize()?;
+        let path = path.as_ref().canonicalize()?;
         let _ = path.read_dir()?;
 
-        #[cfg(feature = "hot-reloading")]
-        let reloader = if _hot_reloading {
-            match HotReloader::start(path.to_owned()) {
-                Ok(r) => Some(r),
-                Err(err) => {
-                    log::error!("Unable to start hot-reloading: {}", err);
-                    None
-                }
-            }
-        } else {
-            None
-        };
-
-        Ok(FileSystem {
-            path,
-
-            #[cfg(feature = "hot-reloading")]
-            reloader,
-        })
+        Ok(FileSystem { path })
     }
 
     /// Gets the path of the source's root.
@@ -143,10 +106,19 @@ impl Source for FileSystem {
         self.path_of(entry).exists()
     }
 
-    #[cfg(feature = "hot-reloading")]
-    #[inline]
-    fn _private_hot_reloader(&self) -> Option<&crate::hot_reloading::HotReloader> {
-        self.reloader.as_ref()
+    fn configure_hot_reloading(&self) -> Result<Option<HotReloader>, crate::BoxedError> {
+        #[cfg(feature = "hot-reloading")]
+        {
+            let mut watcher = crate::hot_reloading::FsWatcherBuilder::new()?;
+            watcher.watch(self.path.clone())?;
+            let config = watcher.build();
+            Ok(Some(HotReloader::start(config, self.clone())))
+        }
+
+        #[cfg(not(feature = "hot-reloading"))]
+        {
+            Ok(None)
+        }
     }
 }
 

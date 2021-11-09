@@ -16,7 +16,7 @@ use crate::AssetGuard;
 use std::{any::TypeId, fmt, io, path::Path};
 
 #[cfg(feature = "hot-reloading")]
-use crate::utils::HashSet;
+use crate::{hot_reloading::HotReloader, utils::HashSet};
 
 #[cfg(feature = "hot-reloading")]
 use std::{cell::Cell, ptr::NonNull};
@@ -229,6 +229,9 @@ thread_local! {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct AssetCache<S: ?Sized = FileSystem> {
+    #[cfg(feature = "hot-reloading")]
+    pub(crate) reloader: Option<HotReloader>,
+
     pub(crate) assets: Map,
     source: S,
 }
@@ -246,10 +249,35 @@ impl AssetCache<FileSystem> {
     }
 }
 
-impl<S> AssetCache<S> {
-    /// Creates a cache that loads assets from the given source.
+impl<S: Source> AssetCache<S> {
+    /// Creates a cache that loads assets from the given source and tries to
+    /// start hot-reloading (if feature `hot-reloading` is used).
+    ///
+    /// If hot-reloading fails to start, an error is logged.
     pub fn with_source(source: S) -> AssetCache<S> {
+        #[cfg(feature = "hot-reloading")]
+        let reloader = source.configure_hot_reloading().unwrap_or_else(|err| {
+            log::error!("Unable to start hot-reloading: {}", err);
+            None
+        });
+
         AssetCache {
+            #[cfg(feature = "hot-reloading")]
+            reloader,
+
+            assets: Map::new(32),
+            source,
+        }
+    }
+}
+
+impl<S: Source> AssetCache<S> {
+    /// Creates a cache that loads assets from the given source.
+    pub fn without_hot_reloading(source: S) -> AssetCache<S> {
+        AssetCache {
+            #[cfg(feature = "hot-reloading")]
+            reloader: None,
+
             assets: Map::new(32),
             source,
         }
@@ -439,7 +467,7 @@ where
     ) -> Result<(A, HashSet<OwnedKey>), Error> {
         let mut record = Record::new(self as *const Self as *const () as usize);
 
-        let asset = if self.source._private_hot_reloader().is_some() {
+        let asset = if self.reloader.is_some() {
             RECORDING.with(|rec| {
                 let old_rec = rec.replace(Some(NonNull::from(&mut record)));
                 let result = A::load(self, id);
@@ -581,13 +609,16 @@ where
         self.assets.clear();
 
         #[cfg(feature = "hot-reloading")]
-        if let Some(reloader) = self.source._private_hot_reloader() {
+        if let Some(reloader) = &self.reloader {
             reloader.clear();
         }
     }
 }
 
-impl AssetCache<FileSystem> {
+impl<S> AssetCache<S>
+where
+    S: Source + Sync + 'static,
+{
     /// Reloads changed assets.
     ///
     /// This function is typically called within a loop.
@@ -607,11 +638,16 @@ impl AssetCache<FileSystem> {
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
     #[inline]
     pub fn hot_reload(&self) {
-        if let Some(reloader) = &self.source.reloader {
+        if let Some(reloader) = &self.reloader {
             reloader.reload(self);
         }
     }
+}
 
+impl<S> AssetCache<S>
+where
+    S: Source + Sync,
+{
     /// Enhances hot-reloading.
     ///
     /// Having a `'static` reference to the cache enables some optimizations,
@@ -629,7 +665,7 @@ impl AssetCache<FileSystem> {
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
     #[inline]
     pub fn enhance_hot_reloading(&'static self) {
-        if let Some(reloader) = &self.source.reloader {
+        if let Some(reloader) = &self.reloader {
             reloader.send_static(self);
         }
     }

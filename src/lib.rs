@@ -193,8 +193,8 @@ mod key;
 
 pub mod source;
 
-#[cfg(feature = "hot-reloading")]
-mod hot_reloading;
+#[cfg_attr(not(feature = "hot-reloading"), path = "hot_reloading/disabled.rs")]
+pub mod hot_reloading;
 
 mod utils;
 pub use utils::{SharedBytes, SharedString};

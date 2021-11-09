@@ -5,7 +5,7 @@ use std::{any::TypeId, cmp, fmt, hash};
 use crate::{
     cache::load_from_source,
     entry::{CacheEntry, CacheEntryInner},
-    source::FileSystem,
+    source::Source,
     utils, Asset, Error, SharedString,
 };
 
@@ -32,7 +32,7 @@ impl<A: Asset> AnyAsset for A {
     }
 }
 
-fn load<A: Asset>(source: &FileSystem, id: &str) -> Result<Box<dyn AnyAsset>, Error> {
+fn load<A: Asset>(source: &dyn Source, id: &str) -> Result<Box<dyn AnyAsset>, Error> {
     let asset = load_from_source::<A, _>(source, id)?;
     Ok(Box::new(asset))
 }
@@ -40,7 +40,7 @@ fn load<A: Asset>(source: &FileSystem, id: &str) -> Result<Box<dyn AnyAsset>, Er
 struct Inner {
     extensions: &'static [&'static str],
     #[allow(clippy::type_complexity)]
-    load: fn(&FileSystem, id: &str) -> Result<Box<dyn AnyAsset>, Error>,
+    load: fn(&dyn Source, id: &str) -> Result<Box<dyn AnyAsset>, Error>,
 }
 
 impl Inner {
@@ -52,6 +52,7 @@ impl Inner {
     }
 }
 
+/// A structure to represent the type on an [`Asset`]
 #[derive(Clone, Copy)]
 pub struct AssetType {
     // TODO: move this into `inner` when `TypeId::of` is const-stable
@@ -60,6 +61,7 @@ pub struct AssetType {
 }
 
 impl AssetType {
+    /// Creates an `AssetType` for type `A`.
     #[inline]
     pub fn of<A: Asset>() -> Self {
         Self {
@@ -68,12 +70,13 @@ impl AssetType {
         }
     }
 
+    /// The extensions associated with the reprensented asset type.
     #[inline]
     pub fn extensions(self) -> &'static [&'static str] {
         self.inner.extensions
     }
 
-    pub(crate) fn load(self, source: &FileSystem, id: &str) -> Result<Box<dyn AnyAsset>, Error> {
+    pub(crate) fn load<S: Source>(self, source: &S, id: &str) -> Result<Box<dyn AnyAsset>, Error> {
         (self.inner.load)(source, id)
     }
 }
@@ -116,13 +119,18 @@ impl fmt::Debug for AssetType {
     }
 }
 
+/// An untyped representation of a stored asset.
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AssetKey {
+    /// The representation of the type of the asset.
     pub typ: AssetType,
+
+    /// The id of the asset.
     pub id: SharedString,
 }
 
 impl AssetKey {
+    /// Creates a new `AssetKey` from a type and an id.
     #[inline]
     pub fn new<A: Asset>(id: SharedString) -> Self {
         Self {

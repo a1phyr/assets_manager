@@ -1,16 +1,19 @@
 use std::{
+    fmt,
     path::{Path, PathBuf},
     sync::mpsc,
     thread,
     time::Duration,
 };
 
-use crossbeam_channel::{self as channel, Receiver, Sender};
-
 use crate::{
     source::DirEntry,
     utils::{path_of_entry, HashMap},
+    BoxedError,
 };
+
+#[cfg(doc)]
+use crate::source::Source;
 
 pub struct SmallSet<T>(Vec<T>);
 
@@ -35,46 +38,80 @@ impl<T: Eq> SmallSet<T> {
     }
 }
 
-use super::{AssetKey, UpdateMessage};
+/// Built-in reloader based on filesystem events.
+///
+/// You can use it to quickly set up hot-reloading for a custom [`Source`].
+#[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
+pub struct FsWatcherBuilder {
+    roots: Vec<PathBuf>,
+    watcher: notify::RecommendedWatcher,
+    notify: mpsc::Receiver<notify::DebouncedEvent>,
+}
 
-pub(super) fn make(
-    root: PathBuf,
-    updates: Receiver<UpdateMessage>,
-) -> notify::Result<(notify::RecommendedWatcher, Receiver<AssetKey>)> {
-    let (notify_tx, notify_rx) = mpsc::channel();
-    let (events_tx, events_rx) = channel::unbounded();
+impl FsWatcherBuilder {
+    /// Creates a new builder.
+    pub fn new() -> Result<Self, BoxedError> {
+        let (notify_tx, notify) = mpsc::channel();
+        let watcher = notify::watcher(notify_tx, Duration::from_millis(50))?;
+        Ok(Self {
+            roots: Vec::new(),
+            watcher,
+            notify,
+        })
+    }
 
-    let mut watcher = notify::watcher(notify_tx, Duration::from_millis(50))?;
-    notify::Watcher::watch(&mut watcher, &root, notify::RecursiveMode::Recursive)?;
+    /// Adds a path to watch.
+    pub fn watch(&mut self, path: PathBuf) -> Result<(), BoxedError> {
+        notify::Watcher::watch(&mut self.watcher, &path, notify::RecursiveMode::Recursive)?;
+        self.roots.push(path);
+        Ok(())
+    }
 
-    thread::Builder::new()
-        .name("assets_translate".to_string())
-        .spawn(|| translation_thread(root, notify_rx, updates, events_tx))
-        .unwrap();
+    /// Starts the watcher.
+    ///
+    /// The return value is meant to be used in [`Source::configure_hot_reloading`]
+    pub fn build(self) -> super::HotReloaderConfig {
+        let (events, updates, config) = super::config_hot_reloading();
 
-    Ok((watcher, events_rx))
+        thread::Builder::new()
+            .name("assets_translate".to_string())
+            .spawn(|| translation_thread(self.watcher, self.roots, self.notify, updates, events))
+            .unwrap();
+
+        config
+    }
+}
+
+impl fmt::Debug for FsWatcherBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("FsWatcherBuilder")
+            .field("roots", &self.roots)
+            .finish()
+    }
 }
 
 struct WatchedPaths {
-    root: PathBuf,
-    paths: HashMap<PathBuf, SmallSet<AssetKey>>,
+    roots: Vec<PathBuf>,
+    paths: HashMap<PathBuf, SmallSet<super::AssetKey>>,
 }
 
 impl WatchedPaths {
-    fn new(root: PathBuf) -> WatchedPaths {
+    fn new(roots: Vec<PathBuf>) -> WatchedPaths {
         WatchedPaths {
-            root,
+            roots,
             paths: HashMap::new(),
         }
     }
 
-    fn add_asset(&mut self, asset: AssetKey) {
-        for ext in asset.typ.extensions() {
-            let path = path_of_entry(&self.root, DirEntry::File(&asset.id, ext));
-            self.paths
-                .entry(path)
-                .or_insert_with(SmallSet::new)
-                .insert(asset.clone());
+    fn add_asset(&mut self, asset: super::AssetKey) {
+        for root in &self.roots {
+            for ext in asset.typ.extensions() {
+                let path = path_of_entry(root, DirEntry::File(&asset.id, ext));
+                self.paths
+                    .entry(path)
+                    .or_insert_with(SmallSet::new)
+                    .insert(asset.clone());
+            }
         }
     }
 
@@ -82,7 +119,7 @@ impl WatchedPaths {
         self.paths.clear();
     }
 
-    fn assets<'a>(&'a self, path: &Path) -> impl Iterator<Item = AssetKey> + 'a {
+    fn assets<'a>(&'a self, path: &Path) -> impl Iterator<Item = super::AssetKey> + 'a {
         self.paths
             .get(path)
             .map_or(&[][..], |set| &set.0)
@@ -92,22 +129,27 @@ impl WatchedPaths {
 }
 
 fn translation_thread(
-    root: PathBuf,
+    _watcher: notify::RecommendedWatcher,
+    roots: Vec<PathBuf>,
     notify: mpsc::Receiver<notify::DebouncedEvent>,
-    updates: Receiver<UpdateMessage>,
-    events: Sender<AssetKey>,
+    updates: super::UpdateReceiver,
+    events: super::EventSender,
 ) {
-    let mut watched_paths = WatchedPaths::new(root);
+    log::trace!("Starting hot-reloading translation thread");
+
+    let mut watched_paths = WatchedPaths::new(roots);
 
     while let Ok(event) = notify.recv() {
         loop {
             match updates.try_recv() {
-                Ok(UpdateMessage::AddAsset(key)) => watched_paths.add_asset(key),
-                Ok(UpdateMessage::Clear) => watched_paths.clear(),
-                Err(channel::TryRecvError::Empty) => break,
-                Err(channel::TryRecvError::Disconnected) => return,
+                Ok(super::UpdateMessage::AddAsset(key)) => watched_paths.add_asset(key),
+                Ok(super::UpdateMessage::Clear) => watched_paths.clear(),
+                Err(super::TryRecvUpdateError::Empty) => break,
+                Err(super::TryRecvUpdateError::Disconnected) => return,
             }
         }
+
+        log::trace!("Received filesystem event: {:?}", event);
 
         match event {
             notify::DebouncedEvent::Write(path)

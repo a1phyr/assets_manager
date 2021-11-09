@@ -227,7 +227,7 @@ pub trait Compound: Sized + Send + Sync + 'static {
         #[cfg(feature = "hot-reloading")]
         if Self::HOT_RELOADED {
             let (asset, deps) = cache.record_load(id)?;
-            if let Some(reloader) = cache.source()._private_hot_reloader() {
+            if let Some(reloader) = &cache.reloader {
                 reloader.add_compound::<Self>(id.clone(), deps);
             }
             Ok(asset)
@@ -274,7 +274,7 @@ where
 
         #[cfg(feature = "hot-reloading")]
         if A::HOT_RELOADED {
-            if let Some(reloader) = cache.source()._private_hot_reloader() {
+            if let Some(reloader) = &cache.reloader {
                 reloader.add_asset::<Self>(id.clone());
             }
         }

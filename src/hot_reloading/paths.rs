@@ -1,18 +1,16 @@
-use std::path::PathBuf;
-
 use crate::{
     key::{AnyAsset, AssetKey},
-    source::FileSystem,
+    source::Source,
     utils::{BorrowedKey, HashMap, HashSet, OwnedKey},
-    AssetCache, Compound, SharedString,
+    Compound, SharedString,
 };
 
-use super::dependencies::Dependencies;
+use super::{dependencies::Dependencies, DynAssetCache};
 
-pub(crate) type ReloadFn = fn(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>>;
+pub(crate) type ReloadFn = fn(cache: &DynAssetCache, id: &str) -> Option<HashSet<OwnedKey>>;
 
 #[allow(clippy::redundant_closure)]
-fn reload<T: Compound>(cache: &AssetCache, id: &str) -> Option<HashSet<OwnedKey>> {
+fn reload<T: Compound>(cache: &DynAssetCache, id: &str) -> Option<HashSet<OwnedKey>> {
     let key = BorrowedKey::new::<T>(id);
     let handle = cache.assets.get_entry(key)?.handle();
     let entry = handle.either(
@@ -56,7 +54,7 @@ pub struct LocalCache {
 
 enum CacheKind {
     Local(LocalCache),
-    Static(&'static AssetCache, Vec<OwnedKey>),
+    Static(&'static DynAssetCache, Vec<OwnedKey>),
 }
 
 impl CacheKind {
@@ -79,27 +77,27 @@ impl CacheKind {
     }
 }
 
-pub(crate) struct HotReloadingData {
-    fs: FileSystem,
+pub(crate) struct HotReloadingData<S> {
+    source: S,
     cache: CacheKind,
     deps: Dependencies,
 }
 
-impl HotReloadingData {
-    pub fn new(root: PathBuf) -> Self {
+impl<S: Source> HotReloadingData<S> {
+    pub fn new(source: S) -> Self {
         let cache = LocalCache {
             changed: HashMap::new(),
         };
 
         HotReloadingData {
-            fs: FileSystem::without_hot_reloading(root).unwrap(),
+            source,
             cache: CacheKind::Local(cache),
             deps: Dependencies::new(),
         }
     }
 
     pub fn load_asset(&mut self, key: AssetKey) {
-        match key.typ.load(&self.fs, &key.id) {
+        match key.typ.load(&self.source, &key.id) {
             Ok(asset) => {
                 self.cache.update(key.into_owned_key(), asset);
                 self.update_if_static();
@@ -108,7 +106,7 @@ impl HotReloadingData {
         }
     }
 
-    pub fn update_if_local(&mut self, cache: &AssetCache) {
+    pub fn update_if_local(&mut self, cache: &DynAssetCache) {
         if let CacheKind::Local(local_cache) = &mut self.cache {
             local_cache.update(&mut self.deps, cache);
         }
@@ -124,7 +122,7 @@ impl HotReloadingData {
 
     /// Drop the local cache and use the static reference we have on the
     /// `AssetCache`.
-    pub fn use_static_ref(&mut self, asset_cache: &'static AssetCache) {
+    pub fn use_static_ref(&mut self, asset_cache: &'static DynAssetCache) {
         if let CacheKind::Local(cache) = &mut self.cache {
             cache.update(&mut self.deps, asset_cache);
             self.cache = CacheKind::Static(asset_cache, Vec::new());
@@ -147,7 +145,7 @@ impl HotReloadingData {
 impl LocalCache {
     /// Update the `AssetCache` with data collected in the `LocalCache` since
     /// the last reload.
-    fn update(&mut self, deps: &mut Dependencies, cache: &AssetCache) {
+    fn update(&mut self, deps: &mut Dependencies, cache: &DynAssetCache) {
         let to_update =
             super::dependencies::AssetDepGraph::new(deps, self.changed.iter().map(|(k, _)| k));
 
