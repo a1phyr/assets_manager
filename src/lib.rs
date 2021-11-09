@@ -29,7 +29,7 @@
 //! - Serialisation formats (with [`serde`] crate): `bincode`, `cbor`, `json`,
 //! `msgpack`, `ron`, `toml`, `yaml`.
 //! - Audio formats (with [`rodio`] crate): `mp3`, `flac`, `vorbis`, `wav`.
-//! - Image formats (with [`image`] crate): `bmp`, `jpeg`, `png`.
+//! - Image formats (with [`image`] crate): `bmp`, `jpeg`, `png` `webp`.
 //!
 //! ### Internal features
 //!

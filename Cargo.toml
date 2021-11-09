@@ -39,6 +39,7 @@ wav = ["rodio/wav"]
 bmp = ["image/bmp"]
 jpeg = ["image/jpeg"]
 png = ["image/png"]
+webp = ["image/webp"]
 
 
 [dependencies]

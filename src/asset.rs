@@ -556,6 +556,13 @@ image_assets! {
         image::ImageFormat::Png,
         ["png"],
     );
+
+    /// An asset to load PNG images.
+    #[cfg(feature = "webp")]
+    struct Webp => (
+        image::ImageFormat::WebP,
+        ["webp"],
+    );
 }
 
 macro_rules! sound_assets {
