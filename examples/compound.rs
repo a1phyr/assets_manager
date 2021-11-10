@@ -79,7 +79,8 @@ fn main() -> Result<(), Error> {
     let cache = AssetCache::new("assets")?;
 
     // Load the Level from the cache
-    let mut level = cache.load::<Level>("example.levels.forest")?;
+    let level = cache.load::<Level>("example.levels.forest")?;
+    let mut watcher = level.reload_watcher();
 
     println!("{:#?}", level);
 
@@ -90,7 +91,7 @@ fn main() -> Result<(), Error> {
         //  - assets/example/levels/forest.ron
         //  - assets/example/monsters/goblin.ron
         //  - assets/example/monsters/giant_bat.ron
-        if level.reloaded() {
+        if watcher.reloaded() {
             println!("{:#?}", level);
         }
 

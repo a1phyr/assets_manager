@@ -187,7 +187,7 @@ pub use error::{BoxedError, Error};
 pub mod loader;
 
 mod entry;
-pub use entry::{AssetGuard, Handle};
+pub use entry::{AssetGuard, Handle, ReloadId, ReloadWatcher};
 
 mod key;
 

@@ -46,26 +46,27 @@ macro_rules! test_scenario {
 
             test_scenario!(@enhance cache $is_static);
 
-            let mut asset = cache.load::<$load>(id)?;
+            let asset = cache.load::<$load>(id)?;
+            let mut watcher = asset.reload_watcher();
             assert_eq!(asset.read().0, $n);
             test_scenario!(@reload cache $is_static);
-            assert!(!asset.reloaded());
+            assert!(!watcher.reloaded());
 
             let n = rand::random();
             write_i32(&path, n)?;
             sleep();
             test_scenario!(@reload cache $is_static);
             assert_eq!(asset.read().0, n);
-            assert!(asset.reloaded());
-            assert!(!asset.reloaded());
+            assert!(watcher.reloaded());
+            assert!(!watcher.reloaded());
             $( assert!(!cache.contains::<$not_loaded>(id)); )?
 
             write_i32(&path, $n)?;
             sleep();
             test_scenario!(@reload cache $is_static);
             assert_eq!(asset.read().0, $n);
-            assert!(asset.reloaded());
-            assert!(!asset.reloaded());
+            assert!(watcher.reloaded());
+            assert!(!watcher.reloaded());
             $( assert!(!cache.contains::<$not_loaded>(id)); )?
 
             Ok(())

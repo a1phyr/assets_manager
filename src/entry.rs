@@ -3,6 +3,7 @@
 use std::{
     any::{type_name, Any},
     fmt,
+    marker::PhantomData,
     ops::Deref,
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
@@ -156,8 +157,6 @@ impl<T> Copy for HandleInner<'_, T> {}
 /// information, see [top-level documentation](crate#getting-owned-data).
 pub struct Handle<'a, T> {
     inner: HandleInner<'a, T>,
-    #[cfg(feature = "hot-reloading")]
-    last_reload: usize,
 }
 
 impl<'a, T> Handle<'a, T> {
@@ -181,13 +180,7 @@ impl<'a, T> Handle<'a, T> {
             wrong_handle_type()
         };
 
-        let mut this = Self {
-            inner,
-            #[cfg(feature = "hot-reloading")]
-            last_reload: 0,
-        };
-        this.reloaded();
-        this
+        Handle { inner }
     }
 
     #[inline]
@@ -231,14 +224,14 @@ impl<'a, T> Handle<'a, T> {
         self.either(|s| &s.id, |d| &d.id)
     }
 
-    /// Returns `true` if the asset has been reloaded since last call to this
-    /// method with the same handle.
+    /// Returns a `ReloadWatcher` that can be used to check whether this asset
+    /// was reloaded.
     ///
     /// # Example
     ///
     /// ```no_run
     /// # cfg_if::cfg_if! { if #[cfg(feature = "hot-reloading")] {
-    /// use assets_manager::{Asset, AssetCache};
+    /// use assets_manager::{Asset, AssetCache, ReloadWatcher};
     /// # use assets_manager::loader::{LoadFrom, ParseLoader};
     ///
     /// struct Example;
@@ -252,55 +245,50 @@ impl<'a, T> Handle<'a, T> {
     /// }
     ///
     /// let cache = AssetCache::new("assets")?;
-    /// let mut asset = cache.load::<Example>("example.reload")?;
+    /// let asset = cache.load::<Example>("example.reload")?;
+    /// let mut watcher = asset.reload_watcher();
     ///
     /// // The handle has just been created, so `reloaded` returns false
-    /// assert!(!asset.reloaded());
+    /// assert!(!watcher.reloaded());
     ///
     /// loop {
     ///     cache.hot_reload();
     ///
-    ///     if asset.reloaded() {
+    ///     if watcher.reloaded() {
     ///         println!("The asset was reloaded !")
     ///     }
     ///
     ///     // Calling `reloaded` once more returns false: the asset has not
     ///     // been reloaded since last call to `reloaded`
-    ///     assert!(!asset.reloaded());
+    ///     assert!(!watcher.reloaded());
     /// }
     ///
     /// # }}
     /// # Ok::<_, Box<dyn std::error::Error>>(())
     /// ```
-    pub fn reloaded(&mut self) -> bool {
-        #[cfg(not(feature = "hot-reloading"))]
-        {
-            false
-        }
+    #[inline]
+    pub fn reload_watcher(&self) -> ReloadWatcher<'a> {
+        ReloadWatcher::new(self.either(|_| None, |d| Some(&d.reload)))
+    }
 
-        #[cfg(feature = "hot-reloading")]
-        {
-            let reloaded = self.either(|_| None, |this| Some(this.reload.load(Ordering::Acquire)));
-
-            match reloaded {
-                None => false,
-                Some(last_reload) => {
-                    let reloaded = last_reload > self.last_reload;
-                    self.last_reload = last_reload;
-                    reloaded
-                }
-            }
-        }
+    /// Returns the last `ReloadId` associated with this asset.
+    ///
+    /// It is only meaningful when compared to other `ReloadId`s returned by the
+    /// [same handle](`Self::same_handle`).
+    #[inline]
+    pub fn last_reload_id(&self) -> ReloadId {
+        let id = self.either(|_| 0, |this| this.reload.load(Ordering::Acquire));
+        ReloadId(id)
     }
 
     /// Returns `true` if the asset has been reloaded since last call to this
     /// method with **any** handle on this asset.
     ///
-    /// Note that this method and [`reloaded`] are totally independant, and
-    /// the result of the two functions do not depend on whether the other was
-    /// called
+    /// Note that this method and [`reload_watcher`] are totally independant,
+    /// and the result of the two functions do not depend on whether the other
+    /// was called.
     ///
-    /// [`reloaded`]: Self::reloaded
+    /// [`reload_watcher`]: Self::reload_watcher
     #[inline]
     pub fn reloaded_global(&self) -> bool {
         self.either(
@@ -465,6 +453,104 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&**self, f)
+    }
+}
+
+#[cfg(feature = "hot-reloading")]
+#[derive(Debug, Clone, Copy)]
+struct ReloadWatcherInner<'a> {
+    reload_id: &'a AtomicUsize,
+    last_reload_id: ReloadId,
+}
+
+#[cfg(feature = "hot-reloading")]
+impl<'a> ReloadWatcherInner<'a> {
+    #[inline]
+    fn new(reload_id: &'a AtomicUsize) -> Self {
+        Self {
+            reload_id,
+            last_reload_id: ReloadId(reload_id.load(Ordering::Relaxed)),
+        }
+    }
+
+    #[inline]
+    pub fn last_reload_id(&self) -> ReloadId {
+        ReloadId(self.reload_id.load(Ordering::Acquire))
+    }
+}
+
+/// A watcher that can tell when an asset is reloaded.
+///
+/// Each `ReloadWatcher` is associated to a single asset in a cache.
+///
+/// It can be obtained with [`Handle::reload_watcher`].
+#[derive(Debug, Clone, Copy)]
+pub struct ReloadWatcher<'a> {
+    #[cfg(feature = "hot-reloading")]
+    inner: Option<ReloadWatcherInner<'a>>,
+    _private: PhantomData<&'a ()>,
+}
+
+impl<'a> ReloadWatcher<'a> {
+    #[inline]
+    fn new(_reload_id: Option<&'a AtomicUsize>) -> Self {
+        #[cfg(feature = "hot-reloading")]
+        let inner = _reload_id.map(ReloadWatcherInner::new);
+        Self {
+            #[cfg(feature = "hot-reloading")]
+            inner,
+            _private: PhantomData,
+        }
+    }
+
+    /// Returns `true` if the watched asset was reloaded since the last call to
+    /// this function.
+    #[inline]
+    pub fn reloaded(&mut self) -> bool {
+        #[cfg(feature = "hot-reloading")]
+        if let Some(inner) = &mut self.inner {
+            let new_id = inner.last_reload_id();
+            return inner.last_reload_id.update(new_id);
+        }
+
+        false
+    }
+
+    /// Returns the last `ReloadId` associated with this asset.
+    #[inline]
+    pub fn last_reload_id(&self) -> ReloadId {
+        #[cfg(feature = "hot-reloading")]
+        if let Some(inner) = &self.inner {
+            return inner.last_reload_id();
+        }
+
+        ReloadId(0)
+    }
+}
+
+/// An id to know when an asset is reloaded.
+///
+/// Each time an asset is reloaded, it gets a new `ReloadId` that compares
+/// superior to the previous one.
+///
+/// `ReloadId`s are only meaningful when compared to other `ReloadId`s returned
+/// by the [same handle](`Handle::same_handle`).
+///
+/// They are useful when you cannot afford the associated lifetime of a
+/// `ReloadWatcher`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ReloadId(usize);
+
+impl ReloadId {
+    /// Updates `self` if the argument if the argument is newer. Returns `true`
+    /// if `self` was updated.
+    #[inline]
+    pub fn update(&mut self, new: ReloadId) -> bool {
+        let newer = new > *self;
+        if newer {
+            *self = new;
+        }
+        newer
     }
 }
 
