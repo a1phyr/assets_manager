@@ -424,7 +424,7 @@ where
 
     /// Returns `true` if the cache contains the specified asset.
     #[inline]
-    pub fn contains<A: Compound>(&self, id: &str) -> bool {
+    pub fn contains<A: Storable>(&self, id: &str) -> bool {
         let key = BorrowedKey::new::<A>(id);
         self.assets.contains_key(key)
     }
@@ -587,7 +587,7 @@ where
     /// Note that you need a mutable reference to the cache, so you cannot have
     /// any [`Handle`], [`AssetGuard`], etc when you call this function.
     #[inline]
-    pub fn remove<A: Compound>(&mut self, id: &str) -> bool {
+    pub fn remove<A: Storable>(&mut self, id: &str) -> bool {
         let key = BorrowedKey::new::<A>(id);
         self.assets.remove(key)
     }
@@ -596,7 +596,7 @@ where
     ///
     /// The corresponding asset is removed from the cache.
     #[inline]
-    pub fn take<A: Compound>(&mut self, id: &str) -> Option<A> {
+    pub fn take<A: Storable>(&mut self, id: &str) -> Option<A> {
         let key = BorrowedKey::new::<A>(id);
         self.assets.take(key).map(|e| e.into_inner())
     }
