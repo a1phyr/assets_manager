@@ -528,6 +528,14 @@ impl<'a> ReloadWatcher<'a> {
     }
 }
 
+impl Default for ReloadWatcher<'_> {
+    /// Returns a `ReloadWatcher` that never gets updated.
+    #[inline]
+    fn default() -> Self {
+        Self::new(None)
+    }
+}
+
 /// An id to know when an asset is reloaded.
 ///
 /// Each time an asset is reloaded, it gets a new `ReloadId` that compares
