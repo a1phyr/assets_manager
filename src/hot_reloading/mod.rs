@@ -216,8 +216,10 @@ impl HotReloader {
         let _ = self.updates.send(UpdateMessage::Clear);
     }
 
-    pub(crate) fn reload(&self, cache: &AssetCache<dyn Source + Sync>) {
-        let _ = self.sender.send(CacheMessage::Ptr(cache.into()));
+    pub(crate) fn reload(&self, cache: &AssetCache<dyn Source + Sync + '_>) {
+        // Lifetime magic
+        let ptr = unsafe { std::mem::transmute(NonNull::from(cache)) };
+        let _ = self.sender.send(CacheMessage::Ptr(ptr));
         let _ = self.receiver.recv();
     }
 

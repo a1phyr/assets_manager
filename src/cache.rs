@@ -617,7 +617,7 @@ where
 
 impl<S> AssetCache<S>
 where
-    S: Source + Sync + 'static,
+    S: Source + Sync,
 {
     /// Reloads changed assets.
     ///
@@ -642,12 +642,7 @@ where
             reloader.reload(self);
         }
     }
-}
 
-impl<S> AssetCache<S>
-where
-    S: Source + Sync,
-{
     /// Enhances hot-reloading.
     ///
     /// Having a `'static` reference to the cache enables some optimizations,
