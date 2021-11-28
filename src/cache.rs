@@ -454,6 +454,39 @@ where
     pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
         self.get_cached_dir::<A>(id, recursive).is_some()
     }
+
+    /// Removes an asset from the cache, and returns whether it was present in
+    /// the cache.
+    ///
+    /// Note that you need a mutable reference to the cache, so you cannot have
+    /// any [`Handle`], [`AssetGuard`], etc when you call this function.
+    #[inline]
+    pub fn remove<A: Storable>(&mut self, id: &str) -> bool {
+        let key = BorrowedKey::new::<A>(id);
+        self.assets.remove(key)
+    }
+
+    /// Takes ownership on a cached asset.
+    ///
+    /// The corresponding asset is removed from the cache.
+    #[inline]
+    pub fn take<A: Storable>(&mut self, id: &str) -> Option<A> {
+        let key = BorrowedKey::new::<A>(id);
+        self.assets.take(key).map(|e| e.into_inner())
+    }
+
+    /// Clears the cache.
+    ///
+    /// Removes all cached assets and directories.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.assets.clear();
+
+        #[cfg(feature = "hot-reloading")]
+        if let Some(reloader) = &self.reloader {
+            reloader.clear();
+        }
+    }
 }
 
 impl<S> AssetCache<S>
@@ -579,39 +612,6 @@ where
         }
 
         A::load(self, id)
-    }
-
-    /// Removes an asset from the cache, and returns whether it was present in
-    /// the cache.
-    ///
-    /// Note that you need a mutable reference to the cache, so you cannot have
-    /// any [`Handle`], [`AssetGuard`], etc when you call this function.
-    #[inline]
-    pub fn remove<A: Storable>(&mut self, id: &str) -> bool {
-        let key = BorrowedKey::new::<A>(id);
-        self.assets.remove(key)
-    }
-
-    /// Takes ownership on a cached asset.
-    ///
-    /// The corresponding asset is removed from the cache.
-    #[inline]
-    pub fn take<A: Storable>(&mut self, id: &str) -> Option<A> {
-        let key = BorrowedKey::new::<A>(id);
-        self.assets.take(key).map(|e| e.into_inner())
-    }
-
-    /// Clears the cache.
-    ///
-    /// Removes all cached assets and directories.
-    #[inline]
-    pub fn clear(&mut self) {
-        self.assets.clear();
-
-        #[cfg(feature = "hot-reloading")]
-        if let Some(reloader) = &self.reloader {
-            reloader.clear();
-        }
     }
 }
 
