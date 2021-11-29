@@ -129,13 +129,6 @@ where
         ids.sort_unstable();
         ids.dedup();
 
-        // Pre-load inner assets
-        cache.no_record(|| {
-            for id in &ids {
-                let _ = cache.load::<A>(id);
-            }
-        });
-
         Ok(CachedDir {
             ids,
             _marker: PhantomData,
