@@ -148,7 +148,7 @@ impl HotReloader {
         cache_msg: Receiver<CacheMessage>,
         answer: Sender<()>,
     ) {
-        log::trace!("Starting hot-reloading");
+        log::info!("Starting hot-reloading");
 
         let mut cache = HotReloadingData::new(source);
 

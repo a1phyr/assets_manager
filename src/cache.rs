@@ -41,10 +41,7 @@ impl Map {
 
         let hash_builder = RandomState::new();
         let shards = (0..shards)
-            .map(|_| {
-                let map = HashMap::with_hasher(hash_builder.clone());
-                RwLock::new(map)
-            })
+            .map(|_| RwLock::new(HashMap::with_hasher(hash_builder.clone())))
             .collect();
 
         Map {
@@ -349,6 +346,8 @@ where
         type_id: TypeId,
         load: fn(&Self, SharedString) -> Result<CacheEntry, Error>,
     ) -> Result<CacheEntryInner, Error> {
+        log::trace!("Loading \"{}\"", id);
+
         let id = SharedString::from(id);
         let entry = load(self, id.clone())?;
         let key = OwnedKey::new_with(id, type_id);
