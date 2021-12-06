@@ -29,6 +29,9 @@
 //!
 //! Additionally, one can explicitly disable hot-reloading for a type.
 
+#[cfg(feature = "gltf")]
+mod gltf;
+
 #[cfg(test)]
 mod tests;
 
@@ -54,6 +57,9 @@ use serde::{Deserialize, Serialize};
 
 #[allow(unused)]
 use std::{borrow::Cow, io, sync::Arc};
+
+#[cfg(feature = "gltf")]
+pub use gltf::Gltf;
 
 /// An asset is a type loadable from raw bytes.
 ///

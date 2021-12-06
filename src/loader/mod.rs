@@ -243,6 +243,18 @@ impl Loader<image::DynamicImage> for ImageLoader {
     }
 }
 
+/// Loads glTF assets.
+#[derive(Debug)]
+pub struct GltfLoader(());
+
+#[cfg(feature = "gltf")]
+#[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
+impl Loader<_gltf::Gltf> for GltfLoader {
+    fn load(content: Cow<[u8]>, _: &str) -> Result<_gltf::Gltf, BoxedError> {
+        Ok(_gltf::Gltf::from_slice(&content)?)
+    }
+}
+
 macro_rules! serde_loaders {
     (
         $(

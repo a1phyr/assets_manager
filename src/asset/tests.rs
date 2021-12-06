@@ -32,3 +32,24 @@ sound_test! {
     #[cfg(feature ="wav")]
     test_wav => asset::Wav,
 }
+
+#[cfg(feature = "gltf")]
+#[test]
+pub fn gltf() {
+    let cache = AssetCache::new("assets").unwrap();
+    cache.load::<asset::Gltf>("test.gltf.box").unwrap();
+}
+
+#[cfg(feature = "gltf")]
+#[test]
+pub fn gltf_bin() {
+    let cache = AssetCache::new("assets").unwrap();
+    cache.load::<asset::Gltf>("test.gltf.box-bin").unwrap();
+}
+
+#[cfg(feature = "gltf")]
+#[test]
+pub fn gltf_embedded() {
+    let cache = AssetCache::new("assets").unwrap();
+    cache.load::<asset::Gltf>("test.gltf.box-embedded").unwrap();
+}

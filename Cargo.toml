@@ -41,6 +41,7 @@ jpeg = ["image/jpeg"]
 png = ["image/png"]
 webp = ["image/webp"]
 
+gltf = ["_gltf", "base64", "png", "jpeg"]
 
 [dependencies]
 log = {version = "0.4"}
@@ -66,7 +67,8 @@ serde_yaml = {version = "0.8.4", optional = true}
 
 rodio = {version = "0.14", default-features = false, optional = true}
 image = {version = "0.23.13", default-features = false, optional = true}
-
+_gltf = {version = "0.16", package = "gltf", default-features = false, optional = true}
+base64 = {version = "0.13", optional = true}
 
 [dev-dependencies]
 cfg-if = "1.0"
