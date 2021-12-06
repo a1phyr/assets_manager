@@ -255,6 +255,10 @@ impl Loader<_gltf::Gltf> for GltfLoader {
     }
 }
 
+/// Loads fonts.
+#[derive(Debug)]
+pub struct FontLoader(());
+
 macro_rules! serde_loaders {
     (
         $(

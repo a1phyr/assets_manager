@@ -29,6 +29,8 @@
 //!
 //! Additionally, one can explicitly disable hot-reloading for a type.
 
+#[cfg(feature = "ab_glyph")]
+mod fonts;
 #[cfg(feature = "gltf")]
 mod gltf;
 

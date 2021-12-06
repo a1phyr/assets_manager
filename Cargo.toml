@@ -67,6 +67,8 @@ serde_yaml = {version = "0.8.4", optional = true}
 
 rodio = {version = "0.14", default-features = false, optional = true}
 image = {version = "0.23.13", default-features = false, optional = true}
+ab_glyph = {version = "0.2.12", optional = true}
+
 _gltf = {version = "0.16", package = "gltf", default-features = false, optional = true}
 base64 = {version = "0.13", optional = true}
 
