@@ -1,6 +1,7 @@
 use crate::{loader, source::Source, utils, Asset, AssetCache, BoxedError, Compound, Error};
-use std::{borrow::Cow, path};
+use std::path;
 
+#[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
 impl Asset for _gltf::Gltf {
     const EXTENSIONS: &'static [&'static str] = &["glb", "gltf"];
     type Loader = loader::GltfLoader;
@@ -189,28 +190,10 @@ fn load_image<S: Source + ?Sized>(
     }
 }
 
-#[derive(Clone)]
-struct RawGltf {
-    document: _gltf::Document,
-    blob: Option<Vec<u8>>,
-}
-
-impl loader::Loader<RawGltf> for loader::GltfLoader {
-    fn load(content: Cow<[u8]>, ext: &str) -> Result<RawGltf, BoxedError> {
-        let _gltf::Gltf { document, blob } = Self::load(content, ext)?;
-        Ok(RawGltf { document, blob })
-    }
-}
-
-impl Asset for RawGltf {
-    const EXTENSIONS: &'static [&'static str] = _gltf::Gltf::EXTENSIONS;
-    type Loader = loader::GltfLoader;
-}
-
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
 impl Compound for Gltf {
     fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
-        let RawGltf { document, mut blob } = cache.load::<RawGltf>(id)?.cloned();
+        let _gltf::Gltf { document, mut blob } = cache.load::<_gltf::Gltf>(id)?.cloned();
 
         let base_id = match id.rfind('.') {
             Some(index) => &id[..index],

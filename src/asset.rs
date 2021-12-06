@@ -454,6 +454,7 @@ macro_rules! serde_assets {
             }
 
             #[cfg(feature = $feature)]
+            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
             impl<T> Asset for $name<T>
             where
                 T: for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
@@ -533,6 +534,7 @@ macro_rules! image_assets {
             }
 
             #[cfg(feature = $feature)]
+            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
             impl Asset for $name {
                 const EXTENSIONS: &'static [&'static str] = &[$( $ext ),*];
                 type Loader = loader::ImageLoader;
@@ -600,6 +602,7 @@ macro_rules! sound_assets {
             }
 
             #[cfg(feature = $feature)]
+            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
             impl Asset for $name {
                 const EXTENSIONS: &'static [&'static str] = &[$( $ext ),*];
                 type Loader = loader::SoundLoader;

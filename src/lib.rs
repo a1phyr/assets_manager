@@ -30,6 +30,9 @@
 //! `msgpack`, `ron`, `toml`, `yaml`.
 //! - Audio formats (with [`rodio`] crate): `mp3`, `flac`, `vorbis`, `wav`.
 //! - Image formats (with [`image`] crate): `bmp`, `jpeg`, `png` `webp`.
+//! - 3D formats (with [`gltf`] crate): `gltf`.
+//!
+//! [`gltf`]: `_gltf`
 //!
 //! ### Internal features
 //!
