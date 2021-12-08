@@ -1,7 +1,9 @@
+//! Stub implementation of the module
+
 #![allow(missing_docs, missing_debug_implementations)]
 
 pub use crate::key::{AssetKey, AssetType};
-use crate::source::Source;
+use crate::{source::Source, BoxedError};
 
 enum Void {}
 
@@ -50,5 +52,22 @@ pub struct HotReloader {
 impl HotReloader {
     pub fn start<S: Source + Send + 'static>(config: HotReloaderConfig, _: S) -> Self {
         match config._void {}
+    }
+}
+
+#[non_exhaustive]
+pub struct FsWatcherBuilder;
+
+impl FsWatcherBuilder {
+    pub fn new() -> Result<Self, BoxedError> {
+        Ok(Self)
+    }
+
+    pub fn watch(&mut self, _: std::path::PathBuf) -> Result<(), BoxedError> {
+        Ok(())
+    }
+
+    pub fn build(self) -> HotReloaderConfig {
+        config_hot_reloading().2
     }
 }

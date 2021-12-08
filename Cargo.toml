@@ -90,6 +90,9 @@ required-features = ["hot-reloading"]
 name = "compound"
 required-features = ["hot-reloading", "ron"]
 
+[[example]]
+name = "custom-source"
+
 
 [workspace]
 members = [".", "macros"]
