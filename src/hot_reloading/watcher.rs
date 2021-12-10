@@ -122,6 +122,15 @@ impl WatchedPaths {
         }
     }
 
+    fn remove_asset(&mut self, asset: super::AssetKey) {
+        for root in &self.roots {
+            for ext in asset.typ.extensions() {
+                let path = path_of_entry(root, DirEntry::File(&asset.id, ext));
+                self.paths.remove(&path);
+            }
+        }
+    }
+
     fn clear(&mut self) {
         self.paths.clear();
     }
@@ -150,6 +159,7 @@ fn translation_thread(
         loop {
             match updates.try_recv() {
                 Ok(super::UpdateMessage::AddAsset(key)) => watched_paths.add_asset(key),
+                Ok(super::UpdateMessage::RemoveAsset(key)) => watched_paths.remove_asset(key),
                 Ok(super::UpdateMessage::Clear) => watched_paths.clear(),
                 Err(crossbeam_channel::TryRecvError::Empty) => break,
                 Err(crossbeam_channel::TryRecvError::Disconnected) => return,

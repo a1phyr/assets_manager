@@ -262,6 +262,11 @@ pub trait Compound: Sized + Send + Sync + 'static {
     /// default). If so, you may want to implement [`NotHotReloaded`] for this
     /// type to enable additional functions.
     const HOT_RELOADED: bool = true;
+
+    #[doc(hidden)]
+    fn get_key<P: PrivateMarker>() -> Option<crate::key::AssetType> {
+        None
+    }
 }
 
 impl<A> Compound for A
@@ -291,6 +296,11 @@ where
     }
 
     const HOT_RELOADED: bool = Self::HOT_RELOADED;
+
+    #[doc(hidden)]
+    fn get_key<P: PrivateMarker>() -> Option<crate::key::AssetType> {
+        Some(crate::key::AssetType::of::<Self>())
+    }
 }
 
 impl<A> Compound for Arc<A>
@@ -354,6 +364,11 @@ pub trait Storable: Send + Sync + 'static {
     /// # Ok::<(), assets_manager::BoxedError>(())
     /// ```
     const _CHECK_NOT_HOT_RELOADED: () = [()][Self::HOT_RELOADED as usize];
+
+    #[doc(hidden)]
+    fn get_key<P: PrivateMarker>() -> Option<crate::key::AssetType> {
+        None
+    }
 }
 
 impl<A> Storable for A

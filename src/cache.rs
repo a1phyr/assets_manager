@@ -456,6 +456,12 @@ where
     #[inline]
     pub fn remove<A: Storable>(&mut self, id: &str) -> bool {
         let key = BorrowedKey::new::<A>(id);
+
+        #[cfg(feature = "hot-reloading")]
+        if let Some(reloader) = &self.reloader {
+            reloader.remove_asset::<A>(SharedString::from(id));
+        }
+
         self.assets.remove(key)
     }
 
@@ -465,7 +471,16 @@ where
     #[inline]
     pub fn take<A: Storable>(&mut self, id: &str) -> Option<A> {
         let key = BorrowedKey::new::<A>(id);
-        self.assets.take(key).map(|e| e.into_inner())
+        self.assets.take(key).map(|e| {
+            let (asset, _id) = e.into_inner();
+
+            #[cfg(feature = "hot-reloading")]
+            if let Some(reloader) = &self.reloader {
+                reloader.remove_asset::<A>(_id);
+            }
+
+            asset
+        })
     }
 
     /// Clears the cache.

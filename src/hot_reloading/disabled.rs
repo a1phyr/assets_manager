@@ -11,6 +11,7 @@ enum Void {}
 #[derive(Debug, Clone)]
 pub enum UpdateMessage {
     AddAsset(AssetKey),
+    RemoveAsset(AssetKey),
     Clear,
 }
 

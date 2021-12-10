@@ -16,6 +16,7 @@ use crossbeam_channel::{self as channel, Receiver, Sender};
 use std::{fmt, ptr::NonNull, thread};
 
 use crate::{
+    asset::Storable,
     source::Source,
     utils::{HashSet, OwnedKey},
     AssetCache, SharedString,
@@ -32,6 +33,9 @@ type DynAssetCache = crate::AssetCache<dyn crate::source::Source>;
 pub enum UpdateMessage {
     /// An asset was added to the cache.
     AddAsset(AssetKey),
+
+    /// An asset was removed from the cache
+    RemoveAsset(AssetKey),
 
     /// The cache was cleared.
     Clear,
@@ -143,9 +147,15 @@ impl HotReloader {
     // been logged.
 
     pub(crate) fn add_asset<A: crate::Asset>(&self, id: SharedString) {
-        let _ = self
-            .updates
-            .send_update(UpdateMessage::AddAsset(AssetKey::new::<A>(id)));
+        let key = AssetKey::new::<A>(id);
+        let _ = self.updates.send_update(UpdateMessage::AddAsset(key));
+    }
+
+    pub(crate) fn remove_asset<A: Storable>(&self, id: SharedString) {
+        if let Some(typ) = A::get_key::<crate::utils::Private>() {
+            let key = AssetKey { id, typ };
+            let _ = self.updates.send_update(UpdateMessage::RemoveAsset(key));
+        }
     }
 
     pub(crate) fn add_compound<A: crate::Compound>(

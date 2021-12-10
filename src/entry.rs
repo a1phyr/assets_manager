@@ -106,15 +106,15 @@ impl CacheEntry {
 
     /// Consumes the `CacheEntry` and returns its inner value.
     #[inline]
-    pub fn into_inner<T: 'static>(self) -> T {
+    pub fn into_inner<T: 'static>(self) -> (T, SharedString) {
         let _this = match self.0.downcast::<StaticInner<T>>() {
-            Ok(inner) => return inner.value,
+            Ok(inner) => return (inner.value, inner.id),
             Err(this) => this,
         };
 
         #[cfg(feature = "hot-reloading")]
         if let Ok(inner) = _this.downcast::<DynamicInner<T>>() {
-            return inner.value.into_inner();
+            return (inner.value.into_inner(), inner.id);
         }
 
         wrong_handle_type()
