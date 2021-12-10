@@ -77,14 +77,14 @@ impl CacheKind {
     }
 }
 
-pub(crate) struct HotReloadingData<S> {
-    source: S,
+pub(crate) struct HotReloadingData {
+    source: Box<dyn Source>,
     cache: CacheKind,
     deps: Dependencies,
 }
 
-impl<S: Source> HotReloadingData<S> {
-    pub fn new(source: S) -> Self {
+impl HotReloadingData {
+    pub fn new(source: Box<dyn Source>) -> Self {
         let cache = LocalCache {
             changed: HashMap::new(),
         };

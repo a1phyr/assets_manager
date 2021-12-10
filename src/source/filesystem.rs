@@ -1,4 +1,8 @@
-use crate::{hot_reloading::HotReloader, utils::extension_of};
+use crate::{
+    hot_reloading::{DynUpdateSender, EventSender, FsWatcherBuilder},
+    utils::extension_of,
+    BoxedError,
+};
 
 #[cfg(doc)]
 use crate::AssetCache;
@@ -106,19 +110,15 @@ impl Source for FileSystem {
         self.path_of(entry).exists()
     }
 
-    fn configure_hot_reloading(&self) -> Result<Option<HotReloader>, crate::BoxedError> {
-        #[cfg(feature = "hot-reloading")]
-        {
-            let mut watcher = crate::hot_reloading::FsWatcherBuilder::new()?;
-            watcher.watch(self.path.clone())?;
-            let config = watcher.build();
-            Ok(Some(HotReloader::start(config, self.clone())))
-        }
+    fn make_source(&self) -> Option<Box<dyn Source + Send>> {
+        Some(Box::new(self.clone()))
+    }
 
-        #[cfg(not(feature = "hot-reloading"))]
-        {
-            Ok(None)
-        }
+    fn configure_hot_reloading(&self, events: EventSender) -> Result<DynUpdateSender, BoxedError> {
+        let mut watcher = FsWatcherBuilder::new()?;
+        watcher.watch(self.path.clone())?;
+        let reloader = watcher.build(events);
+        Ok(reloader)
     }
 }
 

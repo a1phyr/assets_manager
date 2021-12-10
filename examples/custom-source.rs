@@ -6,7 +6,7 @@
 //! the code of FsWatcherBuilder`.
 
 use assets_manager::{
-    hot_reloading::{FsWatcherBuilder, HotReloader},
+    hot_reloading::{DynUpdateSender, EventSender, FsWatcherBuilder},
     source::{DirEntry, FileSystem, Source},
     AssetCache, BoxedError,
 };
@@ -91,7 +91,7 @@ impl Source for FsWithOverride {
     }
 
     // Here is the hot-reloading magic
-    fn configure_hot_reloading(&self) -> Result<Option<HotReloader>, BoxedError> {
+    fn configure_hot_reloading(&self, events: EventSender) -> Result<DynUpdateSender, BoxedError> {
         let mut builder = FsWatcherBuilder::new()?;
 
         // Register watched directories
@@ -101,8 +101,11 @@ impl Source for FsWithOverride {
         builder.watch(self.default_dir.root().to_owned())?;
 
         // Start hot-reloading with our paths
-        let config = builder.build();
-        Ok(Some(HotReloader::start(config, self.clone())))
+        Ok(builder.build(events))
+    }
+
+    fn make_source(&self) -> Option<Box<dyn Source + Send>> {
+        Some(Box::new(self.clone()))
     }
 }
 

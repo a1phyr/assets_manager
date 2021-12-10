@@ -252,15 +252,9 @@ impl<S: Source> AssetCache<S> {
     ///
     /// If hot-reloading fails to start, an error is logged.
     pub fn with_source(source: S) -> AssetCache<S> {
-        #[cfg(feature = "hot-reloading")]
-        let reloader = source.configure_hot_reloading().unwrap_or_else(|err| {
-            log::error!("Unable to start hot-reloading: {}", err);
-            None
-        });
-
         AssetCache {
             #[cfg(feature = "hot-reloading")]
-            reloader,
+            reloader: HotReloader::make(&source),
 
             assets: Map::new(32),
             source,

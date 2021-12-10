@@ -10,8 +10,8 @@
 //! # Hot-reloading
 //!
 //! Hot-reloading enable assets to be reloaded automatically when the source it
-//! was loaded from was modified. It is only supported for the [`FileSystem`]
-//! source at the moment.
+//! was loaded from was modified. It requires the `Source` to support it. The
+//! built-in [`FileSystem`] source supports it out of the box.
 //!
 //! # Using a different source depending on the target platform
 //!
@@ -35,7 +35,10 @@ use std::{borrow::Cow, io};
 
 #[cfg(doc)]
 use crate::{asset::DirLoadable, AssetCache};
-use crate::{hot_reloading::HotReloader, BoxedError};
+use crate::{
+    hot_reloading::{DynUpdateSender, EventSender},
+    BoxedError,
+};
 
 mod filesystem;
 pub use filesystem::FileSystem;
@@ -200,15 +203,24 @@ pub trait Source {
     /// ```
     fn exists(&self, entry: DirEntry) -> bool;
 
+    /// Returns a source to use with hot-reloading.
+    ///
+    /// This method returns `None` when the source does not support
+    /// hot-reloading. In this case, `configure_hot_reloading` will never be
+    /// called.
+    #[inline]
+    fn make_source(&self) -> Option<Box<dyn Source + Send>> {
+        None
+    }
+
     /// Configures hot-reloading.
     ///
-    /// Returns:
-    /// - `Ok(None)` if hot-reloading is disabled or not supported (default).
-    /// - `Ok(Some(_))` if hot-reloading started successfully.
-    /// - `Err(_)` if hot-reloading failed to start.
+    /// This method receives an `EventSender` to notify the hot-reloading
+    /// subsystem when assets should be reloaded. It returns a `DynUpdateSender`
+    /// to be notified of cache state changes.
     #[inline]
-    fn configure_hot_reloading(&self) -> Result<Option<HotReloader>, BoxedError> {
-        Ok(None)
+    fn configure_hot_reloading(&self, _events: EventSender) -> Result<DynUpdateSender, BoxedError> {
+        Err("this source does not support hot-reloading".into())
     }
 }
 
@@ -232,8 +244,13 @@ where
     }
 
     #[inline]
-    fn configure_hot_reloading(&self) -> Result<Option<HotReloader>, BoxedError> {
-        self.as_ref().configure_hot_reloading()
+    fn make_source(&self) -> Option<Box<dyn Source + Send>> {
+        self.as_ref().make_source()
+    }
+
+    #[inline]
+    fn configure_hot_reloading(&self, events: EventSender) -> Result<DynUpdateSender, BoxedError> {
+        self.as_ref().configure_hot_reloading(events)
     }
 }
 
@@ -257,8 +274,13 @@ where
     }
 
     #[inline]
-    fn configure_hot_reloading(&self) -> Result<Option<HotReloader>, BoxedError> {
-        (**self).configure_hot_reloading()
+    fn make_source(&self) -> Option<Box<dyn Source + Send>> {
+        (**self).make_source()
+    }
+
+    #[inline]
+    fn configure_hot_reloading(&self, events: EventSender) -> Result<DynUpdateSender, BoxedError> {
+        (**self).configure_hot_reloading(events)
     }
 }
 
@@ -282,8 +304,13 @@ where
     }
 
     #[inline]
-    fn configure_hot_reloading(&self) -> Result<Option<HotReloader>, BoxedError> {
-        self.as_ref().configure_hot_reloading()
+    fn make_source(&self) -> Option<Box<dyn Source + Send>> {
+        (**self).make_source()
+    }
+
+    #[inline]
+    fn configure_hot_reloading(&self, events: EventSender) -> Result<DynUpdateSender, BoxedError> {
+        self.as_ref().configure_hot_reloading(events)
     }
 }
 

@@ -1,4 +1,7 @@
-//! Tools to work with hot-reloading.
+//! Tools to implement hot-reloading.
+//!
+//! If you don't implement hot-reloading for a custom source, you should not
+//! need this.
 
 mod dependencies;
 mod paths;
@@ -62,134 +65,77 @@ impl EventSender {
     }
 }
 
-/// An error returned by [`UpdateReceiver::try_recv`].
-#[derive(Debug)]
-pub enum TryRecvUpdateError {
-    /// The channel was disconnected.
-    Disconnected,
-
-    /// The channel is empty.
-    Empty,
-}
-
-/// Receives updates about the state of an `AssetCache`.
-#[derive(Debug)]
-pub struct UpdateReceiver(Receiver<UpdateMessage>);
-
-impl UpdateReceiver {
-    /// Blocks until an update is received.
-    #[inline]
-    pub fn recv(&self) -> Result<UpdateMessage, Disconnected> {
-        self.0.recv().or(Err(Disconnected))
-    }
-
-    /// Attepts to receive an update without waiting.
-    #[inline]
-    pub fn try_recv(&self) -> Result<UpdateMessage, TryRecvUpdateError> {
-        self.0.try_recv().map_err(|err| match err {
-            channel::TryRecvError::Disconnected => TryRecvUpdateError::Disconnected,
-            channel::TryRecvError::Empty => TryRecvUpdateError::Empty,
-        })
-    }
-}
-
-/// Configuration for hot-reloading.
+/// Defines how to handle updates.
 ///
-/// It can be created with [`config_hot_reloading`] and is meant to be used in
-/// [`HotReloader::start`].
-#[derive(Debug)]
-pub struct HotReloaderConfig {
-    updates: Sender<UpdateMessage>,
-    events: Receiver<AssetKey>,
+/// Cache updates are sent to the hot-reloading subsystem through this trait.
+pub trait UpdateSender {
+    /// Sends an update to the hot-reloading subsystem. This function should be
+    /// quick and should not block.
+    fn send_update(&self, message: UpdateMessage);
 }
 
-/// Creates the necessary parts to hook hot-reloading.
-#[inline]
-pub fn config_hot_reloading() -> (EventSender, UpdateReceiver, HotReloaderConfig) {
-    let (events_tx, events) = channel::unbounded();
-    let (updates, updates_rx) = channel::unbounded();
-    (
-        EventSender(events_tx),
-        UpdateReceiver(updates_rx),
-        HotReloaderConfig { events, updates },
-    )
+/// A type-erased `UpdateSender`.
+pub type DynUpdateSender = Box<dyn UpdateSender + Send + Sync>;
+
+impl<T> UpdateSender for Box<T>
+where
+    T: UpdateSender + ?Sized,
+{
+    fn send_update(&self, message: UpdateMessage) {
+        (**self).send_update(message)
+    }
+}
+
+impl<T> UpdateSender for std::sync::Arc<T>
+where
+    T: UpdateSender + ?Sized,
+{
+    fn send_update(&self, message: UpdateMessage) {
+        (**self).send_update(message)
+    }
 }
 
 /// The hot-reloading handler.
-pub struct HotReloader {
+pub(crate) struct HotReloader {
     sender: Sender<CacheMessage>,
     receiver: Receiver<()>,
-    updates: Sender<UpdateMessage>,
+    updates: DynUpdateSender,
 }
 
 impl HotReloader {
     /// Starts hot-reloading.
-    pub fn start<S: Source + Send + 'static>(config: HotReloaderConfig, source: S) -> Self {
+    fn start(
+        events: Receiver<AssetKey>,
+        updates: DynUpdateSender,
+        source: Box<dyn Source + Send>,
+    ) -> Self {
         let (cache_msg_tx, cache_msg_rx) = channel::unbounded();
         let (answer_tx, answer_rx) = channel::unbounded();
-        let events = config.events;
 
         thread::Builder::new()
             .name("assets_hot_reload".to_string())
-            .spawn(|| Self::hot_reloading_thread(source, events, cache_msg_rx, answer_tx))
+            .spawn(|| hot_reloading_thread(source, events, cache_msg_rx, answer_tx))
             .unwrap();
 
-        HotReloader {
-            updates: config.updates,
+        Self {
+            updates,
             sender: cache_msg_tx,
             receiver: answer_rx,
         }
     }
 
-    // this is done in a new thread
-    fn hot_reloading_thread<S: Source>(
-        source: S,
-        events: Receiver<AssetKey>,
-        cache_msg: Receiver<CacheMessage>,
-        answer: Sender<()>,
-    ) {
-        log::info!("Starting hot-reloading");
+    pub fn make<S: Source>(source: S) -> Option<Self> {
+        let sent_source = source.make_source()?;
+        let (events_tx, events_rx) = channel::unbounded();
 
-        let mut cache = HotReloadingData::new(source);
+        let updates = source
+            .configure_hot_reloading(EventSender(events_tx))
+            .map_err(|err| {
+                log::error!("Unable to start hot-reloading: {}", err);
+            })
+            .ok()?;
 
-        // At the beginning, we select over three channels:
-        // - One to notify that we can update the `AssetCache` or that we
-        //   can switch to using a 'static reference. We close this channel
-        //   in the latter case.
-        // - One to receive events from notify
-        // - One to update the watched paths list when the `AssetCache`
-        //   changes
-        let mut select = channel::Select::new();
-        select.recv(&cache_msg);
-        select.recv(&events);
-
-        loop {
-            let ready = select.select();
-            match ready.index() {
-                0 => match ready.recv(&cache_msg) {
-                    Ok(CacheMessage::Ptr(ptr)) => {
-                        // Safety: The received pointer is guaranteed to
-                        // be valid until we reply back
-                        cache.update_if_local(unsafe { ptr.as_ref() });
-                        answer.send(()).unwrap();
-                    }
-                    Ok(CacheMessage::Static(asset_cache)) => cache.use_static_ref(asset_cache),
-                    Ok(CacheMessage::Clear) => cache.clear_local_cache(),
-                    Ok(CacheMessage::AddCompound(infos)) => cache.add_compound(infos),
-                    Err(_) => (),
-                },
-
-                1 => match ready.recv(&events) {
-                    Ok(msg) => cache.load_asset(msg),
-                    Err(_) => {
-                        log::error!("Notify panicked, hot-reloading stopped");
-                        break;
-                    }
-                },
-
-                _ => unreachable!(),
-            }
-        }
+        Some(Self::start(events_rx, updates, sent_source))
     }
 
     // All theses methods ignore send/recv errors: the program can continue
@@ -199,7 +145,7 @@ impl HotReloader {
     pub(crate) fn add_asset<A: crate::Asset>(&self, id: SharedString) {
         let _ = self
             .updates
-            .send(UpdateMessage::AddAsset(AssetKey::new::<A>(id)));
+            .send_update(UpdateMessage::AddAsset(AssetKey::new::<A>(id)));
     }
 
     pub(crate) fn add_compound<A: crate::Compound>(
@@ -213,7 +159,7 @@ impl HotReloader {
 
     pub(crate) fn clear(&self) {
         let _ = self.sender.send(CacheMessage::Clear);
-        let _ = self.updates.send(UpdateMessage::Clear);
+        let _ = self.updates.send_update(UpdateMessage::Clear);
     }
 
     pub(crate) fn reload(&self, cache: &AssetCache<dyn Source + Sync + '_>) {
@@ -231,5 +177,48 @@ impl HotReloader {
 impl fmt::Debug for HotReloader {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.pad("HotReloader { .. }")
+    }
+}
+
+fn hot_reloading_thread(
+    source: Box<dyn Source>,
+    events: Receiver<AssetKey>,
+    cache_msg: Receiver<CacheMessage>,
+    answer: Sender<()>,
+) {
+    log::info!("Starting hot-reloading");
+
+    let mut cache = HotReloadingData::new(source);
+
+    let mut select = channel::Select::new();
+    select.recv(&cache_msg);
+    select.recv(&events);
+
+    loop {
+        let ready = select.select();
+        match ready.index() {
+            0 => match ready.recv(&cache_msg) {
+                Ok(CacheMessage::Ptr(ptr)) => {
+                    // Safety: The received pointer is guaranteed to
+                    // be valid until we reply back
+                    cache.update_if_local(unsafe { ptr.as_ref() });
+                    answer.send(()).unwrap();
+                }
+                Ok(CacheMessage::Static(asset_cache)) => cache.use_static_ref(asset_cache),
+                Ok(CacheMessage::Clear) => cache.clear_local_cache(),
+                Ok(CacheMessage::AddCompound(infos)) => cache.add_compound(infos),
+                Err(_) => (),
+            },
+
+            1 => match ready.recv(&events) {
+                Ok(msg) => cache.load_asset(msg),
+                Err(_) => {
+                    log::error!("Notify panicked, hot-reloading stopped");
+                    break;
+                }
+            },
+
+            _ => unreachable!(),
+        }
     }
 }

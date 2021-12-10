@@ -1,19 +1,23 @@
-//! Stub implementation of the module
+//! Stub implementation of the module's API
 
-#![allow(missing_docs, missing_debug_implementations)]
+#![allow(missing_docs)]
 
 pub use crate::key::{AssetKey, AssetType};
-use crate::{source::Source, BoxedError};
+use crate::BoxedError;
 
+#[derive(Debug, Clone)]
 enum Void {}
 
+#[derive(Debug, Clone)]
 pub enum UpdateMessage {
     AddAsset(AssetKey),
     Clear,
 }
 
+#[derive(Debug)]
 pub struct Disconnected;
 
+#[derive(Debug, Clone)]
 pub struct EventSender(Void);
 impl EventSender {
     pub fn send(&self, _: AssetKey) -> Result<(), Disconnected> {
@@ -21,53 +25,44 @@ impl EventSender {
     }
 }
 
-pub enum TryRecvUpdateError {
-    Disconnected,
-    Empty,
+pub trait UpdateSender {
+    fn send_update(&self, update: UpdateMessage);
 }
 
-pub struct UpdateReceiver(Void);
-impl UpdateReceiver {
-    pub fn recv(&self) -> Result<UpdateMessage, Disconnected> {
-        match self.0 {}
-    }
+pub type DynUpdateSender = Box<dyn UpdateSender + Send + Sync>;
 
-    pub fn try_recv(&self) -> Result<UpdateMessage, TryRecvUpdateError> {
-        match self.0 {}
-    }
-}
-
-pub struct HotReloaderConfig {
-    _void: Void,
-}
-
-pub fn config_hot_reloading() -> (EventSender, UpdateReceiver, HotReloaderConfig) {
-    panic!("Hot reloading is disabled")
-}
-
-pub struct HotReloader {
-    _void: Void,
-}
-
-impl HotReloader {
-    pub fn start<S: Source + Send + 'static>(config: HotReloaderConfig, _: S) -> Self {
-        match config._void {}
+impl<T> UpdateSender for Box<T>
+where
+    T: UpdateSender + ?Sized,
+{
+    fn send_update(&self, message: UpdateMessage) {
+        (**self).send_update(message)
     }
 }
 
-#[non_exhaustive]
-pub struct FsWatcherBuilder;
+impl<T> UpdateSender for std::sync::Arc<T>
+where
+    T: UpdateSender + ?Sized,
+{
+    fn send_update(&self, message: UpdateMessage) {
+        (**self).send_update(message)
+    }
+}
+
+#[derive(Debug)]
+pub struct FsWatcherBuilder(Void);
 
 impl FsWatcherBuilder {
+    #[inline]
     pub fn new() -> Result<Self, BoxedError> {
-        Ok(Self)
+        Err("hot-reloading feature is disabled".into())
     }
 
     pub fn watch(&mut self, _: std::path::PathBuf) -> Result<(), BoxedError> {
-        Ok(())
+        match self.0 {}
     }
 
-    pub fn build(self) -> HotReloaderConfig {
-        config_hot_reloading().2
+    pub fn build(self, _: EventSender) -> DynUpdateSender {
+        match self.0 {}
     }
 }

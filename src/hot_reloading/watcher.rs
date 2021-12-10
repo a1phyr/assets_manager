@@ -38,10 +38,17 @@ impl<T: Eq> SmallSet<T> {
     }
 }
 
+struct UpdateSender(crossbeam_channel::Sender<super::UpdateMessage>);
+
+impl super::UpdateSender for UpdateSender {
+    fn send_update(&self, message: super::UpdateMessage) {
+        let _ = self.0.send(message);
+    }
+}
+
 /// Built-in reloader based on filesystem events.
 ///
 /// You can use it to quickly set up hot-reloading for a custom [`Source`].
-#[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
 pub struct FsWatcherBuilder {
     roots: Vec<PathBuf>,
     watcher: notify::RecommendedWatcher,
@@ -70,15 +77,15 @@ impl FsWatcherBuilder {
     /// Starts the watcher.
     ///
     /// The return value is meant to be used in [`Source::configure_hot_reloading`]
-    pub fn build(self) -> super::HotReloaderConfig {
-        let (events, updates, config) = super::config_hot_reloading();
+    pub fn build(self, events: super::EventSender) -> super::DynUpdateSender {
+        let (sender, updates) = crossbeam_channel::unbounded();
 
         thread::Builder::new()
             .name("assets_translate".to_string())
             .spawn(|| translation_thread(self.watcher, self.roots, self.notify, updates, events))
             .unwrap();
 
-        config
+        Box::new(UpdateSender(sender))
     }
 }
 
@@ -132,7 +139,7 @@ fn translation_thread(
     _watcher: notify::RecommendedWatcher,
     roots: Vec<PathBuf>,
     notify: mpsc::Receiver<notify::DebouncedEvent>,
-    updates: super::UpdateReceiver,
+    updates: crossbeam_channel::Receiver<super::UpdateMessage>,
     events: super::EventSender,
 ) {
     log::trace!("Starting hot-reloading translation thread");
@@ -144,8 +151,8 @@ fn translation_thread(
             match updates.try_recv() {
                 Ok(super::UpdateMessage::AddAsset(key)) => watched_paths.add_asset(key),
                 Ok(super::UpdateMessage::Clear) => watched_paths.clear(),
-                Err(super::TryRecvUpdateError::Empty) => break,
-                Err(super::TryRecvUpdateError::Disconnected) => return,
+                Err(crossbeam_channel::TryRecvError::Empty) => break,
+                Err(crossbeam_channel::TryRecvError::Disconnected) => return,
             }
         }
 
