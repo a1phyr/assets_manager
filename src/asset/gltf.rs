@@ -82,8 +82,8 @@ impl<'a> UriContent<'a> {
         uri: &'a str,
         mime_type: Option<&'a str>,
     ) -> Result<Self, BoxedError> {
-        if uri.starts_with("data:") {
-            let mut data = uri[5..].split(";base64,");
+        if let Some(uri) = uri.strip_prefix("data:") {
+            let mut data = uri.split(";base64,");
 
             let fst = match data.next() {
                 Some(fst) => fst,
