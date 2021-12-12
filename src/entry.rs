@@ -232,20 +232,9 @@ impl<'a, T> Handle<'a, T> {
     /// ```no_run
     /// # cfg_if::cfg_if! { if #[cfg(feature = "hot-reloading")] {
     /// use assets_manager::{Asset, AssetCache, ReloadWatcher};
-    /// # use assets_manager::loader::{LoadFrom, ParseLoader};
-    ///
-    /// struct Example;
-    /// # impl From<i32> for Example {
-    /// #     fn from(n: i32) -> Self { Self }
-    /// # }
-    /// impl Asset for Example {
-    ///     /* ... */
-    ///     # const EXTENSION: &'static str = "x";
-    ///     # type Loader = LoadFrom<i32, ParseLoader>;
-    /// }
     ///
     /// let cache = AssetCache::new("assets")?;
-    /// let asset = cache.load::<Example>("example.reload")?;
+    /// let asset = cache.load::<String>("common.some_text")?;
     /// let mut watcher = asset.reload_watcher();
     ///
     /// // The handle has just been created, so `reloaded` returns false

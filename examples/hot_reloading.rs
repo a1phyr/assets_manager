@@ -1,43 +1,23 @@
 //! A demonstration of hot-reloading.
 //!
-//! In this example, the file `assets/example/hot.x` is loaded as a integer.
+//! In this example, the file `assets/example/hello.txt` is loaded as text.
 //! It is automatically updated when this file is changed (you are of course
 //! encouraged to try changing the value to see what happens).
 
-use assets_manager::{
-    loader::{LoadFrom, ParseLoader},
-    Asset, AssetCache,
-};
-use std::{error::Error, thread::sleep, time::Duration};
+use assets_manager::{AssetCache, BoxedError};
+use std::{thread::sleep, time::Duration};
 
-/// A simple `i32` wrapper
-struct X(i32);
-
-impl From<i32> for X {
-    fn from(x: i32) -> X {
-        X(x)
-    }
-}
-
-impl Asset for X {
-    const EXTENSION: &'static str = "x";
-
-    // An asset of type X is loaded by parsing the file as an i32
-    // X: From<i32> is needed for this
-    type Loader = LoadFrom<i32, ParseLoader>;
-}
-
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), BoxedError> {
     let cache = AssetCache::new("assets")?;
 
     // The asset reference is obtained outside the loop
-    let x = cache.load::<X>("example.hot")?;
+    let text = cache.load::<String>("example.hello")?;
 
-    // Indefinitly reload assets if they changed and print `x`
+    // Indefinitly reload assets if they changed and print `text`
     loop {
         cache.hot_reload();
 
-        print!("{}\n", x.read().0);
+        println!("{}", text.read());
 
         sleep(Duration::from_millis(200));
     }

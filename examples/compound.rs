@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 /// The monster that can be found in different levels
 #[derive(Deserialize, Clone, Debug)]
+#[allow(dead_code)]
 struct Monster {
     name: String,
     description: String,
@@ -36,6 +37,7 @@ impl Asset for LevelManifest {
 
 /// The structure we use to store an in-game level
 #[derive(Debug)]
+#[allow(dead_code)]
 struct Level {
     id: String,
     name: String,
