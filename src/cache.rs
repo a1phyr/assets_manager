@@ -4,6 +4,7 @@ use crate::{
     asset::{DirLoadable, Storable},
     dirs::DirHandle,
     entry::{CacheEntry, CacheEntryInner},
+    error::ErrorKind,
     loader::Loader,
     source::{FileSystem, Source},
     utils::{BorrowedKey, HashMap, Key, OwnedKey, Private, RandomState, RwLock},
@@ -505,7 +506,7 @@ where
     pub(crate) fn record_load<A: Compound>(
         &self,
         id: &str,
-    ) -> Result<(A, HashSet<OwnedKey>), Error> {
+    ) -> Result<(A, HashSet<OwnedKey>), crate::BoxedError> {
         let mut record = Record::new(self as *const Self as *const () as usize);
 
         let asset = if self.reloader.is_some() {
@@ -558,14 +559,18 @@ where
     pub fn load_expect<A: Compound>(&self, id: &str) -> Handle<A> {
         #[cold]
         #[track_caller]
-        fn expect_failed(id: &str, err: Error) -> ! {
-            panic!("Failed to load essential asset \"{}\": {}", id, err)
+        fn expect_failed(err: Error) -> ! {
+            panic!(
+                "Failed to load essential asset \"{}\": {}",
+                err.id(),
+                err.reason()
+            )
         }
 
         // Do not use `unwrap_or_else` as closures do not have #[track_caller]
         match self.load(id) {
             Ok(h) => h,
-            Err(err) => expect_failed(id, err),
+            Err(err) => expect_failed(err),
         }
     }
 
@@ -611,15 +616,16 @@ where
     /// This can be useful if you need ownership on a non-clonable value.
     #[inline]
     pub fn load_owned<A: Compound>(&self, id: &str) -> Result<A, Error> {
+        let id = SharedString::from(id);
+        let asset = A::_load_and_record::<S, Private>(self, &id);
+
         #[cfg(feature = "hot-reloading")]
         if A::HOT_RELOADED && self.is_recording() {
-            let id = SharedString::from(id);
-            let key = OwnedKey::new::<A>(id.clone());
+            let key = OwnedKey::new::<A>(id);
             self.add_record(key);
-            return A::_load_and_record::<S, Private>(self, &id);
         }
 
-        A::load(self, id)
+        asset
     }
 }
 
@@ -686,7 +692,7 @@ where
 }
 
 #[inline]
-fn load_single<A, S>(source: &S, id: &str, ext: &str) -> Result<A, Error>
+fn load_single<A, S>(source: &S, id: &str, ext: &str) -> Result<A, ErrorKind>
 where
     A: Asset,
     S: Source + ?Sized,
@@ -701,14 +707,14 @@ where
     A: Asset,
     S: Source + ?Sized,
 {
-    let mut error = Error::NoDefaultValue;
+    let mut error = ErrorKind::NoDefaultValue;
 
     for ext in A::EXTENSIONS {
         match load_single(source, id, ext) {
             Err(err) => error = err.or(error),
-            asset => return asset,
+            Ok(asset) => return Ok(asset),
         }
     }
 
-    A::default_value(id, error)
+    A::default_value(id, Error::from_kind(id.into(), error))
 }

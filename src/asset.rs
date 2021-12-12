@@ -222,7 +222,7 @@ pub trait Compound: Sized + Send + Sync + 'static {
     ///
     /// This function should not perform any kind of I/O: such concern should be
     /// delegated to [`Asset`]s.
-    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error>;
+    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, BoxedError>;
 
     /// Loads an asset and registers it for hot-reloading if necessary.
     ///
@@ -233,20 +233,21 @@ pub trait Compound: Sized + Send + Sync + 'static {
         id: &SharedString,
     ) -> Result<Self, Error> {
         #[cfg(feature = "hot-reloading")]
-        if Self::HOT_RELOADED {
-            let (asset, deps) = cache.record_load(id)?;
-            if let Some(reloader) = &cache.reloader {
-                reloader.add_compound::<Self>(id.clone(), deps);
-            }
-            Ok(asset)
+        let res = if Self::HOT_RELOADED {
+            cache.record_load(id).map(|(asset, deps)| {
+                if let Some(reloader) = &cache.reloader {
+                    reloader.add_compound::<Self>(id.clone(), deps);
+                }
+                asset
+            })
         } else {
             cache.no_record(|| Self::load(cache, id))
-        }
+        };
 
         #[cfg(not(feature = "hot-reloading"))]
-        {
-            Self::load(cache, id)
-        }
+        let res = Self::load(cache, id);
+
+        res.map_err(|err| Error::new(id.clone(), err))
     }
 
     #[doc(hidden)]
@@ -274,8 +275,8 @@ where
     A: Asset,
 {
     #[inline]
-    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
-        load_from_source(cache.source(), id)
+    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, BoxedError> {
+        Ok(load_from_source(cache.source(), id)?)
     }
 
     #[doc(hidden)]
@@ -283,7 +284,7 @@ where
         cache: &AssetCache<S>,
         id: &SharedString,
     ) -> Result<Self, Error> {
-        let asset = cache.no_record(|| Self::load(cache, id))?;
+        let asset = load_from_source(cache.source(), id)?;
 
         #[cfg(feature = "hot-reloading")]
         if A::HOT_RELOADED {
@@ -307,8 +308,9 @@ impl<A> Compound for Arc<A>
 where
     A: Compound,
 {
-    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, Error> {
-        cache.load_owned::<A>(id).map(Arc::new)
+    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, BoxedError> {
+        let asset = cache.load_owned::<A>(id)?;
+        Ok(Arc::new(asset))
     }
 
     const HOT_RELOADED: bool = A::HOT_RELOADED;

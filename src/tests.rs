@@ -31,10 +31,11 @@ impl Asset for XS {
 
 impl asset::NotHotReloaded for XS {}
 
+#[derive(Debug)]
 pub struct Y(pub i32);
 
 impl Compound for Y {
-    fn load<S: source::Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Y, Error> {
+    fn load<S: source::Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Y, BoxedError> {
         Ok(Y(cache.load::<X>(id)?.read().0))
     }
 }
@@ -42,13 +43,13 @@ impl Compound for Y {
 pub struct Z(pub i32);
 
 impl Compound for Z {
-    fn load<S: source::Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Z, Error> {
+    fn load<S: source::Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Z, BoxedError> {
         Ok(Z(cache.load::<Y>(id)?.read().0))
     }
 }
 
 mod asset_cache {
-    use super::X;
+    use super::{X, Y};
     use crate::AssetCache;
 
     #[test]
@@ -108,6 +109,24 @@ mod asset_cache {
         assert!(cache.get_cached::<i32>("test.xxx").is_none());
         let handle = cache.get_or_insert::<i32>("test.xxx", 5);
         assert_eq!(*handle.get(), 5);
+    }
+
+    #[test]
+    fn errors() {
+        let cache = AssetCache::new("assets").unwrap();
+
+        let err = cache.load::<String>("test.missing").unwrap_err();
+        assert!(err.reason().downcast_ref::<std::io::Error>().is_some());
+
+        let err = cache.load::<Y>("test.a").unwrap_err();
+
+        assert_eq!(err.id(), "test.a");
+        let err = err.reason().downcast_ref::<crate::Error>().unwrap();
+        assert_eq!(err.id(), "test.a");
+        assert!(err
+            .reason()
+            .downcast_ref::<std::num::ParseIntError>()
+            .is_some());
     }
 
     #[test]

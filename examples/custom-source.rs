@@ -29,9 +29,8 @@ impl FsWithOverride {
         let default_dir = FileSystem::new(default_path)?;
         let override_dir = std::env::var_os("ASSETS_OVERRIDE").and_then(|path| {
             FileSystem::new(path)
-                .or_else(|err| {
+                .map_err(|err| {
                     log::error!("Error setting override assets directory: {}", err);
-                    Err(())
                 })
                 .ok()
         });
