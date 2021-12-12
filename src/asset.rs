@@ -124,9 +124,8 @@ pub trait Asset: Sized + Send + Sync + 'static {
     ///
     /// If `EXTENSION` is provided, you don't have to set this constant.
     ///
-    /// If this array is empty, loading an asset of this type returns
-    /// [`Error::NoDefaultValue`] unless a default value is provided with the
-    /// `default_value` method.
+    /// If this array is empty, loading an asset of this type returns an error
+    /// unless a default value is provided with the `default_value` method.
     const EXTENSIONS: &'static [&'static str] = &[Self::EXTENSION];
 
     /// Specifies a way to convert raw bytes into the asset.
