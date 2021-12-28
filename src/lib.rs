@@ -190,7 +190,7 @@ pub use error::{BoxedError, Error};
 pub mod loader;
 
 mod entry;
-pub use entry::{AssetGuard, Handle, ReloadId, ReloadWatcher};
+pub use entry::{AssetGuard, AtomicReloadId, Handle, ReloadId, ReloadWatcher};
 
 mod key;
 

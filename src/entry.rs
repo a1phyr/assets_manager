@@ -37,7 +37,7 @@ pub(crate) struct DynamicInner<T> {
     id: SharedString,
     value: RwLock<T>,
     reload_global: AtomicBool,
-    reload: AtomicUsize,
+    reload: AtomicReloadId,
 }
 
 impl<T> DynamicInner<T> {
@@ -47,7 +47,7 @@ impl<T> DynamicInner<T> {
         Self {
             id,
             value: RwLock::new(value),
-            reload: AtomicUsize::new(0),
+            reload: AtomicReloadId::new(),
             reload_global: AtomicBool::new(false),
         }
     }
@@ -55,7 +55,7 @@ impl<T> DynamicInner<T> {
     pub fn write(&self, value: T) {
         let mut data = self.value.write();
         *data = value;
-        self.reload.fetch_add(1, Ordering::Release);
+        self.reload.increment();
         self.reload_global.store(true, Ordering::Release);
     }
 }
@@ -266,8 +266,7 @@ impl<'a, T> Handle<'a, T> {
     /// [same handle](`Self::same_handle`).
     #[inline]
     pub fn last_reload_id(&self) -> ReloadId {
-        let id = self.either(|_| 0, |this| this.reload.load(Ordering::Acquire));
-        ReloadId(id)
+        self.either(|_| ReloadId(0), |this| this.reload.load())
     }
 
     /// Returns `true` if the asset has been reloaded since last call to this
@@ -448,23 +447,18 @@ where
 #[cfg(feature = "hot-reloading")]
 #[derive(Debug, Clone, Copy)]
 struct ReloadWatcherInner<'a> {
-    reload_id: &'a AtomicUsize,
+    reload_id: &'a AtomicReloadId,
     last_reload_id: ReloadId,
 }
 
 #[cfg(feature = "hot-reloading")]
 impl<'a> ReloadWatcherInner<'a> {
     #[inline]
-    fn new(reload_id: &'a AtomicUsize) -> Self {
+    fn new(reload_id: &'a AtomicReloadId) -> Self {
         Self {
             reload_id,
-            last_reload_id: ReloadId(reload_id.load(Ordering::Relaxed)),
+            last_reload_id: reload_id.load(),
         }
-    }
-
-    #[inline]
-    pub fn last_reload_id(&self) -> ReloadId {
-        ReloadId(self.reload_id.load(Ordering::Acquire))
     }
 }
 
@@ -482,7 +476,7 @@ pub struct ReloadWatcher<'a> {
 
 impl<'a> ReloadWatcher<'a> {
     #[inline]
-    fn new(_reload_id: Option<&'a AtomicUsize>) -> Self {
+    fn new(_reload_id: Option<&'a AtomicReloadId>) -> Self {
         #[cfg(feature = "hot-reloading")]
         let inner = _reload_id.map(ReloadWatcherInner::new);
         Self {
@@ -498,7 +492,7 @@ impl<'a> ReloadWatcher<'a> {
     pub fn reloaded(&mut self) -> bool {
         #[cfg(feature = "hot-reloading")]
         if let Some(inner) = &mut self.inner {
-            let new_id = inner.last_reload_id();
+            let new_id = inner.reload_id.load();
             return inner.last_reload_id.update(new_id);
         }
 
@@ -510,7 +504,7 @@ impl<'a> ReloadWatcher<'a> {
     pub fn last_reload_id(&self) -> ReloadId {
         #[cfg(feature = "hot-reloading")]
         if let Some(inner) = &self.inner {
-            return inner.last_reload_id();
+            return inner.reload_id.load();
         }
 
         ReloadId(0)
@@ -534,7 +528,8 @@ impl Default for ReloadWatcher<'_> {
 /// by the [same handle](`Handle::same_handle`).
 ///
 /// They are useful when you cannot afford the associated lifetime of a
-/// `ReloadWatcher`.
+/// [`ReloadWatcher`]. In this case, you may be interested in using an
+/// [`AtomicReloadId`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ReloadId(usize);
 
@@ -548,6 +543,66 @@ impl ReloadId {
             *self = new;
         }
         newer
+    }
+}
+
+/// A [`ReloadId`] that can be shared between threads.
+///
+/// This type is useful when one cannot afford the associated lifetime of
+/// [`ReloadWatcher`] and is cheaper than a `Mutex<ReloadId>`.
+///
+/// `update` method is enough to satisfy most needs, but this type exposes more
+/// primitive operations too.
+#[derive(Debug)]
+pub struct AtomicReloadId(AtomicUsize);
+
+impl AtomicReloadId {
+    /// Creates a new atomic `ReloadId`.
+    #[inline]
+    pub const fn new() -> Self {
+        Self(AtomicUsize::new(0))
+    }
+
+    /// Creates a new atomic `ReloadId`, initialized with the given value.
+    #[inline]
+    pub fn with_value(value: ReloadId) -> Self {
+        Self(AtomicUsize::new(value.0))
+    }
+
+    /// Updates `self` if the argument if the argument is newer. Returns `true`
+    /// if `self` was updated.
+    #[inline]
+    pub fn update(&self, new: ReloadId) -> bool {
+        new > self.fetch_max(new)
+    }
+
+    /// Loads the inner `ReloadId`.
+    #[inline]
+    pub fn load(&self) -> ReloadId {
+        ReloadId(self.0.load(Ordering::Acquire))
+    }
+
+    /// Stores a `ReloadId`.
+    #[inline]
+    pub fn store(&self, new: ReloadId) {
+        self.0.store(new.0, Ordering::Release)
+    }
+
+    #[inline]
+    fn increment(&self) {
+        self.0.fetch_add(1, Ordering::Release);
+    }
+
+    /// Stores a `ReloadId`, returning the previous one.
+    #[inline]
+    pub fn swap(&self, new: ReloadId) -> ReloadId {
+        ReloadId(self.0.swap(new.0, Ordering::AcqRel))
+    }
+
+    /// Stores the maximum of the two `ReloadId`, returning the previous one.
+    #[inline]
+    pub fn fetch_max(&self, new: ReloadId) -> ReloadId {
+        ReloadId(self.0.fetch_max(new.0, Ordering::AcqRel))
     }
 }
 
