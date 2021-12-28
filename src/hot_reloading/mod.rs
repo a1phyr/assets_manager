@@ -54,9 +54,23 @@ unsafe impl Send for CacheMessage where AssetCache<dyn Source + Sync>: Sync {}
 #[derive(Debug)]
 pub struct Disconnected;
 
+enum Events {
+    Single(AssetKey),
+    Multiple(Vec<AssetKey>),
+}
+
+impl Events {
+    fn for_each(self, mut f: impl FnMut(AssetKey)) {
+        match self {
+            Self::Single(e) => f(e),
+            Self::Multiple(e) => e.into_iter().for_each(f),
+        }
+    }
+}
+
 /// Sends events for hot-reloading.
 #[derive(Debug, Clone)]
-pub struct EventSender(Sender<AssetKey>);
+pub struct EventSender(Sender<Events>);
 
 impl EventSender {
     /// Sends an event.
@@ -65,7 +79,35 @@ impl EventSender {
     /// that depends on it.
     #[inline]
     pub fn send(&self, event: AssetKey) -> Result<(), Disconnected> {
-        self.0.send(event).or(Err(Disconnected))
+        self.0.send(Events::Single(event)).or(Err(Disconnected))
+    }
+
+    /// Sends multiple events an once.
+    ///
+    /// If successful, this function returns the number of events sent.
+    pub fn send_multiple<I>(&self, events: I) -> Result<usize, Disconnected>
+    where
+        I: IntoIterator<Item = AssetKey>,
+    {
+        let mut events = events.into_iter();
+        let event = match events.size_hint().1 {
+            Some(0) => return Ok(0),
+            Some(1) => match events.next() {
+                Some(event) => Events::Single(event),
+                None => return Ok(0),
+            },
+            _ => Events::Multiple(events.collect()),
+        };
+
+        let len = match &event {
+            Events::Single(_) => 1,
+            Events::Multiple(events) => events.len(),
+        };
+
+        match self.0.send(event) {
+            Ok(()) => Ok(len),
+            Err(_) => Err(Disconnected),
+        }
     }
 }
 
@@ -109,7 +151,7 @@ pub(crate) struct HotReloader {
 impl HotReloader {
     /// Starts hot-reloading.
     fn start(
-        events: Receiver<AssetKey>,
+        events: Receiver<Events>,
         updates: DynUpdateSender,
         source: Box<dyn Source + Send>,
     ) -> Self {
@@ -192,7 +234,7 @@ impl fmt::Debug for HotReloader {
 
 fn hot_reloading_thread(
     source: Box<dyn Source>,
-    events: Receiver<AssetKey>,
+    events: Receiver<Events>,
     cache_msg: Receiver<CacheMessage>,
     answer: Sender<()>,
 ) {

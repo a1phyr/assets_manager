@@ -1,5 +1,5 @@
 use crate::{
-    key::{AnyAsset, AssetKey},
+    key::AnyAsset,
     source::Source,
     utils::{BorrowedKey, HashMap, HashSet, OwnedKey},
     Compound, SharedString,
@@ -77,7 +77,7 @@ impl CacheKind {
     }
 }
 
-pub(crate) struct HotReloadingData {
+pub(super) struct HotReloadingData {
     source: Box<dyn Source>,
     cache: CacheKind,
     deps: Dependencies,
@@ -96,14 +96,14 @@ impl HotReloadingData {
         }
     }
 
-    pub fn load_asset(&mut self, key: AssetKey) {
-        match key.typ.load(&self.source, &key.id) {
+    pub fn load_asset(&mut self, events: super::Events) {
+        events.for_each(|key| match key.typ.load(&self.source, &key.id) {
             Ok(asset) => {
                 self.cache.update(key.into_owned_key(), asset);
                 self.update_if_static();
             }
             Err(err) => log::warn!("Error reloading \"{}\": {}", key.id, err),
-        }
+        })
     }
 
     pub fn update_if_local(&mut self, cache: &DynAssetCache) {
