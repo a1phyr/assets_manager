@@ -457,13 +457,16 @@ where
     #[inline]
     pub fn remove<A: Storable>(&mut self, id: &str) -> bool {
         let key = BorrowedKey::new::<A>(id);
+        let removed = self.assets.remove(key);
 
         #[cfg(feature = "hot-reloading")]
         if let Some(reloader) = &self.reloader {
-            reloader.remove_asset::<A>(SharedString::from(id));
+            if removed {
+                reloader.remove_asset::<A>(SharedString::from(id));
+            }
         }
 
-        self.assets.remove(key)
+        removed
     }
 
     /// Takes ownership on a cached asset.

@@ -3,7 +3,7 @@ use crate::{
     tests::{X, Y, Z},
     AssetCache,
 };
-use std::{fs::File, io, io::Write, path::Path, sync::Arc};
+use std::{borrow::Cow, fs::File, io, io::Write, path::Path, sync::Arc};
 
 fn sleep() {
     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -129,4 +129,80 @@ test_scenario! {
     type: Arc<X>,
     id: "g",
     start_value: 57,
+}
+
+#[test]
+fn messages() {
+    use super::*;
+    use crate::utils::Mutex;
+
+    struct MessageChecker(Mutex<Vec<UpdateMessage>>);
+
+    impl UpdateSender for MessageChecker {
+        fn send_update(&self, message: UpdateMessage) {
+            match self.0.lock().pop() {
+                Some(expected) => assert_eq!(message, expected),
+                None => panic!("Unexpected message {:?}", message),
+            }
+        }
+    }
+
+    impl Drop for MessageChecker {
+        fn drop(&mut self) {
+            if !std::thread::panicking() {
+                assert!(self.0.lock().is_empty());
+            }
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    struct TestSource;
+
+    impl crate::source::Source for TestSource {
+        fn read(&self, _id: &str, _ext: &str) -> io::Result<Cow<[u8]>> {
+            Ok(Cow::Borrowed(b"10"))
+        }
+
+        fn read_dir(&self, _id: &str, _f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+            Err(io::ErrorKind::NotFound.into())
+        }
+
+        fn exists(&self, entry: DirEntry) -> bool {
+            entry.is_file()
+        }
+
+        fn make_source(&self) -> Option<Box<dyn crate::source::Source + Send>> {
+            Some(Box::new(*self))
+        }
+
+        fn configure_hot_reloading(
+            &self,
+            _events: EventSender,
+        ) -> Result<DynUpdateSender, crate::BoxedError> {
+            let a_key = AssetKey::new::<X>("a".into());
+            let b_key = AssetKey::new::<X>("b".into());
+
+            // Expected events, in reverse order
+            let events = vec![
+                UpdateMessage::AddAsset(a_key.clone()),
+                UpdateMessage::Clear,
+                UpdateMessage::AddAsset(a_key.clone()),
+                UpdateMessage::RemoveAsset(a_key.clone()),
+                UpdateMessage::AddAsset(b_key),
+                UpdateMessage::AddAsset(a_key),
+            ];
+
+            Ok(Box::new(MessageChecker(Mutex::new(events))))
+        }
+    }
+
+    let mut cache = crate::AssetCache::with_source(TestSource);
+    cache.load_expect::<X>("a");
+    assert!(!cache.remove::<X>("b"));
+    assert!(cache.take::<X>("b").is_none());
+    cache.load_expect::<X>("b");
+    assert!(cache.remove::<X>("a"));
+    cache.load_expect::<X>("a");
+    cache.clear();
+    cache.load_expect::<X>("a");
 }

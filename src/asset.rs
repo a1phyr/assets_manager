@@ -378,6 +378,10 @@ where
 {
     #[doc(hidden)]
     const HOT_RELOADED: bool = A::HOT_RELOADED;
+
+    fn get_key<P: PrivateMarker>() -> Option<crate::key::AssetType> {
+        Self::get_key::<P>()
+    }
 }
 
 macro_rules! string_assets {
