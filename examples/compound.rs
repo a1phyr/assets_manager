@@ -81,6 +81,10 @@ impl Compound for Level {
 }
 
 fn main() -> Result<(), BoxedError> {
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .init();
+
     let cache = AssetCache::new("assets")?;
 
     // Load the Level from the cache

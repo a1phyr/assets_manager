@@ -109,6 +109,10 @@ impl Source for FsWithOverride {
 }
 
 fn main() -> Result<(), BoxedError> {
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .init();
+
     let source = FsWithOverride::new("assets")?;
     let cache = AssetCache::with_source(source);
 

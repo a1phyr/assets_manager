@@ -8,6 +8,10 @@ use assets_manager::{AssetCache, BoxedError};
 use std::{thread::sleep, time::Duration};
 
 fn main() -> Result<(), BoxedError> {
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .init();
+
     let cache = AssetCache::new("assets")?;
 
     // The asset reference is obtained outside the loop
