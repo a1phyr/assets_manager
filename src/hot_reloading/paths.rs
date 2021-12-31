@@ -102,7 +102,7 @@ impl HotReloadingData {
                 self.cache.update(key.into_owned_key(), asset);
                 self.update_if_static();
             }
-            Err(err) => log::warn!("Error reloading \"{}\": {}", key.id, err),
+            Err(err) => log::warn!("Error reloading \"{}\": {}", key.id, err.reason()),
         })
     }
 
