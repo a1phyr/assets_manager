@@ -587,7 +587,7 @@ image_assets! {
         ["png"],
     );
 
-    /// An asset to load PNG images.
+    /// An asset to load WebP images.
     #[cfg(feature = "webp")]
     struct Webp => (
         image::ImageFormat::WebP,
