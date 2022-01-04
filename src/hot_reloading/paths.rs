@@ -13,20 +13,10 @@ pub(crate) type ReloadFn = fn(cache: &DynAssetCache, id: &str) -> Option<HashSet
 fn reload<T: Compound>(cache: &DynAssetCache, id: &str) -> Option<HashSet<OwnedKey>> {
     let key = BorrowedKey::new::<T>(id);
     let handle = cache.assets.get_entry(key)?.handle();
-    let entry = handle.either(
-        |_| {
-            log::error!(
-                "Static asset registered for hot-reloading: {}",
-                std::any::type_name::<T>()
-            );
-            None
-        },
-        |e| Some(e),
-    )?;
 
     match cache.record_load::<T>(id) {
         Ok((asset, deps)) => {
-            entry.write(asset);
+            handle.as_dynamic().write(asset);
             log::info!("Reloading \"{}\"", id);
             Some(deps)
         }

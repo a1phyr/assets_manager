@@ -184,7 +184,7 @@ impl<'a, T> Handle<'a, T> {
     }
 
     #[inline]
-    pub(crate) fn either<U>(
+    fn either<U>(
         &self,
         on_static: impl FnOnce(&'a StaticInner<T>) -> U,
         _on_dynamic: impl FnOnce(&'a DynamicInner<T>) -> U,
@@ -194,6 +194,11 @@ impl<'a, T> Handle<'a, T> {
             #[cfg(feature = "hot-reloading")]
             HandleInner::Dynamic(s) => _on_dynamic(s),
         }
+    }
+
+    #[inline]
+    pub(crate) fn as_dynamic(&self) -> &DynamicInner<T> {
+        self.either(|_| wrong_handle_type(), |this| this)
     }
 
     /// Locks the pointed asset for reading.
@@ -607,6 +612,7 @@ impl AtomicReloadId {
 }
 
 #[cold]
+#[track_caller]
 fn wrong_handle_type() -> ! {
     panic!("wrong handle type");
 }

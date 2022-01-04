@@ -16,15 +16,7 @@ pub(crate) trait AnyAsset: Send + Sync + 'static {
 
 impl<A: Asset> AnyAsset for A {
     fn reload(self: Box<Self>, entry: CacheEntryInner) {
-        entry.handle::<A>().either(
-            |_| {
-                log::error!(
-                    "Static asset registered for hot-reloading: {}",
-                    std::any::type_name::<A>()
-                )
-            },
-            |e| e.write(*self),
-        );
+        entry.handle::<A>().as_dynamic().write(*self);
     }
 
     fn create(self: Box<Self>, id: SharedString) -> CacheEntry {
