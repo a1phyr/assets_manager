@@ -189,7 +189,7 @@ impl<'a, T> Handle<'a, T> {
         on_static: impl FnOnce(&'a StaticInner<T>) -> U,
         _on_dynamic: impl FnOnce(&'a DynamicInner<T>) -> U,
     ) -> U {
-        match &self.inner {
+        match self.inner {
             HandleInner::Static(s) => on_static(s),
             #[cfg(feature = "hot-reloading")]
             HandleInner::Dynamic(s) => _on_dynamic(s),
@@ -210,13 +210,11 @@ impl<'a, T> Handle<'a, T> {
     /// Returns a RAII guard which will release the lock once dropped.
     #[inline]
     pub fn read(&self) -> AssetGuard<'a, T> {
-        let inner = self.either(
-            |this| GuardInner::Ref(&this.value),
+        let inner = match self.inner {
+            HandleInner::Static(this) => GuardInner::Ref(&this.value),
             #[cfg(feature = "hot-reloading")]
-            |this| GuardInner::Guard(this.value.read()),
-            #[cfg(not(feature = "hot-reloading"))]
-            |_| unimplemented!(),
-        );
+            HandleInner::Dynamic(this) => GuardInner::Guard(this.value.read()),
+        };
         AssetGuard { inner }
     }
 
