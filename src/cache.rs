@@ -263,7 +263,7 @@ impl<S: Source> AssetCache<S> {
     }
 }
 
-impl<S: Source> AssetCache<S> {
+impl<S> AssetCache<S> {
     /// Creates a cache that loads assets from the given source.
     pub fn without_hot_reloading(source: S) -> AssetCache<S> {
         AssetCache {
