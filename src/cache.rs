@@ -326,12 +326,6 @@ where
         }
     }
 
-    #[cfg(feature = "hot-reloading")]
-    #[inline]
-    pub(crate) fn is_recording(&self) -> bool {
-        RECORDING.with(|rec| rec.get().is_some())
-    }
-
     /// Adds an asset to the cache.
     ///
     /// This function does not not have the asset kind as generic parameter to
@@ -625,7 +619,7 @@ where
         let asset = A::_load_and_record::<S, Private>(self, &id);
 
         #[cfg(feature = "hot-reloading")]
-        if A::HOT_RELOADED && self.is_recording() {
+        if A::HOT_RELOADED {
             let key = OwnedKey::new::<A>(id);
             self.add_record(key);
         }
