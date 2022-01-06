@@ -39,6 +39,7 @@ impl ErrorKind {
         match (self, other) {
             (NoDefaultValue, other) => other,
             (Io(_), other @ Conversion(_)) => other,
+            (Io(err), other @ Io(_)) if err.kind() == io::ErrorKind::NotFound => other,
             (this, _) => this,
         }
     }
@@ -110,6 +111,7 @@ impl fmt::Display for Error {
 }
 
 impl std::error::Error for Error {
+    #[inline]
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(self.reason())
     }
