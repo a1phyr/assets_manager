@@ -22,7 +22,9 @@ use crate::{hot_reloading::HotReloader, utils::HashSet};
 #[cfg(feature = "hot-reloading")]
 use std::{cell::Cell, ptr::NonNull};
 
-type Shard = RwLock<HashMap<OwnedKey, CacheEntry>>;
+// Make shards go to different cache lines to reduce contention
+#[repr(align(64))]
+struct Shard(RwLock<HashMap<OwnedKey, CacheEntry>>);
 
 /// A map to store assets, optimized for concurrency.
 ///
@@ -42,7 +44,7 @@ impl Map {
 
         let hash_builder = RandomState::new();
         let shards = (0..shards)
-            .map(|_| RwLock::new(HashMap::with_hasher(hash_builder.clone())))
+            .map(|_| Shard(RwLock::new(HashMap::with_hasher(hash_builder.clone()))))
             .collect();
 
         Map {
@@ -70,20 +72,20 @@ impl Map {
     }
 
     pub fn get_entry(&self, key: BorrowedKey) -> Option<CacheEntryInner> {
-        let shard = self.get_shard(key).read();
+        let shard = self.get_shard(key).0.read();
         let entry = shard.get(&key as &dyn Key)?;
         unsafe { Some(entry.inner().extend_lifetime()) }
     }
 
     #[cfg(feature = "hot-reloading")]
     pub fn get_key_entry(&self, key: BorrowedKey) -> Option<(OwnedKey, CacheEntryInner)> {
-        let shard = self.get_shard(key).read();
+        let shard = self.get_shard(key).0.read();
         let (key, entry) = shard.get_key_value(&key as &dyn Key)?;
         unsafe { Some((key.clone(), entry.inner().extend_lifetime())) }
     }
 
     fn insert(&self, key: OwnedKey, entry: CacheEntry) -> CacheEntryInner {
-        let shard = &mut *self.get_shard(key.borrow()).write();
+        let shard = &mut *self.get_shard(key.borrow()).0.write();
         let entry = shard.entry(key).or_insert(entry);
         unsafe { entry.inner().extend_lifetime() }
     }
@@ -97,7 +99,7 @@ impl Map {
         on_vacant: impl FnOnce(T, SharedString) -> CacheEntry,
     ) {
         use std::collections::hash_map::Entry;
-        let shard = &mut *self.get_shard(key.borrow()).write();
+        let shard = &mut *self.get_shard(key.borrow()).0.write();
 
         match shard.entry(key) {
             Entry::Occupied(entry) => on_occupied(val, entry.get()),
@@ -109,12 +111,12 @@ impl Map {
     }
 
     fn contains_key(&self, key: BorrowedKey) -> bool {
-        let shard = self.get_shard(key).read();
+        let shard = self.get_shard(key).0.read();
         shard.contains_key(&key as &dyn Key)
     }
 
     fn take(&mut self, key: BorrowedKey) -> Option<CacheEntry> {
-        self.get_shard_mut(key).get_mut().remove(&key as &dyn Key)
+        self.get_shard_mut(key).0.get_mut().remove(&key as &dyn Key)
     }
 
     #[inline]
@@ -124,7 +126,7 @@ impl Map {
 
     fn clear(&mut self) {
         for shard in &mut *self.shards {
-            shard.get_mut().clear();
+            shard.0.get_mut().clear();
         }
     }
 }
@@ -134,7 +136,7 @@ impl fmt::Debug for Map {
         let mut map = f.debug_map();
 
         for shard in &*self.shards {
-            map.entries(&**shard.read());
+            map.entries(&**shard.0.read());
         }
 
         map.finish()
