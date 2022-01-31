@@ -2,10 +2,11 @@
 name = "assets_manager"
 version = "0.7.2"
 authors = ["Benoît du Garreau"]
-edition = "2018"
+edition = "2021"
+rust-version = "1.56"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-description= "Conveniently load, cache, and reload external resources"
+description = "Conveniently load, cache, and reload external resources"
 
 repository = "https://github.com/a1phyr/assets_manager"
 documentation = "https://docs.rs/assets_manager"
