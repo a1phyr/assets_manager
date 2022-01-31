@@ -27,6 +27,10 @@ jobs:
           toolchain: ${{ matrix.rust }}
           override: true
 
+      - name: Downgrade cpal to MSRV
+        if: ${{ matrix.rust }} == "1.51"
+        run: cargo update -p cpal --precise 0.13.4
+
       - name: cargo test
         run: cargo test
 
