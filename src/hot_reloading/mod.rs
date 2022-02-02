@@ -29,7 +29,7 @@ type DynAssetCache = crate::AssetCache<dyn crate::source::Source>;
 
 /// A message with an update of the state of the [`AssetCache`].
 #[non_exhaustive]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpdateMessage {
     /// An asset was added to the cache.
     AddAsset(AssetKey),

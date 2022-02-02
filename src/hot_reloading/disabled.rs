@@ -8,7 +8,7 @@ use crate::BoxedError;
 #[derive(Debug, Clone)]
 enum Void {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpdateMessage {
     AddAsset(AssetKey),
     RemoveAsset(AssetKey),
