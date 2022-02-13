@@ -5,6 +5,7 @@
 
 mod dependencies;
 mod paths;
+pub(crate) mod records;
 mod watcher;
 
 #[cfg(test)]

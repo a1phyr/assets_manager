@@ -17,10 +17,11 @@ use crate::AssetGuard;
 use std::{any::TypeId, fmt, io, path::Path};
 
 #[cfg(feature = "hot-reloading")]
-use crate::{hot_reloading::HotReloader, key::AnyAsset, utils::HashSet};
-
-#[cfg(feature = "hot-reloading")]
-use std::{cell::Cell, ptr::NonNull};
+use crate::{
+    hot_reloading::{records, HotReloader},
+    key::AnyAsset,
+    utils::HashSet,
+};
 
 // Make shards go to different cache lines to reduce contention
 #[repr(align(64))]
@@ -135,33 +136,6 @@ impl fmt::Debug for Map {
 
         map.finish()
     }
-}
-
-#[cfg(feature = "hot-reloading")]
-struct Record {
-    cache: usize,
-    records: HashSet<OwnedKey>,
-}
-
-#[cfg(feature = "hot-reloading")]
-impl Record {
-    fn new(cache: usize) -> Record {
-        Record {
-            cache,
-            records: HashSet::new(),
-        }
-    }
-
-    fn insert(&mut self, cache: usize, key: OwnedKey) {
-        if self.cache == cache {
-            self.records.insert(key);
-        }
-    }
-}
-
-#[cfg(feature = "hot-reloading")]
-thread_local! {
-    static RECORDING: Cell<Option<NonNull<Record>>> = Cell::new(None);
 }
 
 /// The main structure of this crate, used to cache assets.
@@ -283,13 +257,8 @@ where
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub(crate) fn add_record(&self, key: OwnedKey) {
-        RECORDING.with(|rec| {
-            if let Some(mut recorder) = rec.get() {
-                let recorder = unsafe { recorder.as_mut() };
-                recorder.insert(self as *const Self as *const () as usize, key);
-            }
-        });
+    fn id(&self) -> usize {
+        self as *const Self as *const () as usize
     }
 
     /// Temporarily prevent `Compound` dependencies to be recorded.
@@ -306,12 +275,7 @@ where
     pub fn no_record<T, F: FnOnce() -> T>(&self, f: F) -> T {
         #[cfg(feature = "hot-reloading")]
         {
-            RECORDING.with(|rec| {
-                let old_rec = rec.replace(None);
-                let result = f();
-                rec.set(old_rec);
-                result
-            })
+            records::no_record(f)
         }
 
         #[cfg(not(feature = "hot-reloading"))]
@@ -386,7 +350,7 @@ where
                 Some((key, entry)) => (key, Some(entry)),
                 None => (key.to_owned(), None),
             };
-            self.add_record(key);
+            records::add_record(self.id(), key);
             entry
         } else {
             self.assets.get_entry(key)
@@ -500,20 +464,14 @@ where
         &self,
         id: &str,
     ) -> Result<(A, HashSet<OwnedKey>), crate::BoxedError> {
-        let mut record = Record::new(self as *const Self as *const () as usize);
-
-        let asset = if self.reloader.is_some() {
-            RECORDING.with(|rec| {
-                let old_rec = rec.replace(Some(NonNull::from(&mut record)));
-                let result = A::load(self, id);
-                rec.set(old_rec);
-                result
-            })
+        let (asset, records) = if self.reloader.is_some() {
+            let this = self as *const Self as *const () as usize;
+            records::record(this, || A::load(self, id))
         } else {
-            A::load(self, id)
+            (A::load(self, id), HashSet::new())
         };
 
-        Ok((asset?, record.records))
+        Ok((asset?, records))
     }
 
     /// Loads an asset.
@@ -615,7 +573,7 @@ where
         #[cfg(feature = "hot-reloading")]
         if A::HOT_RELOADED {
             let key = OwnedKey::new::<A>(id);
-            self.add_record(key);
+            records::add_record(self.id(), key);
         }
 
         asset
