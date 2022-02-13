@@ -13,12 +13,20 @@ mod tests;
 use paths::{CompoundReloadInfos, HotReloadingData};
 
 use crossbeam_channel::{self as channel, Receiver, Sender};
-use std::{fmt, ptr::NonNull, thread};
+use std::{
+    fmt,
+    ptr::NonNull,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    thread,
+};
 
 use crate::{
     asset::Storable,
     source::Source,
-    utils::{HashSet, OwnedKey},
+    utils::{Condvar, HashSet, Mutex, OwnedKey},
     AssetCache, SharedString,
 };
 
@@ -42,7 +50,7 @@ pub enum UpdateMessage {
 }
 
 enum CacheMessage {
-    Ptr(NonNull<AssetCache<dyn Source + Sync>>),
+    Ptr(NonNull<AssetCache<dyn Source + Sync>>, usize),
     Static(&'static AssetCache<dyn Source + Sync>),
 
     Clear,
@@ -141,10 +149,41 @@ where
     }
 }
 
+/// Used to make sure any thread calling `AssetCache::hot_reload` continues when
+/// it is answered and not when another thread is. Using a channel would be
+/// vulnerable to race condition, which is fine in that case but not really
+/// future-proof.
+#[derive(Default)]
+struct Answers {
+    next_token: AtomicUsize,
+    current_token: Mutex<Option<usize>>,
+    condvar: Condvar,
+}
+
+impl Answers {
+    fn get_unique_token(&self) -> usize {
+        self.next_token.fetch_add(1, Ordering::Relaxed)
+    }
+
+    fn notify(&self, token: usize) {
+        let guard = self.current_token.lock();
+        // Make sure everyone consumed its answer token
+        let mut guard = self.condvar.wait_while(guard, |t| t.is_some());
+        *guard = Some(token);
+        self.condvar.notify_all();
+    }
+
+    fn wait_for_answer(&self, token: usize) {
+        let guard = self.current_token.lock();
+        let mut token = self.condvar.wait_while(guard, |t| *t != Some(token));
+        *token = None;
+    }
+}
+
 /// The hot-reloading handler.
 pub(crate) struct HotReloader {
     sender: Sender<CacheMessage>,
-    receiver: Receiver<()>,
+    answers: Arc<Answers>,
     updates: DynUpdateSender,
 }
 
@@ -156,17 +195,18 @@ impl HotReloader {
         source: Box<dyn Source + Send>,
     ) -> Self {
         let (cache_msg_tx, cache_msg_rx) = channel::unbounded();
-        let (answer_tx, answer_rx) = channel::unbounded();
+        let answers = Arc::new(Answers::default());
+        let answers_clone = answers.clone();
 
         thread::Builder::new()
             .name("assets_hot_reload".to_string())
-            .spawn(|| hot_reloading_thread(source, events, cache_msg_rx, answer_tx))
+            .spawn(|| hot_reloading_thread(source, events, cache_msg_rx, answers_clone))
             .unwrap();
 
         Self {
             updates,
             sender: cache_msg_tx,
-            receiver: answer_rx,
+            answers,
         }
     }
 
@@ -215,10 +255,16 @@ impl HotReloader {
     }
 
     pub(crate) fn reload(&self, cache: &AssetCache<dyn Source + Sync + '_>) {
-        // Lifetime magic
+        // Lifetime magic: make the compiler think that the `Source` actually
+        // lives for 'static
+        // This is sound because all other references do not exist anymore when
+        // this function exists
         let ptr = unsafe { std::mem::transmute(NonNull::from(cache)) };
-        let _ = self.sender.send(CacheMessage::Ptr(ptr));
-        let _ = self.receiver.recv();
+        let token = self.answers.get_unique_token();
+        if self.sender.send(CacheMessage::Ptr(ptr, token)).is_ok() {
+            // When the hot-reloading thread is done, it sends back our back our token
+            self.answers.wait_for_answer(token);
+        }
     }
 
     pub(crate) fn send_static(&self, cache: &'static AssetCache<dyn Source + Sync>) {
@@ -236,7 +282,7 @@ fn hot_reloading_thread(
     source: Box<dyn Source>,
     events: Receiver<Events>,
     cache_msg: Receiver<CacheMessage>,
-    answer: Sender<()>,
+    answers: Arc<Answers>,
 ) {
     log::info!("Starting hot-reloading");
 
@@ -250,11 +296,11 @@ fn hot_reloading_thread(
         let ready = select.select();
         match ready.index() {
             0 => match ready.recv(&cache_msg) {
-                Ok(CacheMessage::Ptr(ptr)) => {
+                Ok(CacheMessage::Ptr(ptr, token)) => {
                     // Safety: The received pointer is guaranteed to
                     // be valid until we reply back
                     cache.update_if_local(unsafe { ptr.as_ref() });
-                    answer.send(()).unwrap();
+                    answers.notify(token);
                 }
                 Ok(CacheMessage::Static(asset_cache)) => cache.use_static_ref(asset_cache),
                 Ok(CacheMessage::Clear) => cache.clear_local_cache(),

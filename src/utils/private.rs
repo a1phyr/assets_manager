@@ -254,6 +254,7 @@ impl<T: ?Sized> RwLock<T> {
 }
 
 #[allow(unused)]
+#[derive(Default)]
 pub(crate) struct Mutex<T: ?Sized>(sync::Mutex<T>);
 
 #[allow(unused)]
@@ -269,6 +270,49 @@ impl<T: ?Sized> Mutex<T> {
     #[inline]
     pub fn lock(&self) -> sync::MutexGuard<T> {
         wrap(self.0.lock())
+    }
+}
+
+#[allow(unused)]
+#[derive(Default)]
+pub(crate) struct Condvar(sync::Condvar);
+
+#[allow(unused)]
+impl Condvar {
+    #[inline]
+    pub fn new() -> Self {
+        Self(sync::Condvar::new())
+    }
+
+    #[inline]
+    pub fn notify_all(&self) {
+        self.0.notify_all();
+    }
+
+    #[inline]
+    pub fn wait_while<'a, T, F>(
+        &self,
+        mut guard: sync::MutexGuard<'a, T>,
+        mut condition: F,
+    ) -> sync::MutexGuard<'a, T>
+    where
+        F: FnMut(&mut T) -> bool,
+    {
+        #[cfg(feature = "parking_lot")]
+        {
+            while condition(&mut guard) {
+                self.0.wait(&mut guard);
+            }
+            guard
+        }
+
+        #[cfg(not(feature = "parking_lot"))]
+        {
+            while condition(&mut guard) {
+                guard = wrap(self.0.wait(guard));
+            }
+            guard
+        }
     }
 }
 
