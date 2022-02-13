@@ -142,13 +142,7 @@ impl LocalCache {
         // Update assets
         for (key, value) in self.changed.drain() {
             log::info!("Reloading \"{}\"", key.id());
-
-            cache.assets.update_or_insert(
-                key,
-                value,
-                |value, entry| value.reload(entry.inner()),
-                |value, id| value.create(id),
-            );
+            cache.assets.update_or_insert(key, value);
         }
 
         to_update.update(deps, cache);

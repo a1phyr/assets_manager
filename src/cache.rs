@@ -17,7 +17,7 @@ use crate::AssetGuard;
 use std::{any::TypeId, fmt, io, path::Path};
 
 #[cfg(feature = "hot-reloading")]
-use crate::{hot_reloading::HotReloader, utils::HashSet};
+use crate::{hot_reloading::HotReloader, key::AnyAsset, utils::HashSet};
 
 #[cfg(feature = "hot-reloading")]
 use std::{cell::Cell, ptr::NonNull};
@@ -91,21 +91,15 @@ impl Map {
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub fn update_or_insert<T>(
-        &self,
-        key: OwnedKey,
-        val: T,
-        on_occupied: impl FnOnce(T, &CacheEntry),
-        on_vacant: impl FnOnce(T, SharedString) -> CacheEntry,
-    ) {
+    pub fn update_or_insert(&self, key: OwnedKey, value: Box<dyn AnyAsset>) {
         use std::collections::hash_map::Entry;
         let shard = &mut *self.get_shard(key.borrow()).0.write();
 
         match shard.entry(key) {
-            Entry::Occupied(entry) => on_occupied(val, entry.get()),
+            Entry::Occupied(entry) => value.reload(entry.get().inner()),
             Entry::Vacant(entry) => {
                 let id = entry.key().clone().into_id();
-                entry.insert(on_vacant(val, id));
+                entry.insert(value.create(id));
             }
         }
     }
