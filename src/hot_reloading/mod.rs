@@ -311,13 +311,13 @@ fn hot_reloading_thread(
 
             1 => match ready.recv(&events) {
                 Ok(msg) => cache.load_asset(msg),
-                Err(_) => {
-                    log::error!("Notify panicked, hot-reloading stopped");
-                    break;
-                }
+                // We won't receive events anymore, we can stop now
+                Err(_) => break,
             },
 
             _ => unreachable!(),
         }
     }
+
+    log::info!("Stopping hot-reloading");
 }
