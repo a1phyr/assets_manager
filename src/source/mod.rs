@@ -49,9 +49,9 @@ mod embedded;
 pub use embedded::{Embedded, RawEmbedded};
 
 #[cfg(feature = "zip")]
-mod _zip;
+mod zip;
 #[cfg(feature = "zip")]
-pub use _zip::Zip;
+pub use zip::Zip;
 
 /// Embed a directory in the binary
 ///

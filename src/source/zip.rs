@@ -1,16 +1,18 @@
 use super::{DirEntry, Source};
-use crate::utils::{extension_of, HashMap, Mutex};
+use crate::{
+    utils::{extension_of, HashMap},
+    SharedBytes,
+};
 
 use std::{
     borrow::Cow,
-    fmt,
-    fs::File,
-    hash, io,
+    fmt, hash, io,
     path::{self, Path},
     sync::Arc,
 };
 
-use zip::{read::ZipFile, ZipArchive};
+use _zip::{read::ZipFile, ZipArchive};
+use sync_file::SyncFile;
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 struct FileDesc(Arc<(String, String)>);
@@ -203,31 +205,45 @@ fn register_file(
 
 /// A [`Source`] to load assets from a zip archive.
 ///
-/// The archive can be backed by any reader that also implements `io::Seek`,
-/// such as a file or a byte buffer.
+/// The archive can be backed by any reader that also implements [`io::Seek`]
+/// and [`Clone`].
+///
+/// **Warning**: This will clone the reader each time it is read, so you should
+/// ensure that is cheap to clone (eg *not* `Vec<u8>`).
 #[cfg_attr(docsrs, doc(cfg(feature = "zip")))]
 pub struct Zip<R> {
     files: HashMap<FileDesc, usize>,
     dirs: HashMap<String, Vec<OwnedEntry>>,
-    archive: Mutex<ZipArchive<R>>,
+    archive: ZipArchive<R>,
 }
 
-impl Zip<File> {
+impl Zip<SyncFile> {
     /// Creates a `Zip` archive backed by the file at the given path.
     #[inline]
-    pub fn open<P: AsRef<Path>>(path: P) -> io::Result<Zip<File>> {
-        let file = File::open(path)?;
+    pub fn open<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        let file = SyncFile::open(path)?;
         Zip::from_reader(file)
     }
 }
 
-impl<B> Zip<io::Cursor<B>>
-where
-    B: AsRef<[u8]>,
-{
-    /// Creates a `Zip` archive backed by a byte array in memory.
+impl Zip<io::Cursor<SharedBytes>> {
+    /// Creates a `Zip` archive backed by a byte buffer in memory.
+    ///
+    /// If you want to use another kind of byte buffer (such as `&[u8]`), you
+    /// can use `from_reader`.
     #[inline]
-    pub fn from_bytes(bytes: B) -> io::Result<Zip<io::Cursor<B>>> {
+    pub fn from_bytes(bytes: SharedBytes) -> io::Result<Self> {
+        Zip::from_reader(io::Cursor::new(bytes))
+    }
+}
+
+impl<'a> Zip<io::Cursor<&'a [u8]>> {
+    /// Creates a `Zip` archive backed by a byte buffer in memory.
+    ///
+    /// If you want to use another kind of byte buffer (such as `Arc<[u8]>`),
+    /// you can use `from_reader`.
+    #[inline]
+    pub fn from_slice(bytes: &'a [u8]) -> io::Result<Self> {
         Zip::from_reader(io::Cursor::new(bytes))
     }
 }
@@ -250,7 +266,6 @@ where
             register_file(file, index, &mut files, &mut dirs, &mut id_builder);
         }
 
-        let archive = Mutex::new(archive);
         Ok(Zip {
             files,
             dirs,
@@ -262,7 +277,7 @@ where
 #[cfg_attr(docsrs, doc(cfg(feature = "zip")))]
 impl<R> Source for Zip<R>
 where
-    R: io::Read + io::Seek,
+    R: io::Read + io::Seek + Clone,
 {
     fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
         use io::Read;
@@ -270,7 +285,7 @@ where
         // Get the file within the archive
         let key: &dyn FileKey = &(id, ext);
         let id = *self.files.get(key).ok_or(io::ErrorKind::NotFound)?;
-        let mut archive = self.archive.lock();
+        let mut archive = self.archive.clone();
         let mut file = archive.by_index(id)?;
 
         // Read it in a buffer

@@ -21,8 +21,9 @@ default = ["ahash", "parking_lot"]
 hot-reloading = ["notify", "crossbeam-channel"]
 embedded = ["assets_manager_macros"]
 
-zip-bzip2 = ["zip", "zip/bzip2"]
-zip-deflate = ["zip", "zip/deflate"]
+zip = ["_zip", "sync_file"]
+zip-bzip2 = ["zip", "_zip/bzip2"]
+zip-deflate = ["zip", "_zip/deflate"]
 
 bincode = ["serde_bincode", "serde"]
 cbor = ["serde_cbor", "serde"]
@@ -55,7 +56,8 @@ parking_lot = {version = "0.12", optional = true}
 notify = {version = "4.0", optional = true}
 crossbeam-channel = {version = "0.5", optional = true}
 
-zip = {version = "0.6", default-features = false, optional = true}
+_zip = {version = "0.6", package = "zip", default-features = false, optional = true}
+sync_file = {version = "0.2", optional = true}
 
 serde = {version = "1.0", optional = true, features = ["derive"]}
 serde_bincode = {version = "1.2", package = "bincode", optional = true}
