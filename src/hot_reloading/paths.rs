@@ -19,11 +19,11 @@ struct BorrowedCache<'a> {
 
 impl<'a> crate::anycache::RawCache for BorrowedCache<'a> {
     fn assets(&self) -> &AssetMap {
-        &self.assets
+        self.assets
     }
 
     fn reloader(&self) -> Option<&super::HotReloader> {
-        Some(&self.reloader)
+        Some(self.reloader)
     }
 }
 
@@ -101,9 +101,9 @@ impl CacheKind {
     fn update(&mut self, key: OwnedKey, asset: Box<dyn AnyAsset>) {
         match self {
             CacheKind::Static(cache, _, to_reload) => {
-                if let Some(entry) = cache.get_entry(key.borrow()) {
+                if let Some(entry) = cache.get_entry(&key.id, key.type_id) {
                     asset.reload(entry);
-                    log::info!("Reloading \"{}\"", key.id());
+                    log::info!("Reloading \"{}\"", key.id);
                 }
                 to_reload.push(key);
             }
@@ -195,8 +195,8 @@ impl LocalCache {
 
         // Update assets
         for (key, value) in self.changed.drain() {
-            log::info!("Reloading \"{}\"", key.id());
-            cache.assets.update_or_insert(key, value);
+            log::info!("Reloading \"{}\"", key.id);
+            cache.assets.update_or_insert(key.id, key.type_id, value);
         }
 
         to_update.update(deps, cache.as_any_cache());

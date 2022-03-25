@@ -44,7 +44,7 @@ pub(crate) fn extension_of(path: &Path) -> Option<&str> {
     }
 }
 
-/// Trick to be able to use a `BorrowedKey` to index a HashMap<OwnedKey, _>`.
+/// Trick to be able to use a `BorrowedKey` to index a `HashMap<OwnedKey, _>`.
 ///
 /// See https://stackoverflow.com/questions/45786717/how-to-implement-hashmap-with-two-keys/45795699#45795699.
 ///
@@ -74,8 +74,8 @@ impl hash::Hash for dyn Key + '_ {
 /// The key used to identify assets
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct OwnedKey {
-    type_id: TypeId,
-    id: SharedString,
+    pub type_id: TypeId,
+    pub id: SharedString,
 }
 
 impl OwnedKey {
@@ -91,12 +91,6 @@ impl OwnedKey {
     #[inline]
     pub fn new_with(id: SharedString, type_id: TypeId) -> Self {
         Self { id, type_id }
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    #[inline]
-    pub fn id(&self) -> &str {
-        &self.id
     }
 
     #[inline]
@@ -144,10 +138,10 @@ pub(crate) struct BorrowedKey<'a> {
     id: &'a str,
 }
 
-#[allow(dead_code)]
 impl<'a> BorrowedKey<'a> {
     /// Creates an Key for the given type and id.
     #[inline]
+    #[allow(dead_code)]
     pub fn new<T: 'static>(id: &'a str) -> Self {
         Self {
             id,
@@ -158,11 +152,6 @@ impl<'a> BorrowedKey<'a> {
     #[inline]
     pub fn new_with(id: &'a str, type_id: TypeId) -> Self {
         Self { id, type_id }
-    }
-
-    #[inline]
-    pub fn id(self) -> &'a str {
-        self.id
     }
 
     #[inline]

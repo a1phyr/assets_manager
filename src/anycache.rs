@@ -265,18 +265,19 @@ pub(crate) trait RawCacheWithSource: RawCache {
         let id = SharedString::from(id);
         let cache = AnyCache { cache: self };
         let entry = load(cache, id.clone())?;
-        let key = OwnedKey::new_with(id, type_id);
 
-        Ok(self.assets().insert(key, entry))
+        Ok(self.assets().insert(id, type_id, entry))
     }
 }
 
 impl<T: RawCache> Cache for T {
+    #[inline]
     fn assets(&self) -> &AssetMap {
         self.assets()
     }
 
     #[cfg(feature = "hot-reloading")]
+    #[inline]
     fn reloader(&self) -> Option<&HotReloader> {
         self.reloader()
     }
@@ -287,26 +288,24 @@ impl<T: RawCache> Cache for T {
         type_id: TypeId,
         _hot_reloaded: bool,
     ) -> Option<CacheEntryInner> {
-        let key = crate::utils::BorrowedKey::new_with(id, type_id);
-
         #[cfg(feature = "hot-reloading")]
         if _hot_reloaded {
             if let Some(reloader) = self.reloader() {
-                let (key, entry) = match self.assets().get_key_entry(key) {
+                let (key, entry) = match self.assets().get_key_entry(id, type_id) {
                     Some((key, entry)) => (key, Some(entry)),
-                    None => (key.to_owned(), None),
+                    None => (OwnedKey::new_with(id.into(), type_id), None),
                 };
                 records::add_record(reloader, key);
                 return entry;
             }
         }
 
-        self.assets().get_entry(key)
+        self.assets().get_entry(id, type_id)
     }
 
+    #[inline]
     fn contains(&self, id: &str, type_id: TypeId) -> bool {
-        let key = crate::utils::BorrowedKey::new_with(id, type_id);
-        self.assets().contains_key(key)
+        self.assets().contains_key(id, type_id)
     }
 }
 
@@ -352,9 +351,8 @@ pub(crate) trait CacheExt: Cache {
     fn add_any<A: Storable>(&self, id: &str, asset: A) -> CacheEntryInner {
         let id = SharedString::from(id);
         let entry = CacheEntry::new(asset, id.clone());
-        let key = OwnedKey::new::<A>(id);
 
-        self.assets().insert(key, entry)
+        self.assets().insert(id, TypeId::of::<A>(), entry)
     }
 
     fn _get_or_insert<A: Storable>(&self, id: &str, default: A) -> Handle<A> {

@@ -15,7 +15,7 @@ use crate::{
 #[cfg(doc)]
 use crate::AssetGuard;
 
-use std::{fmt, io, path::Path};
+use std::{any::TypeId, fmt, io, path::Path};
 
 #[cfg(feature = "hot-reloading")]
 use crate::{
@@ -73,28 +73,33 @@ impl AssetMap {
         &mut self.shards[id]
     }
 
-    pub fn get_entry(&self, key: BorrowedKey) -> Option<CacheEntryInner> {
+    pub fn get_entry(&self, id: &str, type_id: TypeId) -> Option<CacheEntryInner> {
+        let key = BorrowedKey::new_with(id, type_id);
         let shard = self.get_shard(key).0.read();
         let entry = shard.get(&key as &dyn Key)?;
         unsafe { Some(entry.inner().extend_lifetime()) }
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub fn get_key_entry(&self, key: BorrowedKey) -> Option<(OwnedKey, CacheEntryInner)> {
+    pub fn get_key_entry(&self, id: &str, type_id: TypeId) -> Option<(OwnedKey, CacheEntryInner)> {
+        let key = BorrowedKey::new_with(id, type_id);
         let shard = self.get_shard(key).0.read();
         let (key, entry) = shard.get_key_value(&key as &dyn Key)?;
         unsafe { Some((key.clone(), entry.inner().extend_lifetime())) }
     }
 
-    pub fn insert(&self, key: OwnedKey, entry: CacheEntry) -> CacheEntryInner {
+    pub fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> CacheEntryInner {
+        let key = OwnedKey::new_with(id, type_id);
         let shard = &mut *self.get_shard(key.borrow()).0.write();
         let entry = shard.entry(key).or_insert(entry);
         unsafe { entry.inner().extend_lifetime() }
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub fn update_or_insert(&self, key: OwnedKey, value: Box<dyn AnyAsset>) {
+    pub fn update_or_insert(&self, id: SharedString, type_id: TypeId, value: Box<dyn AnyAsset>) {
         use std::collections::hash_map::Entry;
+
+        let key = OwnedKey::new_with(id, type_id);
         let shard = &mut *self.get_shard(key.borrow()).0.write();
 
         match shard.entry(key) {
@@ -106,18 +111,20 @@ impl AssetMap {
         }
     }
 
-    pub fn contains_key(&self, key: BorrowedKey) -> bool {
+    pub fn contains_key(&self, id: &str, type_id: TypeId) -> bool {
+        let key = BorrowedKey::new_with(id, type_id);
         let shard = self.get_shard(key).0.read();
         shard.contains_key(&key as &dyn Key)
     }
 
-    fn take(&mut self, key: BorrowedKey) -> Option<CacheEntry> {
+    fn take(&mut self, id: &str, type_id: TypeId) -> Option<CacheEntry> {
+        let key = BorrowedKey::new_with(id, type_id);
         self.get_shard_mut(key).0.get_mut().remove(&key as &dyn Key)
     }
 
     #[inline]
-    fn remove(&mut self, key: BorrowedKey) -> bool {
-        self.take(key).is_some()
+    fn remove(&mut self, id: &str, type_id: TypeId) -> bool {
+        self.take(id, type_id).is_some()
     }
 
     fn clear(&mut self) {
@@ -320,8 +327,7 @@ impl<S> AssetCache<S> {
     /// Returns `true` if the cache contains the specified asset.
     #[inline]
     pub fn contains<A: Storable>(&self, id: &str) -> bool {
-        let key = BorrowedKey::new::<A>(id);
-        self.assets.contains_key(key)
+        self.assets.contains_key(id, TypeId::of::<A>())
     }
 
     /// Removes an asset from the cache, and returns whether it was present in
@@ -331,8 +337,7 @@ impl<S> AssetCache<S> {
     /// any [`Handle`], [`AssetGuard`], etc when you call this function.
     #[inline]
     pub fn remove<A: Storable>(&mut self, id: &str) -> bool {
-        let key = BorrowedKey::new::<A>(id);
-        let removed = self.assets.remove(key);
+        let removed = self.assets.remove(id, TypeId::of::<A>());
 
         #[cfg(feature = "hot-reloading")]
         if let Some(reloader) = &self.reloader {
@@ -349,8 +354,7 @@ impl<S> AssetCache<S> {
     /// The corresponding asset is removed from the cache.
     #[inline]
     pub fn take<A: Storable>(&mut self, id: &str) -> Option<A> {
-        let key = BorrowedKey::new::<A>(id);
-        self.assets.take(key).map(|e| {
+        self.assets.take(id, TypeId::of::<A>()).map(|e| {
             let (asset, _id) = e.into_inner();
 
             #[cfg(feature = "hot-reloading")]
