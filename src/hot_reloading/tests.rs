@@ -36,6 +36,8 @@ macro_rules! test_scenario {
     ) => {
         #[test]
         fn $name() -> Res {
+            let _ = env_logger::try_init();
+
             let id = concat!("test.hot_asset.", $id);
             let cache = AssetCache::new("assets")?;
 

@@ -1,26 +1,27 @@
 //! Definition of the cache
 
 use crate::{
+    anycache::{CacheExt, CacheWithSourceExt, RawCache, RawCacheWithSource},
     asset::{DirLoadable, Storable},
     dirs::DirHandle,
     entry::{CacheEntry, CacheEntryInner},
     error::ErrorKind,
     loader::Loader,
     source::{FileSystem, Source},
-    utils::{BorrowedKey, HashMap, Key, OwnedKey, Private, RandomState, RwLock},
-    Asset, Compound, Error, Handle, SharedString,
+    utils::{BorrowedKey, HashMap, Key, OwnedKey, RandomState, RwLock},
+    AnyCache, Asset, Compound, Error, Handle,
 };
 
 #[cfg(doc)]
 use crate::AssetGuard;
 
-use std::{any::TypeId, fmt, io, path::Path};
+use std::{fmt, io, path::Path};
 
 #[cfg(feature = "hot-reloading")]
 use crate::{
     hot_reloading::{records, HotReloader},
     key::AnyAsset,
-    utils::HashSet,
+    SharedString,
 };
 
 // Make shards go to different cache lines to reduce contention
@@ -34,13 +35,13 @@ struct Shard(RwLock<HashMap<OwnedKey, CacheEntry>>);
 /// - Make a sharded lock map to reduce contention on the `RwLock` that guard
 ///   inner `HashMap`s.
 /// - Provide an interface with the minimum of generics to reduce compile times.
-pub(crate) struct Map {
+pub(crate) struct AssetMap {
     hash_builder: RandomState,
     shards: Box<[Shard]>,
 }
 
-impl Map {
-    fn new(min_shards: usize) -> Map {
+impl AssetMap {
+    fn new(min_shards: usize) -> AssetMap {
         let shards = min_shards.next_power_of_two();
 
         let hash_builder = RandomState::new();
@@ -48,7 +49,7 @@ impl Map {
             .map(|_| Shard(RwLock::new(HashMap::with_hasher(hash_builder.clone()))))
             .collect();
 
-        Map {
+        AssetMap {
             hash_builder,
             shards,
         }
@@ -85,7 +86,7 @@ impl Map {
         unsafe { Some((key.clone(), entry.inner().extend_lifetime())) }
     }
 
-    fn insert(&self, key: OwnedKey, entry: CacheEntry) -> CacheEntryInner {
+    pub fn insert(&self, key: OwnedKey, entry: CacheEntry) -> CacheEntryInner {
         let shard = &mut *self.get_shard(key.borrow()).0.write();
         let entry = shard.entry(key).or_insert(entry);
         unsafe { entry.inner().extend_lifetime() }
@@ -105,7 +106,7 @@ impl Map {
         }
     }
 
-    fn contains_key(&self, key: BorrowedKey) -> bool {
+    pub fn contains_key(&self, key: BorrowedKey) -> bool {
         let shard = self.get_shard(key).0.read();
         shard.contains_key(&key as &dyn Key)
     }
@@ -126,7 +127,7 @@ impl Map {
     }
 }
 
-impl fmt::Debug for Map {
+impl fmt::Debug for AssetMap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut map = f.debug_map();
 
@@ -196,12 +197,34 @@ impl fmt::Debug for Map {
 /// # }}
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub struct AssetCache<S: ?Sized = FileSystem> {
+pub struct AssetCache<S = FileSystem> {
     #[cfg(feature = "hot-reloading")]
     pub(crate) reloader: Option<HotReloader>,
 
-    pub(crate) assets: Map,
+    pub(crate) assets: AssetMap,
     source: S,
+}
+
+impl<S> RawCache for AssetCache<S> {
+    #[inline]
+    fn assets(&self) -> &crate::cache::AssetMap {
+        &self.assets
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    fn reloader(&self) -> Option<&HotReloader> {
+        self.reloader.as_ref()
+    }
+}
+
+impl<S: Source> RawCacheWithSource for AssetCache<S> {
+    type Source = S;
+
+    #[inline]
+    fn get_source(&self) -> &S {
+        &self.source
+    }
 }
 
 impl AssetCache<FileSystem> {
@@ -223,11 +246,11 @@ impl<S: Source> AssetCache<S> {
     ///
     /// If hot-reloading fails to start, an error is logged.
     pub fn with_source(source: S) -> AssetCache<S> {
-        AssetCache {
+        Self {
             #[cfg(feature = "hot-reloading")]
             reloader: HotReloader::make(&source),
 
-            assets: Map::new(32),
+            assets: AssetMap::new(32),
             source,
         }
     }
@@ -236,29 +259,19 @@ impl<S: Source> AssetCache<S> {
 impl<S> AssetCache<S> {
     /// Creates a cache that loads assets from the given source.
     pub fn without_hot_reloading(source: S) -> AssetCache<S> {
-        AssetCache {
+        Self {
             #[cfg(feature = "hot-reloading")]
             reloader: None,
 
-            assets: Map::new(32),
+            assets: AssetMap::new(32),
             source,
         }
     }
-}
 
-impl<S> AssetCache<S>
-where
-    S: ?Sized,
-{
     /// Returns a reference to the cache's [`Source`].
     #[inline]
     pub fn source(&self) -> &S {
         &self.source
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    fn id(&self) -> usize {
-        self as *const Self as *const () as usize
     }
 
     /// Temporarily prevent `Compound` dependencies to be recorded.
@@ -284,36 +297,6 @@ where
         }
     }
 
-    /// Adds an asset to the cache.
-    ///
-    /// This function does not not have the asset kind as generic parameter to
-    /// reduce monomorphisation.
-    #[cold]
-    fn add_asset(
-        &self,
-        id: &str,
-        type_id: TypeId,
-        load: fn(&Self, SharedString) -> Result<CacheEntry, Error>,
-    ) -> Result<CacheEntryInner, Error> {
-        log::trace!("Loading \"{}\"", id);
-
-        let id = SharedString::from(id);
-        let entry = load(self, id.clone())?;
-        let key = OwnedKey::new_with(id, type_id);
-
-        Ok(self.assets.insert(key, entry))
-    }
-
-    /// Adds any value to the cache.
-    #[cold]
-    fn add_any<A: Storable>(&self, id: &str, asset: A) -> CacheEntryInner {
-        let id = SharedString::from(id);
-        let entry = CacheEntry::new(asset, id.clone());
-        let key = OwnedKey::new::<A>(id);
-
-        self.assets.insert(key, entry)
-    }
-
     /// Gets a value from the cache.
     ///
     /// The value does not have to be an asset, but if it is not, its type must
@@ -323,38 +306,7 @@ where
     /// is not found in the cache.
     #[inline]
     pub fn get_cached<A: Storable>(&self, id: &str) -> Option<Handle<A>> {
-        Some(self.get_cached_entry::<A>(id)?.handle())
-    }
-
-    #[inline]
-    fn get_cached_entry<A: Storable>(&self, id: &str) -> Option<CacheEntryInner> {
-        self.get_cached_entry_inner(id, TypeId::of::<A>(), A::HOT_RELOADED)
-    }
-
-    fn get_cached_entry_inner(
-        &self,
-        id: &str,
-        type_id: TypeId,
-        _hot_reloaded: bool,
-    ) -> Option<CacheEntryInner> {
-        let key = BorrowedKey::new_with(id, type_id);
-
-        #[cfg(not(feature = "hot-reloading"))]
-        {
-            self.assets.get_entry(key)
-        }
-
-        #[cfg(feature = "hot-reloading")]
-        if _hot_reloaded {
-            let (key, entry) = match self.assets.get_key_entry(key) {
-                Some((key, entry)) => (key, Some(entry)),
-                None => (key.to_owned(), None),
-            };
-            records::add_record(self.id(), key);
-            entry
-        } else {
-            self.assets.get_entry(key)
-        }
+        self._get_cached(id)
     }
 
     /// Gets a value from the cache or inserts one.
@@ -362,12 +314,7 @@ where
     /// As for `get_cached`, non-assets types must be marked with [`Storable`].
     #[inline]
     pub fn get_or_insert<A: Storable>(&self, id: &str, default: A) -> Handle<A> {
-        let entry = match self.get_cached_entry::<A>(id) {
-            Some(entry) => entry,
-            None => self.add_any(id, default),
-        };
-
-        entry.handle()
+        self._get_or_insert(id, default)
     }
 
     /// Returns `true` if the cache contains the specified asset.
@@ -375,32 +322,6 @@ where
     pub fn contains<A: Storable>(&self, id: &str) -> bool {
         let key = BorrowedKey::new::<A>(id);
         self.assets.contains_key(key)
-    }
-
-    /// Loads an directory from the cache.
-    ///
-    /// This function does not attempt to load the it from the source if it is
-    /// not found in the cache.
-    #[inline]
-    pub fn get_cached_dir<A: DirLoadable>(
-        &self,
-        id: &str,
-        recursive: bool,
-    ) -> Option<DirHandle<A, S>> {
-        Some(if recursive {
-            let handle = self.get_cached(id)?;
-            DirHandle::new_rec(handle, self)
-        } else {
-            let handle = self.get_cached(id)?;
-            DirHandle::new(handle, self)
-        })
-    }
-
-    /// Returns `true` if the cache contains the specified directory with the
-    /// given `recursive` parameter.
-    #[inline]
-    pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
-        self.get_cached_dir::<A>(id, recursive).is_some()
     }
 
     /// Removes an asset from the cache, and returns whether it was present in
@@ -457,21 +378,12 @@ where
 
 impl<S> AssetCache<S>
 where
-    S: Source + ?Sized,
+    S: Source,
 {
-    #[cfg(feature = "hot-reloading")]
-    pub(crate) fn record_load<A: Compound>(
-        &self,
-        id: &str,
-    ) -> Result<(A, HashSet<OwnedKey>), crate::BoxedError> {
-        let (asset, records) = if self.reloader.is_some() {
-            let this = self as *const Self as *const () as usize;
-            records::record(this, || A::load(self, id))
-        } else {
-            (A::load(self, id), HashSet::new())
-        };
-
-        Ok((asset?, records))
+    /// TODO
+    #[inline]
+    pub fn as_any_cache(&self) -> AnyCache {
+        self._as_any_cache()
     }
 
     /// Loads an asset.
@@ -486,16 +398,7 @@ where
     /// - The asset has no extension
     #[inline]
     pub fn load<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
-        let entry = match self.get_cached_entry::<A>(id) {
-            Some(entry) => entry,
-            None => {
-                let load = A::_load_and_record_entry::<S, Private>;
-                let type_id = TypeId::of::<A>();
-                self.add_asset(id, type_id, load)?
-            }
-        };
-
-        Ok(entry.handle())
+        self._load(id)
     }
 
     /// Loads an asset and panic if an error happens.
@@ -508,21 +411,27 @@ where
     #[inline]
     #[track_caller]
     pub fn load_expect<A: Compound>(&self, id: &str) -> Handle<A> {
-        #[cold]
-        #[track_caller]
-        fn expect_failed(err: Error) -> ! {
-            panic!(
-                "Failed to load essential asset \"{}\": {}",
-                err.id(),
-                err.reason()
-            )
-        }
+        self._load_expect(id)
+    }
 
-        // Do not use `unwrap_or_else` as closures do not have #[track_caller]
-        match self.load(id) {
-            Ok(h) => h,
-            Err(err) => expect_failed(err),
-        }
+    /// Loads an directory from the cache.
+    ///
+    /// This function does not attempt to load the it from the source if it is
+    /// not found in the cache.
+    #[inline]
+    pub fn get_cached_dir<A: DirLoadable>(
+        &self,
+        id: &str,
+        recursive: bool,
+    ) -> Option<DirHandle<A>> {
+        self._get_cached_dir(id, recursive)
+    }
+
+    /// Returns `true` if the cache contains the specified directory with the
+    /// given `recursive` parameter.
+    #[inline]
+    pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
+        self.get_cached_dir::<A>(id, recursive).is_some()
     }
 
     /// Loads all assets of a given type from a directory.
@@ -547,14 +456,8 @@ where
         &self,
         id: &str,
         recursive: bool,
-    ) -> Result<DirHandle<A, S>, Error> {
-        Ok(if recursive {
-            let handle = self.load(id)?;
-            DirHandle::new_rec(handle, self)
-        } else {
-            let handle = self.load(id)?;
-            DirHandle::new(handle, self)
-        })
+    ) -> Result<DirHandle<A>, Error> {
+        self._load_dir(id, recursive)
     }
 
     /// Loads an owned version of an asset
@@ -567,16 +470,7 @@ where
     /// This can be useful if you need ownership on a non-clonable value.
     #[inline]
     pub fn load_owned<A: Compound>(&self, id: &str) -> Result<A, Error> {
-        let id = SharedString::from(id);
-        let asset = A::_load_and_record::<S, Private>(self, &id);
-
-        #[cfg(feature = "hot-reloading")]
-        if A::HOT_RELOADED {
-            let key = OwnedKey::new::<A>(id);
-            records::add_record(self.id(), key);
-        }
-
-        asset
+        self._load_owned(id)
     }
 }
 
@@ -604,7 +498,7 @@ where
     #[inline]
     pub fn hot_reload(&self) {
         if let Some(reloader) = &self.reloader {
-            reloader.reload(self);
+            reloader.reload(&self.assets);
         }
     }
 
@@ -626,15 +520,12 @@ where
     #[inline]
     pub fn enhance_hot_reloading(&'static self) {
         if let Some(reloader) = &self.reloader {
-            reloader.send_static(self);
+            reloader.send_static(&self.assets);
         }
     }
 }
 
-impl<S> fmt::Debug for AssetCache<S>
-where
-    S: ?Sized,
-{
+impl<S> fmt::Debug for AssetCache<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AssetCache")
             .field("assets", &self.assets)

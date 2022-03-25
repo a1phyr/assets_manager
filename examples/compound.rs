@@ -1,7 +1,7 @@
 //! This example shows the use of Compound assets: assets able to load other
 //! assets, and their integration with hot-reloading.
 
-use assets_manager::{loader, source, Asset, AssetCache, BoxedError, Compound};
+use assets_manager::{loader, AnyCache, Asset, AssetCache, BoxedError, Compound};
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -53,10 +53,7 @@ struct Level {
 /// a Compound depends on. When a dependency is reloading, the Coumpound is also
 /// reloaded. You don't have to write hot-reloading-specific code.
 impl Compound for Level {
-    fn load<S: source::Source + ?Sized>(
-        cache: &AssetCache<S>,
-        id: &str,
-    ) -> Result<Self, BoxedError> {
+    fn load(cache: AnyCache, id: &str) -> Result<Self, BoxedError> {
         // Load the manifest
         let raw_level = cache.load::<LevelManifest>(id)?.read();
 

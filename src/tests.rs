@@ -35,7 +35,7 @@ impl asset::NotHotReloaded for XS {}
 pub struct Y(pub i32);
 
 impl Compound for Y {
-    fn load<S: source::Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Y, BoxedError> {
+    fn load(cache: AnyCache, id: &str) -> Result<Y, BoxedError> {
         Ok(Y(cache.load::<X>(id)?.read().0))
     }
 }
@@ -43,7 +43,7 @@ impl Compound for Y {
 pub struct Z(pub i32);
 
 impl Compound for Z {
-    fn load<S: source::Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Z, BoxedError> {
+    fn load(cache: AnyCache, id: &str) -> Result<Z, BoxedError> {
         Ok(Z(cache.load::<Y>(id)?.read().0))
     }
 }
@@ -68,13 +68,6 @@ mod asset_cache {
     fn new_with_valid_file() {
         let cache = AssetCache::new("src/lib.rs");
         assert!(cache.is_err());
-    }
-
-    #[test]
-    fn dyn_source() {
-        let cache = AssetCache::new("assets").unwrap();
-        let cache: &AssetCache<dyn crate::source::Source> = &cache;
-        cache.load_expect::<X>("test.cache");
     }
 
     #[test]

@@ -2,7 +2,7 @@ use crate::utils::{HashMap, HashSet, OwnedKey};
 
 use std::collections::hash_map::Entry;
 
-use super::{paths::ReloadFn, DynAssetCache};
+use super::paths::ReloadFn;
 
 struct AssetDeps {
     reload: Option<ReloadFn>,
@@ -115,7 +115,7 @@ impl AssetDepGraph {
         AssetDepGraph(sort.list)
     }
 
-    pub fn update(&self, deps: &mut Dependencies, cache: &DynAssetCache) {
+    pub fn update(&self, deps: &mut Dependencies, cache: crate::AnyCache) {
         for key in self.0.iter().rev() {
             if let Some(entry) = deps.0.get_mut(key) {
                 if let Some(reload) = entry.reload {

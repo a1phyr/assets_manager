@@ -1,6 +1,6 @@
 use crate::{
     source::{DirEntry, Source},
-    Asset, AssetCache, BoxedError, Compound, Error, Handle, SharedString,
+    AnyCache, Asset, BoxedError, Compound, Error, Handle, SharedString,
 };
 
 use std::{fmt, io, marker::PhantomData};
@@ -21,7 +21,7 @@ use std::{fmt, io, marker::PhantomData};
 /// ```no_run
 /// # cfg_if::cfg_if! { if #[cfg(all(feature = "json", feature = "flac"))] {
 /// use assets_manager::{
-///     Compound, BoxedError, AssetCache, SharedString,
+///     Compound, BoxedError, AnyCache, SharedString,
 ///     asset::{DirLoadable, Json, Flac},
 ///     source::{DirEntry, Source},
 /// };
@@ -33,7 +33,7 @@ use std::{fmt, io, marker::PhantomData};
 ///
 /// // Specify how to load a playlist
 /// impl Compound for Playlist {
-///     fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, BoxedError> {
+///     fn load(cache: AnyCache, id: &str) -> Result<Self, BoxedError> {
 ///         // Read the manifest (a list of ids)
 ///         let manifest = cache.load::<Json<Vec<String>>>(id)?.read();
 ///
@@ -122,9 +122,9 @@ impl<A> Compound for CachedDir<A>
 where
     A: DirLoadable,
 {
-    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, BoxedError> {
+    fn load(cache: crate::AnyCache, id: &str) -> Result<Self, BoxedError> {
         let mut ids =
-            A::select_ids(cache.source(), id).map_err(|err| Error::from_io(id.into(), err))?;
+            A::select_ids(&cache.source(), id).map_err(|err| Error::from_io(id.into(), err))?;
 
         // Remove duplicated entries
         ids.sort_unstable();
@@ -157,7 +157,7 @@ impl<A> Compound for CachedRecDir<A>
 where
     A: DirLoadable,
 {
-    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, BoxedError> {
+    fn load(cache: crate::AnyCache, id: &str) -> Result<Self, BoxedError> {
         // Load the current directory
         let this = cache.load::<CachedDir<A>>(id)?;
         let mut ids = this.get().ids.clone();
@@ -228,24 +228,23 @@ where
 /// A handle on a asset directory.
 ///
 /// This type provides methods to access assets within a directory.
-pub struct DirHandle<'a, A, S: ?Sized> {
+pub struct DirHandle<'a, A> {
     inner: DirHandleInner<'a, A>,
-    cache: &'a AssetCache<S>,
+    cache: AnyCache<'a>,
 }
 
-impl<'a, A, S> DirHandle<'a, A, S>
+impl<'a, A> DirHandle<'a, A>
 where
     A: DirLoadable,
-    S: ?Sized,
 {
     #[inline]
-    pub(crate) fn new(handle: Handle<'a, CachedDir<A>>, cache: &'a AssetCache<S>) -> Self {
+    pub(crate) fn new(handle: Handle<'a, CachedDir<A>>, cache: AnyCache<'a>) -> Self {
         let inner = DirHandleInner::Simple(handle);
         DirHandle { inner, cache }
     }
 
     #[inline]
-    pub(crate) fn new_rec(handle: Handle<'a, CachedRecDir<A>>, cache: &'a AssetCache<S>) -> Self {
+    pub(crate) fn new_rec(handle: Handle<'a, CachedRecDir<A>>, cache: AnyCache<'a>) -> Self {
         let inner = DirHandleInner::Recursive(handle);
         DirHandle { inner, cache }
     }
@@ -275,10 +274,9 @@ where
     }
 }
 
-impl<'a, A, S> DirHandle<'a, A, S>
+impl<'a, A> DirHandle<'a, A>
 where
     A: DirLoadable,
-    S: Source + ?Sized,
 {
     /// Returns an iterator over the assets in the directory.
     ///
@@ -293,18 +291,17 @@ where
     }
 }
 
-impl<A, S: ?Sized> Clone for DirHandle<'_, A, S> {
+impl<A> Clone for DirHandle<'_, A> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<A, S: ?Sized> Copy for DirHandle<'_, A, S> {}
+impl<A> Copy for DirHandle<'_, A> {}
 
-impl<A, S> fmt::Debug for DirHandle<'_, A, S>
+impl<A> fmt::Debug for DirHandle<'_, A>
 where
     A: DirLoadable,
-    S: ?Sized,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DirHandle")

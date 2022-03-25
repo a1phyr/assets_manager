@@ -175,8 +175,11 @@
 
 extern crate self as assets_manager;
 
+mod anycache;
+pub use anycache::AnyCache;
+
 pub mod asset;
-pub use asset::{Asset, Compound};
+pub use asset::{Asset, Compound, Storable};
 
 mod cache;
 pub use cache::AssetCache;

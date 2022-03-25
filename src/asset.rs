@@ -46,7 +46,7 @@ use crate::{
     loader,
     source::Source,
     utils::{PrivateMarker, SharedBytes, SharedString},
-    AssetCache, BoxedError, Error,
+    AnyCache, AssetCache, BoxedError, Error,
 };
 
 #[cfg(feature = "rodio")]
@@ -221,20 +221,20 @@ pub trait Compound: Sized + Send + Sync + 'static {
     ///
     /// This function should not perform any kind of I/O: such concern should be
     /// delegated to [`Asset`]s.
-    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, BoxedError>;
+    fn load(cache: AnyCache, id: &str) -> Result<Self, BoxedError>;
 
     /// Loads an asset and registers it for hot-reloading if necessary.
     ///
     /// This method is a internal implementation detail.
     #[doc(hidden)]
-    fn _load_and_record<S: Source + ?Sized, P: PrivateMarker>(
-        cache: &AssetCache<S>,
+    fn _load_and_record<P: PrivateMarker>(
+        cache: AnyCache,
         id: &SharedString,
     ) -> Result<Self, Error> {
         #[cfg(feature = "hot-reloading")]
         let res = if Self::HOT_RELOADED {
             cache.record_load(id).map(|(asset, deps)| {
-                if let Some(reloader) = &cache.reloader {
+                if let Some(reloader) = cache.reloader() {
                     reloader.add_compound::<Self>(id.clone(), deps);
                 }
                 asset
@@ -250,11 +250,11 @@ pub trait Compound: Sized + Send + Sync + 'static {
     }
 
     #[doc(hidden)]
-    fn _load_and_record_entry<S: Source + ?Sized, P: PrivateMarker>(
-        cache: &AssetCache<S>,
+    fn _load_and_record_entry<P: PrivateMarker>(
+        cache: AnyCache,
         id: SharedString,
     ) -> Result<CacheEntry, Error> {
-        let asset = Self::_load_and_record::<S, P>(cache, &id)?;
+        let asset = Self::_load_and_record::<P>(cache, &id)?;
         Ok(CacheEntry::new(asset, id))
     }
 
@@ -274,20 +274,20 @@ where
     A: Asset,
 {
     #[inline]
-    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, BoxedError> {
-        Ok(load_from_source(cache.source(), id)?)
+    fn load(cache: AnyCache, id: &str) -> Result<Self, BoxedError> {
+        Ok(load_from_source(&cache.source(), id)?)
     }
 
     #[doc(hidden)]
-    fn _load_and_record<S: Source + ?Sized, P: PrivateMarker>(
-        cache: &AssetCache<S>,
+    fn _load_and_record<P: PrivateMarker>(
+        cache: AnyCache,
         id: &SharedString,
     ) -> Result<Self, Error> {
-        let asset = load_from_source(cache.source(), id)?;
+        let asset = load_from_source(&cache.source(), id)?;
 
         #[cfg(feature = "hot-reloading")]
         if A::HOT_RELOADED {
-            if let Some(reloader) = &cache.reloader {
+            if let Some(reloader) = cache.reloader() {
                 reloader.add_asset::<Self>(id.clone());
             }
         }
@@ -307,7 +307,7 @@ impl<A> Compound for Arc<A>
 where
     A: Compound,
 {
-    fn load<S: Source + ?Sized>(cache: &AssetCache<S>, id: &str) -> Result<Self, BoxedError> {
+    fn load(cache: AnyCache, id: &str) -> Result<Self, BoxedError> {
         let asset = cache.load_owned::<A>(id)?;
         Ok(Arc::new(asset))
     }

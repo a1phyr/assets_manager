@@ -28,13 +28,11 @@ use crate::{
     asset::Storable,
     source::Source,
     utils::{Condvar, HashSet, Mutex, OwnedKey},
-    AssetCache, SharedString,
+    SharedString,
 };
 
 pub use crate::key::{AssetKey, AssetType};
 pub use watcher::FsWatcherBuilder;
-
-type DynAssetCache = crate::AssetCache<dyn crate::source::Source>;
 
 /// A message with an update of the state of the [`AssetCache`].
 #[non_exhaustive]
@@ -51,13 +49,13 @@ pub enum UpdateMessage {
 }
 
 enum CacheMessage {
-    Ptr(NonNull<AssetCache<dyn Source + Sync>>, usize),
-    Static(&'static AssetCache<dyn Source + Sync>),
+    Ptr(NonNull<crate::cache::AssetMap>, NonNull<HotReloader>, usize),
+    Static(&'static crate::cache::AssetMap, &'static HotReloader),
 
     Clear,
     AddCompound(CompoundReloadInfos),
 }
-unsafe impl Send for CacheMessage where AssetCache<dyn Source + Sync>: Sync {}
+unsafe impl Send for CacheMessage where crate::cache::AssetMap: Sync {}
 
 /// An error returned when an end of a channel was disconnected.
 #[derive(Debug)]
@@ -255,21 +253,24 @@ impl HotReloader {
         let _ = self.updates.send_update(UpdateMessage::Clear);
     }
 
-    pub(crate) fn reload(&self, cache: &AssetCache<dyn Source + Sync + '_>) {
-        // Lifetime magic: make the compiler think that the `Source` actually
-        // lives for 'static
-        // This is sound because all other references do not exist anymore when
-        // this function exists
-        let ptr = unsafe { std::mem::transmute(NonNull::from(cache)) };
+    pub(crate) fn reload(&self, map: &crate::cache::AssetMap) {
         let token = self.answers.get_unique_token();
-        if self.sender.send(CacheMessage::Ptr(ptr, token)).is_ok() {
+        if self
+            .sender
+            .send(CacheMessage::Ptr(
+                NonNull::from(map),
+                NonNull::from(self),
+                token,
+            ))
+            .is_ok()
+        {
             // When the hot-reloading thread is done, it sends back our back our token
             self.answers.wait_for_answer(token);
         }
     }
 
-    pub(crate) fn send_static(&self, cache: &'static AssetCache<dyn Source + Sync>) {
-        let _ = self.sender.send(CacheMessage::Static(cache));
+    pub(crate) fn send_static(&'static self, map: &'static crate::cache::AssetMap) {
+        let _ = self.sender.send(CacheMessage::Static(map, self));
     }
 }
 
@@ -297,13 +298,17 @@ fn hot_reloading_thread(
         let ready = select.select();
         match ready.index() {
             0 => match ready.recv(&cache_msg) {
-                Ok(CacheMessage::Ptr(ptr, token)) => {
+                Ok(CacheMessage::Ptr(ptr, reloader, token)) => {
                     // Safety: The received pointer is guaranteed to
                     // be valid until we reply back
-                    cache.update_if_local(unsafe { ptr.as_ref() });
+                    unsafe {
+                        cache.update_if_local(ptr.as_ref(), reloader.as_ref());
+                    }
                     answers.notify(token);
                 }
-                Ok(CacheMessage::Static(asset_cache)) => cache.use_static_ref(asset_cache),
+                Ok(CacheMessage::Static(asset_cache, reloader)) => {
+                    cache.use_static_ref(asset_cache, reloader)
+                }
                 Ok(CacheMessage::Clear) => cache.clear_local_cache(),
                 Ok(CacheMessage::AddCompound(infos)) => cache.add_compound(infos),
                 Err(_) => (),
