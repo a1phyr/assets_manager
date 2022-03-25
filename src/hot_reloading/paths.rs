@@ -2,13 +2,13 @@ use crate::{
     cache::AssetMap,
     key::AnyAsset,
     source::Source,
-    utils::{HashMap, HashSet, OwnedKey},
+    utils::{HashMap, OwnedKey},
     AnyCache, Compound, SharedString,
 };
 
-use super::dependencies::Dependencies;
+use super::{dependencies::DepsGraph, records::Dependencies};
 
-pub(crate) type ReloadFn = fn(cache: AnyCache, id: &str) -> Option<HashSet<OwnedKey>>;
+pub(crate) type ReloadFn = fn(cache: AnyCache, id: &str) -> Option<Dependencies>;
 
 #[derive(Clone, Copy)]
 struct BorrowedCache<'a> {
@@ -54,7 +54,7 @@ impl<'a> BorrowedCache<'a> {
 }
 
 #[allow(clippy::redundant_closure)]
-fn reload<T: Compound>(cache: AnyCache, id: &str) -> Option<HashSet<OwnedKey>> {
+fn reload<T: Compound>(cache: AnyCache, id: &str) -> Option<Dependencies> {
     let handle = cache.get_cached::<T>(id)?;
 
     match cache.record_load::<T>(id) {
@@ -70,11 +70,11 @@ fn reload<T: Compound>(cache: AnyCache, id: &str) -> Option<HashSet<OwnedKey>> {
     }
 }
 
-pub(crate) struct CompoundReloadInfos(OwnedKey, HashSet<OwnedKey>, ReloadFn);
+pub(crate) struct CompoundReloadInfos(OwnedKey, Dependencies, ReloadFn);
 
 impl CompoundReloadInfos {
     #[inline]
-    pub(crate) fn of<A: Compound>(id: SharedString, deps: HashSet<OwnedKey>) -> Self {
+    pub(crate) fn of<A: Compound>(id: SharedString, deps: Dependencies) -> Self {
         let key = OwnedKey::new::<A>(id);
         Self(key, deps, reload::<A>)
     }
@@ -117,7 +117,7 @@ impl CacheKind {
 pub(super) struct HotReloadingData {
     source: Box<dyn Source>,
     cache: CacheKind,
-    deps: Dependencies,
+    deps: DepsGraph,
 }
 
 impl HotReloadingData {
@@ -129,7 +129,7 @@ impl HotReloadingData {
         HotReloadingData {
             source,
             cache: CacheKind::Local(cache),
-            deps: Dependencies::new(),
+            deps: DepsGraph::new(),
         }
     }
 
@@ -189,7 +189,7 @@ impl HotReloadingData {
 impl LocalCache {
     /// Update the `AssetCache` with data collected in the `LocalCache` since
     /// the last reload.
-    fn update(&mut self, deps: &mut Dependencies, cache: BorrowedCache) {
+    fn update(&mut self, deps: &mut DepsGraph, cache: BorrowedCache) {
         let to_update =
             super::dependencies::AssetDepGraph::new(deps, self.changed.iter().map(|(k, _)| k));
 

@@ -24,10 +24,7 @@ use crate::{
 };
 
 #[cfg(feature = "hot-reloading")]
-use crate::{
-    hot_reloading::{records, HotReloader},
-    utils::HashSet,
-};
+use crate::hot_reloading::{records, Dependencies, HotReloader};
 
 /// TODO
 #[derive(Clone, Copy)]
@@ -136,11 +133,11 @@ impl<'a> AnyCache<'a> {
     pub(crate) fn record_load<A: Compound>(
         self,
         id: &str,
-    ) -> Result<(A, HashSet<OwnedKey>), crate::BoxedError> {
+    ) -> Result<(A, Dependencies), crate::BoxedError> {
         let (asset, records) = if let Some(reloader) = self.reloader() {
             records::record(reloader, || A::load(self, id))
         } else {
-            (A::load(self, id), HashSet::new())
+            (A::load(self, id), Dependencies::empty())
         };
 
         Ok((asset?, records))

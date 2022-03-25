@@ -3,22 +3,41 @@ use std::{cell::Cell, ptr::NonNull};
 
 use super::HotReloader;
 
+pub(crate) struct Dependencies(HashSet<OwnedKey>);
+
+impl Dependencies {
+    #[inline]
+    pub fn empty() -> Self {
+        Self(HashSet::new())
+    }
+
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = &OwnedKey> {
+        self.0.iter()
+    }
+
+    #[inline]
+    pub fn difference<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = &OwnedKey> + 'a {
+        self.0.difference(&other.0)
+    }
+}
+
 struct Record {
     reloader: *const HotReloader,
-    records: HashSet<OwnedKey>,
+    records: Dependencies,
 }
 
 impl Record {
     fn new(reloader: &HotReloader) -> Record {
         Record {
             reloader,
-            records: HashSet::new(),
+            records: Dependencies::empty(),
         }
     }
 
     fn insert(&mut self, reloader: &HotReloader, key: OwnedKey) {
         if self.reloader == reloader {
-            self.records.insert(key);
+            self.records.0.insert(key);
         }
     }
 }
@@ -46,7 +65,7 @@ thread_local! {
     static RECORDING: Cell<Option<NonNull<Record>>> = Cell::new(None);
 }
 
-pub(crate) fn record<F: FnOnce() -> T, T>(reloader: &HotReloader, f: F) -> (T, HashSet<OwnedKey>) {
+pub(crate) fn record<F: FnOnce() -> T, T>(reloader: &HotReloader, f: F) -> (T, Dependencies) {
     RECORDING.with(|rec| {
         let mut record = Record::new(reloader);
         let _guard = CellGuard::replace(rec, Some(NonNull::from(&mut record)));

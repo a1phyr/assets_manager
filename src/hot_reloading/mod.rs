@@ -27,12 +27,14 @@ use std::{
 use crate::{
     asset::Storable,
     source::Source,
-    utils::{Condvar, HashSet, Mutex, OwnedKey},
+    utils::{Condvar, Mutex},
     SharedString,
 };
 
 pub use crate::key::{AssetKey, AssetType};
 pub use watcher::FsWatcherBuilder;
+
+pub(crate) use records::Dependencies;
 
 /// A message with an update of the state of the [`AssetCache`].
 #[non_exhaustive]
@@ -239,11 +241,7 @@ impl HotReloader {
         }
     }
 
-    pub(crate) fn add_compound<A: crate::Compound>(
-        &self,
-        id: SharedString,
-        deps: HashSet<OwnedKey>,
-    ) {
+    pub(crate) fn add_compound<A: crate::Compound>(&self, id: SharedString, deps: Dependencies) {
         let infos = CompoundReloadInfos::of::<A>(id, deps);
         let _ = self.sender.send(CacheMessage::AddCompound(infos));
     }

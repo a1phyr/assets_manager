@@ -1,27 +1,25 @@
+use super::{paths::ReloadFn, Dependencies};
 use crate::utils::{HashMap, HashSet, OwnedKey};
-
 use std::collections::hash_map::Entry;
-
-use super::paths::ReloadFn;
 
 struct AssetDeps {
     reload: Option<ReloadFn>,
     rdeps: HashSet<OwnedKey>,
-    deps: HashSet<OwnedKey>,
+    deps: Dependencies,
 }
 
 impl Default for AssetDeps {
     fn default() -> Self {
         AssetDeps {
             reload: None,
-            deps: HashSet::new(),
+            deps: Dependencies::empty(),
             rdeps: HashSet::new(),
         }
     }
 }
 
 impl AssetDeps {
-    fn new(reload: Option<ReloadFn>, deps: HashSet<OwnedKey>) -> Self {
+    fn new(reload: Option<ReloadFn>, deps: Dependencies) -> Self {
         AssetDeps {
             reload,
             deps,
@@ -30,19 +28,14 @@ impl AssetDeps {
     }
 }
 
-pub(crate) struct Dependencies(HashMap<OwnedKey, AssetDeps>);
+pub(crate) struct DepsGraph(HashMap<OwnedKey, AssetDeps>);
 
-impl Dependencies {
+impl DepsGraph {
     pub fn new() -> Self {
-        Dependencies(HashMap::new())
+        DepsGraph(HashMap::new())
     }
 
-    pub fn insert(
-        &mut self,
-        asset_key: OwnedKey,
-        deps: HashSet<OwnedKey>,
-        reload: Option<ReloadFn>,
-    ) {
+    pub fn insert(&mut self, asset_key: OwnedKey, deps: Dependencies, reload: Option<ReloadFn>) {
         for key in deps.iter() {
             let entry = self.0.entry(key.clone()).or_insert_with(AssetDeps::default);
             entry.rdeps.insert(asset_key.clone());
@@ -76,7 +69,7 @@ struct TopologicalSortData {
     list: Vec<OwnedKey>,
 }
 
-fn visit(dep_graph: &Dependencies, sort: &mut TopologicalSortData, key: &OwnedKey, add_self: bool) {
+fn visit(dep_graph: &DepsGraph, sort: &mut TopologicalSortData, key: &OwnedKey, add_self: bool) {
     if sort.visited.contains(key) {
         return;
     }
@@ -99,10 +92,7 @@ fn visit(dep_graph: &Dependencies, sort: &mut TopologicalSortData, key: &OwnedKe
 pub(crate) struct AssetDepGraph(Vec<OwnedKey>);
 
 impl AssetDepGraph {
-    pub fn new<'a, I: IntoIterator<Item = &'a OwnedKey>>(
-        dep_graph: &Dependencies,
-        iter: I,
-    ) -> Self {
+    pub fn new<'a, I: IntoIterator<Item = &'a OwnedKey>>(dep_graph: &DepsGraph, iter: I) -> Self {
         let mut sort = TopologicalSortData {
             visited: HashSet::new(),
             list: Vec::new(),
@@ -115,7 +105,7 @@ impl AssetDepGraph {
         AssetDepGraph(sort.list)
     }
 
-    pub fn update(&self, deps: &mut Dependencies, cache: crate::AnyCache) {
+    pub fn update(&self, deps: &mut DepsGraph, cache: crate::AnyCache) {
         for key in self.0.iter().rev() {
             if let Some(entry) = deps.0.get_mut(key) {
                 if let Some(reload) = entry.reload {
