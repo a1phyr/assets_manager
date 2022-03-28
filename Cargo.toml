@@ -68,7 +68,7 @@ serde_ron = {version = "0.7", package = "ron", optional = true}
 serde_toml = {version = "0.5", package = "toml", optional = true}
 serde_yaml = {version = "0.8.4", optional = true}
 
-rodio = {version = "0.14", default-features = false, optional = true}
+rodio = {version = "0.15", default-features = false, optional = true}
 image = {version = "0.24", default-features = false, optional = true}
 ab_glyph = {version = "0.2.12", optional = true}
 

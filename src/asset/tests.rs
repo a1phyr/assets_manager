@@ -4,13 +4,13 @@ use crate::*;
 macro_rules! sound_test {
     (
         $(
-            #[cfg(feature = $feat:literal)]
+            $( #[$attr:meta] )*
             $name:ident => $kind:path,
         )*
     ) => {
         $(
             #[test]
-            #[cfg(feature = $feat)]
+            $( #[$attr] )*
             fn $name() {
                 let cache = AssetCache::new("assets").unwrap();
                 assert!(cache.load::<$kind>("test.sounds.silence").is_ok());
@@ -24,6 +24,7 @@ sound_test! {
     test_flac => asset::Flac,
 
     #[cfg(feature ="mp3")]
+    #[ignore = "Blocks on https://github.com/RustAudio/rodio/issues/411"]
     test_mp3 => asset::Mp3,
 
     #[cfg(feature ="vorbis")]

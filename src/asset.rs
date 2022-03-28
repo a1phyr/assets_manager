@@ -635,7 +635,10 @@ macro_rules! sound_assets {
                 /// Creates a new sound from raw bytes.
                 #[inline]
                 pub fn new(bytes: SharedBytes) -> Result<$name, DecoderError> {
-                    let _ = $decoder(io::Cursor::new(&bytes))?;
+                    // We have to clone the bytes here because `Decoder::new`
+                    // requires a 'static lifetime, but it should be cheap
+                    // anyway.
+                    let _ = $decoder(io::Cursor::new(bytes.clone()))?;
                     Ok($name(bytes))
                 }
 
