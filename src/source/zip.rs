@@ -211,7 +211,7 @@ fn register_file(
 /// **Warning**: This will clone the reader each time it is read, so you should
 /// ensure that is cheap to clone (eg *not* `Vec<u8>`).
 #[cfg_attr(docsrs, doc(cfg(feature = "zip")))]
-pub struct Zip<R> {
+pub struct Zip<R = SyncFile> {
     files: HashMap<FileDesc, usize>,
     dirs: HashMap<String, Vec<OwnedEntry>>,
     archive: ZipArchive<R>,
