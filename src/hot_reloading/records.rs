@@ -1,5 +1,5 @@
-use crate::utils::{HashSet, OwnedKey};
-use std::{cell::Cell, ptr::NonNull};
+use crate::utils::{HashSet, OwnedKey, SharedString};
+use std::{any::TypeId, cell::Cell, ptr::NonNull};
 
 use super::HotReloader;
 
@@ -81,11 +81,11 @@ pub(crate) fn no_record<F: FnOnce() -> T, T>(f: F) -> T {
     })
 }
 
-pub(crate) fn add_record(reloader: &HotReloader, key: OwnedKey) {
+pub(crate) fn add_record(reloader: &HotReloader, id: SharedString, type_id: TypeId) {
     RECORDING.with(|rec| {
         if let Some(mut recorder) = rec.get() {
             let recorder = unsafe { recorder.as_mut() };
-            recorder.insert(reloader, key);
+            recorder.insert(reloader, OwnedKey::new_with(id, type_id));
         }
     });
 }

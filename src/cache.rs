@@ -9,7 +9,7 @@ use crate::{
     loader::Loader,
     source::{FileSystem, Source},
     utils::{BorrowedKey, HashMap, Key, OwnedKey, RandomState, RwLock},
-    AnyCache, Asset, Compound, Error, Handle,
+    AnyCache, Asset, Compound, Error, Handle, SharedString,
 };
 
 #[cfg(doc)]
@@ -21,7 +21,6 @@ use std::{any::TypeId, fmt, io, path::Path};
 use crate::{
     hot_reloading::{records, HotReloader},
     key::AnyAsset,
-    SharedString,
 };
 
 // Make shards go to different cache lines to reduce contention

@@ -81,6 +81,7 @@ pub(crate) struct OwnedKey {
 impl OwnedKey {
     /// Creates a `OwnedKey` with the given type and id.
     #[inline]
+    #[allow(dead_code)]
     pub fn new<T: 'static>(id: SharedString) -> Self {
         Self {
             id,

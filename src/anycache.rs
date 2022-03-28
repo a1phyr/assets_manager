@@ -19,7 +19,7 @@ use crate::{
     cache::AssetMap,
     entry::{CacheEntry, CacheEntryInner},
     source::{DirEntry, Source},
-    utils::{OwnedKey, Private},
+    utils::Private,
     Compound, DirHandle, Error, Handle, SharedString, Storable,
 };
 
@@ -288,11 +288,11 @@ impl<T: RawCache> Cache for T {
         #[cfg(feature = "hot-reloading")]
         if _hot_reloaded {
             if let Some(reloader) = self.reloader() {
-                let (key, entry) = match self.assets().get_key_entry(id, type_id) {
-                    Some((key, entry)) => (key, Some(entry)),
-                    None => (OwnedKey::new_with(id.into(), type_id), None),
+                let (id, entry) = match self.assets().get_key_entry(id, type_id) {
+                    Some((key, entry)) => (key.id, Some(entry)),
+                    None => (id.into(), None),
                 };
-                records::add_record(reloader, key);
+                records::add_record(reloader, id, type_id);
                 return entry;
             }
         }
@@ -431,8 +431,7 @@ pub(crate) trait CacheWithSourceExt: CacheWithSource + CacheExt {
         #[cfg(feature = "hot-reloading")]
         if A::HOT_RELOADED {
             if let Some(reloader) = self.reloader() {
-                let key = OwnedKey::new::<A>(id);
-                records::add_record(reloader, key);
+                records::add_record(reloader, id, TypeId::of::<A>());
             }
         }
 
