@@ -434,7 +434,7 @@ where
     /// given `recursive` parameter.
     #[inline]
     pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
-        self.get_cached_dir::<A>(id, recursive).is_some()
+        self._contains_dir::<A>(id, recursive)
     }
 
     /// Loads all assets of a given type from a directory.

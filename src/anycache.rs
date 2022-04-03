@@ -100,6 +100,22 @@ impl<'a> AnyCache<'a> {
 
     /// TODO
     #[inline]
+    pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
+        self.cache._contains_dir::<A>(id, recursive)
+    }
+
+    /// TODO
+    #[inline]
+    pub fn get_cached_dir<A: DirLoadable>(
+        self,
+        id: &str,
+        recursive: bool,
+    ) -> Option<DirHandle<'a, A>> {
+        self.cache._get_cached_dir(id, recursive)
+    }
+
+    /// TODO
+    #[inline]
     pub fn load_dir<A: DirLoadable>(
         self,
         id: &str,
@@ -303,7 +319,6 @@ impl<T: RawCacheWithSource> CacheWithSource for T {
     fn load_owned_entry(&self, id: &str, typ: Type) -> Result<CacheEntry, Error> {
         let id = SharedString::from(id);
         let asset = crate::asset::load_and_record(self._as_any_cache(), &id, typ);
-        //A::_load_and_record::<Private>(self._as_any_cache(), &id);
 
         #[cfg(feature = "hot-reloading")]
         if typ.is_hot_reloaded() {
@@ -400,6 +415,15 @@ pub(crate) trait CacheWithSourceExt: CacheWithSource + CacheExt {
             let handle = self._load(id)?;
             DirHandle::new(handle, self._as_any_cache())
         })
+    }
+
+    #[inline]
+    fn _contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
+        if recursive {
+            self._contains::<crate::dirs::CachedRecDir<A>>(id)
+        } else {
+            self._contains::<crate::dirs::CachedDir<A>>(id)
+        }
     }
 
     #[inline]

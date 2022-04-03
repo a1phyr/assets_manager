@@ -65,7 +65,7 @@ use std::{fmt, io, marker::PhantomData};
 /// }
 /// # }}
 /// ```
-pub trait DirLoadable: Compound {
+pub trait DirLoadable: Send + Sync + 'static {
     /// Returns the ids of the assets contained in the directory given by `id`.
     ///
     /// Note that the order of the returned ids is not kept, and that redundant
@@ -260,7 +260,12 @@ where
     pub fn ids(self) -> impl ExactSizeIterator<Item = &'a str> {
         self.inner.ids().iter().map(|id| &**id)
     }
+}
 
+impl<'a, A> DirHandle<'a, A>
+where
+    A: DirLoadable + crate::Storable,
+{
     /// Returns an iterator over the assets in the directory.
     ///
     /// This fonction does not do any I/O and assets that previously failed to
@@ -276,7 +281,7 @@ where
 
 impl<'a, A> DirHandle<'a, A>
 where
-    A: DirLoadable,
+    A: DirLoadable + Compound,
 {
     /// Returns an iterator over the assets in the directory.
     ///
