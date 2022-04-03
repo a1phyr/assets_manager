@@ -1,6 +1,6 @@
 use crate::{
     source::DirEntry,
-    tests::{X, Y, Z},
+    tests::{X, XS, Y, Z},
     AssetCache,
 };
 use std::{borrow::Cow, fs::File, io, io::Write, path::Path, sync::Arc};
@@ -187,6 +187,7 @@ fn messages() {
 
             // Expected events, in reverse order
             let events = vec![
+                UpdateMessage::RemoveAsset(a_key.clone()),
                 UpdateMessage::AddAsset(a_key.clone()),
                 UpdateMessage::Clear,
                 UpdateMessage::AddAsset(a_key.clone()),
@@ -208,4 +209,9 @@ fn messages() {
     cache.load_expect::<X>("a");
     cache.clear();
     cache.load_expect::<X>("a");
+    assert!(cache.take::<X>("a").is_some());
+
+    // Make sure we don't send message for these ones
+    cache.load_expect::<XS>("c");
+    assert!(cache.remove::<XS>("c"));
 }

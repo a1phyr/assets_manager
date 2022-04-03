@@ -340,7 +340,7 @@ impl<S> AssetCache<S> {
 
         #[cfg(feature = "hot-reloading")]
         if let Some(reloader) = &self.reloader {
-            if removed {
+            if A::HOT_RELOADED && removed {
                 reloader.remove_asset::<A>(SharedString::from(id));
             }
         }
@@ -358,7 +358,9 @@ impl<S> AssetCache<S> {
 
             #[cfg(feature = "hot-reloading")]
             if let Some(reloader) = &self.reloader {
-                reloader.remove_asset::<A>(_id);
+                if A::HOT_RELOADED {
+                    reloader.remove_asset::<A>(_id);
+                }
             }
 
             asset

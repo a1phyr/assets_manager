@@ -254,20 +254,23 @@ pub(crate) fn load_and_record(
     typ: Type,
 ) -> Result<CacheEntry, Error> {
     #[cfg(feature = "hot-reloading")]
-    if let Some(reloader) = cache.reloader() {
-        match &typ.inner.typ {
-            crate::key::InnerType::Storable => (),
-            crate::key::InnerType::Asset(inner) => {
-                let asset = (typ.inner.load)(cache, id)?;
-                reloader.add_asset(id.clone(), crate::key::AssetType::new(typ.type_id, inner));
-                return Ok(asset);
-            }
-            crate::key::InnerType::Compound(inner) => {
-                let (entry, deps) =
-                    crate::hot_reloading::records::record(reloader, || (typ.inner.load)(cache, id));
-                let entry = entry?;
-                reloader.add_compound(id.clone(), deps, typ, inner.reload);
-                return Ok(entry);
+    if typ.is_hot_reloaded() {
+        if let Some(reloader) = cache.reloader() {
+            match &typ.inner.typ {
+                crate::key::InnerType::Storable => (),
+                crate::key::InnerType::Asset(inner) => {
+                    let asset = (typ.inner.load)(cache, id)?;
+                    reloader.add_asset(id.clone(), crate::key::AssetType::new(typ.type_id, inner));
+                    return Ok(asset);
+                }
+                crate::key::InnerType::Compound(inner) => {
+                    let (entry, deps) = crate::hot_reloading::records::record(reloader, || {
+                        (typ.inner.load)(cache, id)
+                    });
+                    let entry = entry?;
+                    reloader.add_compound(id.clone(), deps, typ, inner.reload);
+                    return Ok(entry);
+                }
             }
         }
     }
