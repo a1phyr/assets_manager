@@ -26,6 +26,7 @@ use std::{
 
 use crate::{
     asset::Storable,
+    key::Type,
     source::Source,
     utils::{Condvar, Mutex},
     SharedString,
@@ -35,6 +36,8 @@ pub use crate::key::{AssetKey, AssetType};
 pub use watcher::FsWatcherBuilder;
 
 pub(crate) use records::Dependencies;
+
+pub(crate) type ReloadFn = fn(cache: crate::AnyCache, id: &str) -> Option<Dependencies>;
 
 /// A message with an update of the state of the [`AssetCache`].
 #[non_exhaustive]
@@ -229,20 +232,26 @@ impl HotReloader {
     // without hot-reloading if it stopped, and an error should have already
     // been logged.
 
-    pub(crate) fn add_asset<A: crate::Asset>(&self, id: SharedString) {
-        let key = AssetKey::new::<A>(id);
+    pub(crate) fn add_asset(&self, id: SharedString, typ: AssetType) {
+        let key = AssetKey { id, typ };
         let _ = self.updates.send_update(UpdateMessage::AddAsset(key));
     }
 
     pub(crate) fn remove_asset<A: Storable>(&self, id: SharedString) {
-        if let Some(typ) = A::get_key::<crate::utils::Private>() {
+        if let Some(typ) = A::get_type::<crate::utils::Private>().to_asset_type() {
             let key = AssetKey { id, typ };
             let _ = self.updates.send_update(UpdateMessage::RemoveAsset(key));
         }
     }
 
-    pub(crate) fn add_compound<A: crate::Compound>(&self, id: SharedString, deps: Dependencies) {
-        let infos = CompoundReloadInfos::of::<A>(id, deps);
+    pub(crate) fn add_compound(
+        &self,
+        id: SharedString,
+        deps: Dependencies,
+        typ: Type,
+        reload_fn: ReloadFn,
+    ) {
+        let infos = CompoundReloadInfos::from_type(id, deps, typ, reload_fn);
         let _ = self.sender.send(CacheMessage::AddCompound(infos));
     }
 

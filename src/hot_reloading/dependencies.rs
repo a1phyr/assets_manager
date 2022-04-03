@@ -1,4 +1,4 @@
-use super::{paths::ReloadFn, Dependencies};
+use super::{Dependencies, ReloadFn};
 use crate::utils::{HashMap, HashSet, OwnedKey};
 use std::collections::hash_map::Entry;
 

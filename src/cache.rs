@@ -4,7 +4,7 @@ use crate::{
     anycache::{CacheExt, CacheWithSourceExt, RawCache, RawCacheWithSource},
     asset::{DirLoadable, Storable},
     dirs::DirHandle,
-    entry::{CacheEntry, CacheEntryInner},
+    entry::{CacheEntry, UntypedHandle},
     error::ErrorKind,
     loader::Loader,
     source::{FileSystem, Source},
@@ -72,7 +72,7 @@ impl AssetMap {
         &mut self.shards[id]
     }
 
-    pub fn get_entry(&self, id: &str, type_id: TypeId) -> Option<CacheEntryInner> {
+    pub fn get_entry(&self, id: &str, type_id: TypeId) -> Option<UntypedHandle> {
         let key = BorrowedKey::new_with(id, type_id);
         let shard = self.get_shard(key).0.read();
         let entry = shard.get(&key as &dyn Key)?;
@@ -80,14 +80,14 @@ impl AssetMap {
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub fn get_key_entry(&self, id: &str, type_id: TypeId) -> Option<(OwnedKey, CacheEntryInner)> {
+    pub fn get_key_entry(&self, id: &str, type_id: TypeId) -> Option<(OwnedKey, UntypedHandle)> {
         let key = BorrowedKey::new_with(id, type_id);
         let shard = self.get_shard(key).0.read();
         let (key, entry) = shard.get_key_value(&key as &dyn Key)?;
         unsafe { Some((key.clone(), entry.inner().extend_lifetime())) }
     }
 
-    pub fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> CacheEntryInner {
+    pub fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> UntypedHandle {
         let key = OwnedKey::new_with(id, type_id);
         let shard = &mut *self.get_shard(key.borrow()).0.write();
         let entry = shard.entry(key).or_insert(entry);

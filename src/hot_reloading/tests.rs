@@ -131,6 +131,7 @@ test_scenario! {
     type: Arc<X>,
     id: "g",
     start_value: 57,
+    not_loaded: X,
 }
 
 #[test]

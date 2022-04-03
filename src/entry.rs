@@ -40,9 +40,9 @@ pub(crate) struct DynamicInner<T> {
     reload: AtomicReloadId,
 }
 
+#[cfg(feature = "hot-reloading")]
 impl<T> DynamicInner<T> {
     #[inline]
-    #[cfg(feature = "hot-reloading")]
     fn new(value: T, id: SharedString) -> Self {
         Self {
             id,
@@ -60,24 +60,8 @@ impl<T> DynamicInner<T> {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct CacheEntryInner<'a>(&'a (dyn Any + Send + Sync));
-
-impl<'a> CacheEntryInner<'a> {
-    #[inline]
-    pub unsafe fn extend_lifetime<'b>(self) -> CacheEntryInner<'b> {
-        let inner = &*(self.0 as *const (dyn Any + Send + Sync));
-        CacheEntryInner(inner)
-    }
-
-    #[inline]
-    pub fn handle<T: 'static>(self) -> Handle<'a, T> {
-        Handle::new(self)
-    }
-}
-
 /// An entry in the cache.
-pub struct CacheEntry(pub Box<dyn Any + Send + Sync>);
+pub struct CacheEntry(Box<dyn Any + Send + Sync>);
 
 impl CacheEntry {
     /// Creates a new `CacheEntry` containing an asset of type `T`.
@@ -100,8 +84,8 @@ impl CacheEntry {
 
     /// Returns a reference on the inner storage of the entry.
     #[inline]
-    pub(crate) fn inner(&self) -> CacheEntryInner {
-        CacheEntryInner(self.0.as_ref())
+    pub(crate) fn inner(&self) -> UntypedHandle {
+        UntypedHandle(self.0.as_ref())
     }
 
     /// Consumes the `CacheEntry` and returns its inner value.
@@ -124,6 +108,36 @@ impl CacheEntry {
 impl fmt::Debug for CacheEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CacheEntry").finish()
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct UntypedHandle<'a>(&'a (dyn Any + Send + Sync));
+
+impl<'a> UntypedHandle<'a> {
+    #[inline]
+    pub(crate) unsafe fn extend_lifetime<'b>(self) -> UntypedHandle<'b> {
+        let inner = &*(self.0 as *const (dyn Any + Send + Sync));
+        UntypedHandle(inner)
+    }
+
+    #[inline]
+    pub fn try_downcast<T: 'static>(self) -> Option<Handle<'a, T>> {
+        Handle::new(self)
+    }
+
+    #[inline]
+    pub fn downcast<T: 'static>(self) -> Handle<'a, T> {
+        match self.try_downcast() {
+            Some(h) => h,
+            None => wrong_handle_type(),
+        }
+    }
+}
+
+impl fmt::Debug for UntypedHandle<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("UntypedHandle").finish()
     }
 }
 
@@ -163,7 +177,7 @@ impl<'a, T> Handle<'a, T> {
     /// Creates a new handle.
     ///
     /// `inner` must contain a `StaticInner<T>` or a `DynamicInner<T>`.
-    fn new(inner: CacheEntryInner<'a>) -> Self
+    fn new(inner: UntypedHandle<'a>) -> Option<Self>
     where
         T: 'static,
     {
@@ -177,10 +191,10 @@ impl<'a, T> Handle<'a, T> {
                 break HandleInner::Dynamic(inner);
             }
 
-            wrong_handle_type()
+            return None;
         };
 
-        Handle { inner }
+        Some(Handle { inner })
     }
 
     #[inline]
@@ -197,6 +211,7 @@ impl<'a, T> Handle<'a, T> {
     }
 
     #[inline]
+    #[cfg(feature = "hot-reloading")]
     pub(crate) fn as_dynamic(&self) -> &DynamicInner<T> {
         self.either(|_| wrong_handle_type(), |this| this)
     }
@@ -592,6 +607,7 @@ impl AtomicReloadId {
     }
 
     #[inline]
+    #[cfg(feature = "hot-reloading")]
     fn increment(&self) {
         self.0.fetch_add(1, Ordering::Release);
     }

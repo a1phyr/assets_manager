@@ -39,6 +39,7 @@ mod tests;
 
 pub use crate::dirs::DirLoadable;
 
+use crate::key::Type;
 #[allow(unused)]
 use crate::{
     cache::load_from_source,
@@ -223,39 +224,15 @@ pub trait Compound: Sized + Send + Sync + 'static {
     /// delegated to [`Asset`]s.
     fn load(cache: AnyCache, id: &str) -> Result<Self, BoxedError>;
 
-    /// Loads an asset and registers it for hot-reloading if necessary.
-    ///
-    /// This method is a internal implementation detail.
     #[doc(hidden)]
-    fn _load_and_record<P: PrivateMarker>(
+    fn _load_entry<P: PrivateMarker>(
         cache: AnyCache,
         id: &SharedString,
-    ) -> Result<Self, Error> {
-        #[cfg(feature = "hot-reloading")]
-        let res = if Self::HOT_RELOADED {
-            cache.record_load(id).map(|(asset, deps)| {
-                if let Some(reloader) = cache.reloader() {
-                    reloader.add_compound::<Self>(id.clone(), deps);
-                }
-                asset
-            })
-        } else {
-            cache.no_record(|| Self::load(cache, id))
-        };
-
-        #[cfg(not(feature = "hot-reloading"))]
-        let res = Self::load(cache, id);
-
-        res.map_err(|err| Error::new(id.clone(), err))
-    }
-
-    #[doc(hidden)]
-    fn _load_and_record_entry<P: PrivateMarker>(
-        cache: AnyCache,
-        id: SharedString,
     ) -> Result<CacheEntry, Error> {
-        let asset = Self::_load_and_record::<P>(cache, &id)?;
-        Ok(CacheEntry::new(asset, id))
+        match Self::load(cache, id) {
+            Ok(asset) => Ok(CacheEntry::new(asset, id.clone())),
+            Err(err) => Err(Error::new(id.clone(), err)),
+        }
     }
 
     /// If `false`, disable hot-reloading for assets of this type (`true` by
@@ -264,9 +241,38 @@ pub trait Compound: Sized + Send + Sync + 'static {
     const HOT_RELOADED: bool = true;
 
     #[doc(hidden)]
-    fn get_key<P: PrivateMarker>() -> Option<crate::key::AssetType> {
-        None
+    #[inline]
+    fn get_type<P: PrivateMarker>() -> crate::key::Type {
+        crate::key::Type::of_compound::<Self>()
     }
+}
+
+#[inline]
+pub(crate) fn load_and_record(
+    cache: AnyCache,
+    id: &SharedString,
+    typ: Type,
+) -> Result<CacheEntry, Error> {
+    #[cfg(feature = "hot-reloading")]
+    if let Some(reloader) = cache.reloader() {
+        match &typ.inner.typ {
+            crate::key::InnerType::Storable => (),
+            crate::key::InnerType::Asset(inner) => {
+                let asset = (typ.inner.load)(cache, id)?;
+                reloader.add_asset(id.clone(), crate::key::AssetType::new(typ.type_id, inner));
+                return Ok(asset);
+            }
+            crate::key::InnerType::Compound(inner) => {
+                let (entry, deps) =
+                    crate::hot_reloading::records::record(reloader, || (typ.inner.load)(cache, id));
+                let entry = entry?;
+                reloader.add_compound(id.clone(), deps, typ, inner.reload);
+                return Ok(entry);
+            }
+        }
+    }
+
+    (typ.inner.load)(cache, id)
 }
 
 impl<A> Compound for A
@@ -279,27 +285,20 @@ where
     }
 
     #[doc(hidden)]
-    fn _load_and_record<P: PrivateMarker>(
+    fn _load_entry<P: PrivateMarker>(
         cache: AnyCache,
         id: &SharedString,
-    ) -> Result<Self, Error> {
-        let asset = load_from_source(&cache.source(), id)?;
-
-        #[cfg(feature = "hot-reloading")]
-        if A::HOT_RELOADED {
-            if let Some(reloader) = cache.reloader() {
-                reloader.add_asset::<Self>(id.clone());
-            }
-        }
-
-        Ok(asset)
+    ) -> Result<CacheEntry, Error> {
+        let asset: Self = load_from_source(&cache.source(), id)?;
+        Ok(CacheEntry::new(asset, id.clone()))
     }
 
     const HOT_RELOADED: bool = Self::HOT_RELOADED;
 
     #[doc(hidden)]
-    fn get_key<P: PrivateMarker>() -> Option<crate::key::AssetType> {
-        Some(crate::key::AssetType::of::<Self>())
+    #[inline]
+    fn get_type<P: PrivateMarker>() -> crate::key::Type {
+        crate::key::Type::of_asset::<Self>()
     }
 }
 
@@ -339,7 +338,7 @@ pub trait NotHotReloaded: Storable {}
 /// trait is already implemented for all `Compound` types.
 ///
 /// This trait is a workaround about Rust's current lack of specialization.
-pub trait Storable: Send + Sync + 'static {
+pub trait Storable: Sized + Send + Sync + 'static {
     #[doc(hidden)]
     const HOT_RELOADED: bool = false;
 
@@ -367,8 +366,9 @@ pub trait Storable: Send + Sync + 'static {
     const _CHECK_NOT_HOT_RELOADED: () = [()][Self::HOT_RELOADED as usize];
 
     #[doc(hidden)]
-    fn get_key<P: PrivateMarker>() -> Option<crate::key::AssetType> {
-        None
+    #[inline]
+    fn get_type<P: PrivateMarker>() -> crate::key::Type {
+        crate::key::Type::of_storable::<Self>()
     }
 }
 
@@ -379,8 +379,9 @@ where
     #[doc(hidden)]
     const HOT_RELOADED: bool = A::HOT_RELOADED;
 
-    fn get_key<P: PrivateMarker>() -> Option<crate::key::AssetType> {
-        Self::get_key::<P>()
+    #[inline]
+    fn get_type<P: PrivateMarker>() -> crate::key::Type {
+        Self::get_type::<P>()
     }
 }
 

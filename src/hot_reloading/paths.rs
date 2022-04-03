@@ -3,12 +3,10 @@ use crate::{
     key::AnyAsset,
     source::Source,
     utils::{HashMap, OwnedKey},
-    AnyCache, Compound, SharedString,
+    AnyCache, SharedString,
 };
 
-use super::{dependencies::DepsGraph, records::Dependencies};
-
-pub(crate) type ReloadFn = fn(cache: AnyCache, id: &str) -> Option<Dependencies>;
+use super::{dependencies::DepsGraph, records::Dependencies, ReloadFn};
 
 #[derive(Clone, Copy)]
 struct BorrowedCache<'a> {
@@ -53,30 +51,18 @@ impl<'a> BorrowedCache<'a> {
     }
 }
 
-#[allow(clippy::redundant_closure)]
-fn reload<T: Compound>(cache: AnyCache, id: &str) -> Option<Dependencies> {
-    let handle = cache.get_cached::<T>(id)?;
-
-    match cache.record_load::<T>(id) {
-        Ok((asset, deps)) => {
-            handle.as_dynamic().write(asset);
-            log::info!("Reloading \"{}\"", id);
-            Some(deps)
-        }
-        Err(err) => {
-            log::warn!("Error reloading \"{}\": {}", id, err);
-            None
-        }
-    }
-}
-
 pub(crate) struct CompoundReloadInfos(OwnedKey, Dependencies, ReloadFn);
 
 impl CompoundReloadInfos {
     #[inline]
-    pub(crate) fn of<A: Compound>(id: SharedString, deps: Dependencies) -> Self {
-        let key = OwnedKey::new::<A>(id);
-        Self(key, deps, reload::<A>)
+    pub(crate) fn from_type(
+        id: SharedString,
+        deps: Dependencies,
+        typ: crate::key::Type,
+        reload_fn: ReloadFn,
+    ) -> Self {
+        let key = OwnedKey::new_with(id, typ.type_id);
+        Self(key, deps, reload_fn)
     }
 }
 
@@ -134,13 +120,15 @@ impl HotReloadingData {
     }
 
     pub fn load_asset(&mut self, events: super::Events) {
-        events.for_each(|key| match key.typ.load(&self.source, &key.id) {
-            Ok(asset) => {
-                self.cache.update(key.into_owned_key(), asset);
-                self.update_if_static();
-            }
-            Err(err) => log::warn!("Error reloading \"{}\": {}", key.id, err.reason()),
-        })
+        events.for_each(
+            |key| match key.typ.load_from_source(&self.source, &key.id) {
+                Ok(asset) => {
+                    self.cache.update(key.into_owned_key(), asset);
+                    self.update_if_static();
+                }
+                Err(err) => log::warn!("Error reloading \"{}\": {}", key.id, err.reason()),
+            },
+        )
     }
 
     pub fn update_if_local(&mut self, cache: &AssetMap, reloader: &super::HotReloader) {
