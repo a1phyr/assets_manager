@@ -296,10 +296,6 @@ serde_loaders! {
     #[cfg(feature = "bincode")]
     struct BincodeLoader => serde_bincode::deserialize;
 
-    /// Loads assets from CBOR encoded files.
-    #[cfg(feature = "cbor")]
-    struct CborLoader => serde_cbor::from_slice;
-
     /// Loads assets from JSON files.
     #[cfg(feature = "json")]
     struct JsonLoader => serde_json::from_slice;

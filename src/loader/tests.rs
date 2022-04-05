@@ -116,14 +116,6 @@ test_loader!(
     serde_bincode::serialize
 );
 
-#[cfg(feature = "cbor")]
-test_loader!(
-    cbor_loader_ok,
-    cbor_loader_err,
-    CborLoader,
-    serde_cbor::to_vec
-);
-
 #[cfg(feature = "json")]
 test_loader!(
     json_loader_ok,
