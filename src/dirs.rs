@@ -5,6 +5,9 @@ use crate::{
 
 use std::{fmt, io, marker::PhantomData};
 
+#[cfg(doc)]
+use crate::AssetCache;
+
 /// Assets that are loadable from directories
 ///
 /// Types that implement this trait can be used with [`AssetCache::load_dir`] to

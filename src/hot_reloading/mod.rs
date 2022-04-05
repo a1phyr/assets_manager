@@ -32,6 +32,9 @@ use crate::{
     SharedString,
 };
 
+#[cfg(doc)]
+use crate::AssetCache;
+
 pub use crate::key::{AssetKey, AssetType};
 pub use watcher::FsWatcherBuilder;
 

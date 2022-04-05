@@ -26,13 +26,17 @@ use crate::{
 #[cfg(feature = "hot-reloading")]
 use crate::hot_reloading::{records, Dependencies, HotReloader};
 
-/// TODO
+#[cfg(doc)]
+use crate::AssetCache;
+
+/// A non-generic version of `AssetCache`.
+///
+/// For most purposes, this can be used exactly like an `AssetCache`.
 #[derive(Clone, Copy)]
 pub struct AnyCache<'a> {
     cache: &'a dyn CacheWithSource,
 }
 
-/// TODO
 #[derive(Clone, Copy)]
 struct AnySource<'a> {
     cache: &'a dyn CacheWithSource,
@@ -56,7 +60,7 @@ impl Source for AnySource<'_> {
 }
 
 impl<'a> AnyCache<'a> {
-    /// TODO
+    /// The `Source` from which assets are loaded.
     #[inline]
     pub fn source(self) -> impl Source + 'a {
         AnySource { cache: self.cache }
@@ -68,43 +72,49 @@ impl<'a> AnyCache<'a> {
         self.cache.reloader()
     }
 
-    /// TODO
+    /// Gets a value from the cache.
+    ///
+    /// See [`AssetCache::get_cached`] for more details.
     #[inline]
     pub fn get_cached<A: Storable>(self, id: &str) -> Option<Handle<'a, A>> {
         self.cache._get_cached(id)
     }
 
-    /// TODO
+    /// Gets a value from the cache or inserts one.
+    ///
+    /// See [`AssetCache::get_or_insert`] for more details.
     #[inline]
     pub fn get_or_insert<A: Storable>(self, id: &str, default: A) -> Handle<'a, A> {
         self.cache._get_or_insert(id, default)
     }
 
-    /// TODO
+    /// Returns `true` if the cache contains the specified asset.
+    ///
+    /// See [`AssetCache::contains`] for more details.
     #[inline]
     pub fn contains<A: Storable>(self, id: &str) -> bool {
         self.cache._contains::<A>(id)
     }
 
-    /// TODO
+    /// Loads an asset.
+    ///
+    /// See [`AssetCache::load`] for more details.
     #[inline]
     pub fn load<A: Compound>(self, id: &str) -> Result<Handle<'a, A>, Error> {
         self.cache._load(id)
     }
 
-    /// TODO
+    /// Loads an asset and panic if an error happens.
+    ///
+    /// See [`AssetCache::load_expect`] for more details.
     #[inline]
     pub fn load_expect<A: Compound>(self, id: &str) -> Handle<'a, A> {
         self.cache._load_expect(id)
     }
 
-    /// TODO
-    #[inline]
-    pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
-        self.cache._contains_dir::<A>(id, recursive)
-    }
-
-    /// TODO
+    /// Gets a directory from the cache.
+    ///
+    /// See [`AssetCache::get_cached_dir`] for more details.
     #[inline]
     pub fn get_cached_dir<A: DirLoadable>(
         self,
@@ -114,7 +124,17 @@ impl<'a> AnyCache<'a> {
         self.cache._get_cached_dir(id, recursive)
     }
 
-    /// TODO
+    /// Returns `true` if the cache contains the specified directory.
+    ///
+    /// See [`AssetCache::contains_dir`] for more details.
+    #[inline]
+    pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
+        self.cache._contains_dir::<A>(id, recursive)
+    }
+
+    /// Loads all assets of a given type from a directory.
+    ///
+    /// See [`AssetCache::load_dir`] for more details.
     #[inline]
     pub fn load_dir<A: DirLoadable>(
         self,
@@ -124,13 +144,17 @@ impl<'a> AnyCache<'a> {
         self.cache._load_dir(id, recursive)
     }
 
-    /// TODO
+    /// Loads an owned version of an asset.
+    ///
+    /// See [`AssetCache::load_owned`] for more details.
     #[inline]
     pub fn load_owned<A: Compound>(self, id: &str) -> Result<A, Error> {
         self.cache._load_owned(id)
     }
 
-    /// TODO
+    /// Temporarily prevent `Compound` dependencies to be recorded.
+    ///
+    /// See [`AssetCache::no_record`] for more details.
     #[inline]
     pub fn no_record<T, F: FnOnce() -> T>(self, f: F) -> T {
         #[cfg(feature = "hot-reloading")]

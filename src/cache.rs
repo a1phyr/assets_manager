@@ -385,7 +385,7 @@ impl<S> AssetCache<S>
 where
     S: Source,
 {
-    /// TODO
+    /// Converts to an `AnyCache`.
     #[inline]
     pub fn as_any_cache(&self) -> AnyCache {
         self._as_any_cache()
