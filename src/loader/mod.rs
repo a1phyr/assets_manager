@@ -302,7 +302,7 @@ serde_loaders! {
 
     /// Loads assets from MessagePack files.
     #[cfg(feature = "msgpack")]
-    struct MessagePackLoader => serde_msgpack::from_read_ref;
+    struct MessagePackLoader => serde_msgpack::from_slice;
 
     /// Loads assets from RON files.
     #[cfg(feature = "ron")]
