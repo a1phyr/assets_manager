@@ -452,14 +452,8 @@ pub(crate) trait CacheWithSourceExt: CacheWithSource + CacheExt {
 
     #[inline]
     fn _load_owned<A: Compound>(&self, id: &str) -> Result<A, Error> {
-        #[cfg(not(feature = "hot-reloading"))]
-        return A::load(self._as_any_cache(), id).map_err(|err| Error::new(id.into(), err));
-
-        #[cfg(feature = "hot-reloading")]
-        {
-            let entry = self.load_owned_entry(id, Type::of::<A>())?;
-            Ok(entry.into_inner().0)
-        }
+        let entry = self.load_owned_entry(id, Type::of::<A>())?;
+        Ok(entry.into_inner().0)
     }
 }
 
