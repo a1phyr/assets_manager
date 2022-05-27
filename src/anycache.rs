@@ -29,9 +29,13 @@ use crate::hot_reloading::{records, Dependencies, HotReloader};
 #[cfg(doc)]
 use crate::AssetCache;
 
-/// A non-generic version of `AssetCache`.
+/// A non-generic version of [`AssetCache`].
 ///
-/// For most purposes, this can be used exactly like an `AssetCache`.
+/// For most purposes, this can be used exactly like an `AssetCache`: you can
+/// load assets from it.
+///
+/// Unlike `AssetCache` this type is not generic, which is useful to make nicer
+/// APIs.
 #[derive(Clone, Copy)]
 pub struct AnyCache<'a> {
     cache: &'a dyn CacheWithSource,
