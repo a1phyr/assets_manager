@@ -138,6 +138,14 @@ pub trait UpdateSender {
 /// A type-erased `UpdateSender`.
 pub type DynUpdateSender = Box<dyn UpdateSender + Send + Sync>;
 
+/// An `UpdateSender` that drops all incoming messages.
+#[derive(Debug)]
+pub struct UpdateSink;
+
+impl UpdateSender for UpdateSink {
+    fn send_update(&self, _message: UpdateMessage) {}
+}
+
 impl<T> UpdateSender for Box<T>
 where
     T: UpdateSender + ?Sized,

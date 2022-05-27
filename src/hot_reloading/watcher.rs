@@ -1,9 +1,6 @@
 use std::{
     fmt,
     path::{Path, PathBuf},
-    sync::mpsc,
-    thread,
-    time::Duration,
 };
 
 use crate::{
@@ -38,11 +35,16 @@ impl<T: Eq> SmallSet<T> {
     }
 }
 
-struct UpdateSender(crossbeam_channel::Sender<super::UpdateMessage>);
+struct UpdateSender {
+    sender: crossbeam_channel::Sender<super::UpdateMessage>,
+
+    // Make sure to keep this alive
+    _watcher: notify::RecommendedWatcher,
+}
 
 impl super::UpdateSender for UpdateSender {
     fn send_update(&self, message: super::UpdateMessage) {
-        let _ = self.0.send(message);
+        let _ = self.sender.send(message);
     }
 }
 
@@ -52,18 +54,19 @@ impl super::UpdateSender for UpdateSender {
 pub struct FsWatcherBuilder {
     roots: Vec<PathBuf>,
     watcher: notify::RecommendedWatcher,
-    notify: mpsc::Receiver<notify::DebouncedEvent>,
+    payload_sender: crossbeam_channel::Sender<NotifyEventHandler>,
 }
 
 impl FsWatcherBuilder {
     /// Creates a new builder.
     pub fn new() -> Result<Self, BoxedError> {
-        let (notify_tx, notify) = mpsc::channel();
-        let watcher = notify::watcher(notify_tx, Duration::from_millis(50))?;
+        let (payload_sender, payload_receiver) = crossbeam_channel::unbounded();
+        let watcher = notify::recommended_watcher(EventHandlerPayload::new(payload_receiver))?;
+
         Ok(Self {
             roots: Vec::new(),
             watcher,
-            notify,
+            payload_sender,
         })
     }
 
@@ -80,12 +83,21 @@ impl FsWatcherBuilder {
     pub fn build(self, events: super::EventSender) -> super::DynUpdateSender {
         let (sender, updates) = crossbeam_channel::unbounded();
 
-        thread::Builder::new()
-            .name("assets_translate".to_string())
-            .spawn(|| translation_thread(self.watcher, self.roots, self.notify, updates, events))
-            .unwrap();
+        let watched_paths = WatchedPaths::new(self.roots);
+        let event_handler = NotifyEventHandler {
+            watched_paths,
+            updates,
+            events,
+        };
 
-        Box::new(UpdateSender(sender))
+        if self.payload_sender.send(event_handler).is_ok() {
+            Box::new(UpdateSender {
+                sender,
+                _watcher: self.watcher,
+            })
+        } else {
+            Box::new(super::UpdateSink)
+        }
     }
 }
 
@@ -144,23 +156,44 @@ impl WatchedPaths {
     }
 }
 
-fn translation_thread(
-    _watcher: notify::RecommendedWatcher,
-    roots: Vec<PathBuf>,
-    notify: mpsc::Receiver<notify::DebouncedEvent>,
+enum EventHandlerPayload<H> {
+    Waiting(crossbeam_channel::Receiver<H>),
+    Handler(H),
+}
+
+impl<H: notify::EventHandler> EventHandlerPayload<H> {
+    fn new(receiver: crossbeam_channel::Receiver<H>) -> Self {
+        Self::Waiting(receiver)
+    }
+}
+
+impl<H: notify::EventHandler> notify::EventHandler for EventHandlerPayload<H> {
+    fn handle_event(&mut self, event: notify::Result<notify::Event>) {
+        match self {
+            Self::Waiting(recv) => {
+                if let Ok(mut handler) = recv.try_recv() {
+                    handler.handle_event(event);
+                    *self = Self::Handler(handler);
+                }
+            }
+            Self::Handler(handler) => handler.handle_event(event),
+        }
+    }
+}
+
+struct NotifyEventHandler {
+    watched_paths: WatchedPaths,
     updates: crossbeam_channel::Receiver<super::UpdateMessage>,
     events: super::EventSender,
-) {
-    log::trace!("Starting hot-reloading translation thread");
+}
 
-    let mut watched_paths = WatchedPaths::new(roots);
-
-    while let Ok(event) = notify.recv() {
+impl notify::EventHandler for NotifyEventHandler {
+    fn handle_event(&mut self, event: notify::Result<notify::Event>) {
         loop {
-            match updates.try_recv() {
-                Ok(super::UpdateMessage::AddAsset(key)) => watched_paths.add_asset(key),
-                Ok(super::UpdateMessage::RemoveAsset(key)) => watched_paths.remove_asset(key),
-                Ok(super::UpdateMessage::Clear) => watched_paths.clear(),
+            match self.updates.try_recv() {
+                Ok(super::UpdateMessage::AddAsset(key)) => self.watched_paths.add_asset(key),
+                Ok(super::UpdateMessage::RemoveAsset(key)) => self.watched_paths.remove_asset(key),
+                Ok(super::UpdateMessage::Clear) => self.watched_paths.clear(),
                 Err(crossbeam_channel::TryRecvError::Empty) => break,
                 Err(crossbeam_channel::TryRecvError::Disconnected) => return,
             }
@@ -169,17 +202,23 @@ fn translation_thread(
         log::trace!("Received filesystem event: {:?}", event);
 
         match event {
-            notify::DebouncedEvent::Write(path)
-            | notify::DebouncedEvent::Chmod(path)
-            | notify::DebouncedEvent::Rename(_, path)
-            | notify::DebouncedEvent::Create(path) => {
-                for asset in watched_paths.assets(&path) {
-                    if events.send(asset).is_err() {
-                        return;
+            Ok(event) => {
+                if matches!(
+                    event.kind,
+                    notify::EventKind::Any
+                        | notify::EventKind::Create(_)
+                        | notify::EventKind::Modify(_)
+                ) {
+                    for path in event.paths {
+                        for asset in self.watched_paths.assets(&path) {
+                            if self.events.send(asset).is_err() {
+                                return;
+                            }
+                        }
                     }
                 }
             }
-            _ => (),
+            Err(err) => log::warn!("Error from notify: {}", err),
         }
     }
 }
