@@ -6,7 +6,7 @@ use crate::{
 use std::{borrow::Cow, fs::File, io, io::Write, path::Path, sync::Arc};
 
 fn sleep() {
-    std::thread::sleep(std::time::Duration::from_millis(100));
+    std::thread::sleep(std::time::Duration::from_millis(20));
 }
 
 type Res = Result<(), Box<dyn std::error::Error>>;
@@ -45,6 +45,7 @@ macro_rules! test_scenario {
 
             let path = cache.source().path_of(DirEntry::File(id, "x"));
             write_i32(&path, $n)?;
+            sleep();
 
             test_scenario!(@enhance cache $is_static);
 

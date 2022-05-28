@@ -313,9 +313,12 @@ fn hot_reloading_thread(
     select.recv(&events);
 
     loop {
-        let ready = select.select();
-        match ready.index() {
-            0 => match ready.recv(&cache_msg) {
+        // We don't use `select` method here as we always want to check
+        // `cache_msg` channel first.
+        let ready = select.ready();
+
+        loop {
+            match cache_msg.try_recv() {
                 Ok(CacheMessage::Ptr(ptr, reloader, token)) => {
                     // Safety: The received pointer is guaranteed to
                     // be valid until we reply back
@@ -329,16 +332,17 @@ fn hot_reloading_thread(
                 }
                 Ok(CacheMessage::Clear) => cache.clear_local_cache(),
                 Ok(CacheMessage::AddCompound(infos)) => cache.add_compound(infos),
-                Err(_) => (),
-            },
-
-            1 => match ready.recv(&events) {
-                Ok(msg) => cache.load_asset(msg),
-                // We won't receive events anymore, we can stop now
                 Err(_) => break,
-            },
+            }
+        }
 
-            _ => unreachable!(),
+        if ready == 1 {
+            match events.try_recv() {
+                Ok(msg) => cache.load_asset(msg),
+                Err(crossbeam_channel::TryRecvError::Empty) => (),
+                // We won't receive events anymore, we can stop now
+                Err(crossbeam_channel::TryRecvError::Disconnected) => break,
+            }
         }
     }
 
