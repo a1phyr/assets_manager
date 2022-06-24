@@ -86,7 +86,7 @@ let point = handle.read();
 assert_eq!(point.x, 5);
 assert_eq!(point.y, -6);
 
-// Loading the same asset retreives it from the cache
+// Loading the same asset retrieves it from the cache
 let other_handle = cache.load("common.position")?;
 assert!(other_handle.same_handle(&handle));
 ```
