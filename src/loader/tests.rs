@@ -92,7 +92,7 @@ cfg_if::cfg_if! { if #[cfg(feature = "serde")] {
                 let point = rand::random::<Point>();
                 let raw = ($ser)(&point).unwrap().into();
 
-                let loaded: Point = <$loader>::load(raw, "").unwrap();
+                let loaded: Point = <$loader>::load(Cow::Owned(raw), "").unwrap();
 
                 assert_eq!(loaded, point);
             }
@@ -133,9 +133,12 @@ test_loader!(
 );
 
 #[cfg(feature = "ron")]
-test_loader!(ron_loader_ok, ron_loader_err, RonLoader, |p| {
-    serde_ron::ser::to_string(p).map(String::into_bytes)
-});
+test_loader!(
+    ron_loader_ok,
+    ron_loader_err,
+    RonLoader,
+    serde_ron::ser::to_string
+);
 
 #[cfg(feature = "toml")]
 test_loader!(
@@ -150,5 +153,5 @@ test_loader!(
     yaml_loader_ok,
     yaml_loader_err,
     YamlLoader,
-    serde_yaml::to_vec
+    serde_yaml::to_string
 );
