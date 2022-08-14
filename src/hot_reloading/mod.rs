@@ -245,13 +245,13 @@ impl HotReloader {
 
     pub(crate) fn add_asset(&self, id: SharedString, typ: AssetType) {
         let key = AssetKey { id, typ };
-        let _ = self.updates.send_update(UpdateMessage::AddAsset(key));
+        self.updates.send_update(UpdateMessage::AddAsset(key));
     }
 
     pub(crate) fn remove_asset<A: Storable>(&self, id: SharedString) {
         if let Some(typ) = A::get_type::<crate::utils::Private>().to_asset_type() {
             let key = AssetKey { id, typ };
-            let _ = self.updates.send_update(UpdateMessage::RemoveAsset(key));
+            self.updates.send_update(UpdateMessage::RemoveAsset(key));
         }
     }
 
@@ -268,7 +268,7 @@ impl HotReloader {
 
     pub(crate) fn clear(&self) {
         let _ = self.sender.send(CacheMessage::Clear);
-        let _ = self.updates.send_update(UpdateMessage::Clear);
+        self.updates.send_update(UpdateMessage::Clear);
     }
 
     pub(crate) fn reload(&self, map: &crate::cache::AssetMap) {

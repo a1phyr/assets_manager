@@ -181,6 +181,7 @@ impl<'a, T> Handle<'a, T> {
     where
         T: 'static,
     {
+        #[allow(clippy::never_loop)]
         let inner = loop {
             if let Some(inner) = inner.0.downcast_ref::<StaticInner<T>>() {
                 break HandleInner::Static(inner);
@@ -321,6 +322,7 @@ where
     ///
     /// This method only works if hot-reloading is disabled for the given type.
     #[inline]
+    #[allow(clippy::let_unit_value)]
     pub fn get(&self) -> &'a A {
         let _ = A::_CHECK_NOT_HOT_RELOADED;
 
