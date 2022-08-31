@@ -2,7 +2,7 @@ use crate::{loader, utils, AnyCache, Asset, BoxedError, Compound};
 use std::path;
 
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
-impl Asset for _gltf::Gltf {
+impl Asset for gltf::Gltf {
     const EXTENSIONS: &'static [&'static str] = &["glb", "gltf"];
     type Loader = loader::GltfLoader;
 }
@@ -15,7 +15,7 @@ impl Asset for _gltf::Gltf {
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
 pub struct Gltf {
     /// The glTF document.
-    pub document: _gltf::Document,
+    pub document: gltf::Document,
 
     images: Vec<image::DynamicImage>,
     buffers: Vec<Vec<u8>>,
@@ -23,7 +23,7 @@ pub struct Gltf {
 
 impl Gltf {
     /// Retreives the content of a buffer.
-    pub fn get_buffer(&self, buffer: &_gltf::Buffer) -> &[u8] {
+    pub fn get_buffer(&self, buffer: &gltf::Buffer) -> &[u8] {
         self.get_buffer_by_index(buffer.index())
     }
 
@@ -33,7 +33,7 @@ impl Gltf {
     }
 
     /// Retreives the content of a buffer view.
-    pub fn get_buffer_view(&self, view: &_gltf::buffer::View) -> &[u8] {
+    pub fn get_buffer_view(&self, view: &gltf::buffer::View) -> &[u8] {
         let buffer = self.get_buffer(&view.buffer());
         let start = view.offset();
         let end = start + view.length();
@@ -41,7 +41,7 @@ impl Gltf {
     }
 
     /// Retreives the content of an image.
-    pub fn get_image(&self, image: &_gltf::Image) -> &image::DynamicImage {
+    pub fn get_image(&self, image: &gltf::Image) -> &image::DynamicImage {
         self.get_image_by_index(image.index())
     }
 
@@ -133,12 +133,12 @@ impl<'a> UriContent<'a> {
 fn load_buffer(
     cache: AnyCache,
     base_id: &str,
-    buffer: _gltf::Buffer,
+    buffer: gltf::Buffer,
     blob: &mut Option<Vec<u8>>,
 ) -> Result<Vec<u8>, BoxedError> {
     Ok(match buffer.source() {
-        _gltf::buffer::Source::Bin => blob.take().ok_or("missing binary portion of binary glTF")?,
-        _gltf::buffer::Source::Uri(uri) => match UriContent::parse_uri(base_id, uri, None)? {
+        gltf::buffer::Source::Bin => blob.take().ok_or("missing binary portion of binary glTF")?,
+        gltf::buffer::Source::Uri(uri) => match UriContent::parse_uri(base_id, uri, None)? {
             UriContent::Bin { content: data, .. } => data,
             UriContent::File { id, .. } => cache.load::<Bin>(&id)?.cloned().0,
         },
@@ -165,10 +165,10 @@ fn load_image(
     cache: AnyCache,
     base_id: &str,
     buffers: &[Vec<u8>],
-    image: _gltf::Image,
+    image: gltf::Image,
 ) -> Result<image::DynamicImage, BoxedError> {
     match image.source() {
-        _gltf::image::Source::Uri { uri, mime_type } => {
+        gltf::image::Source::Uri { uri, mime_type } => {
             match UriContent::parse_uri(base_id, uri, mime_type)? {
                 UriContent::Bin { content, mime_type } => {
                     load_image_from_buffer(&content, mime_type)
@@ -180,7 +180,7 @@ fn load_image(
                 },
             }
         }
-        _gltf::image::Source::View { view, mime_type } => {
+        gltf::image::Source::View { view, mime_type } => {
             let buffer = &buffers[view.buffer().index()];
             let offset = view.offset();
             let buffer = &buffer[offset..offset + view.length()];
@@ -193,7 +193,7 @@ fn load_image(
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
 impl Compound for Gltf {
     fn load(cache: AnyCache, id: &str) -> Result<Self, BoxedError> {
-        let _gltf::Gltf { document, mut blob } = cache.load::<_gltf::Gltf>(id)?.cloned();
+        let gltf::Gltf { document, mut blob } = cache.load::<gltf::Gltf>(id)?.cloned();
 
         let base_id = match id.rfind('.') {
             Some(index) => &id[..index],
@@ -223,6 +223,6 @@ impl super::DirLoadable for Gltf {
         source: &S,
         id: &str,
     ) -> std::io::Result<Vec<crate::SharedString>> {
-        _gltf::Gltf::select_ids(source, id)
+        gltf::Gltf::select_ids(source, id)
     }
 }

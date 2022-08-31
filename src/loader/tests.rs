@@ -113,7 +113,7 @@ test_loader!(
     bincode_loader_ok,
     bincode_loader_err,
     BincodeLoader,
-    serde_bincode::serialize
+    bincode::serialize
 );
 
 #[cfg(feature = "json")]
@@ -129,7 +129,7 @@ test_loader!(
     msgpack_loader_ok,
     msgpack_err,
     MessagePackLoader,
-    serde_msgpack::encode::to_vec
+    rmp_serde::encode::to_vec
 );
 
 #[cfg(feature = "ron")]
@@ -137,7 +137,7 @@ test_loader!(
     ron_loader_ok,
     ron_loader_err,
     RonLoader,
-    serde_ron::ser::to_string
+    ron::ser::to_string
 );
 
 #[cfg(feature = "toml")]
@@ -145,7 +145,7 @@ test_loader!(
     toml_loader_ok,
     toml_loader_err,
     TomlLoader,
-    serde_toml::ser::to_vec
+    toml::ser::to_vec
 );
 
 #[cfg(feature = "yaml")]

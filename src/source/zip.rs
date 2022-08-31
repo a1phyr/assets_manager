@@ -11,8 +11,8 @@ use std::{
     sync::Arc,
 };
 
-use _zip::{read::ZipFile, ZipArchive};
 use sync_file::SyncFile;
+use zip::{read::ZipFile, ZipArchive};
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 struct FileDesc(Arc<(String, String)>);

@@ -249,9 +249,9 @@ pub struct GltfLoader(());
 
 #[cfg(feature = "gltf")]
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
-impl Loader<_gltf::Gltf> for GltfLoader {
-    fn load(content: Cow<[u8]>, _: &str) -> Result<_gltf::Gltf, BoxedError> {
-        Ok(_gltf::Gltf::from_slice(&content)?)
+impl Loader<gltf::Gltf> for GltfLoader {
+    fn load(content: Cow<[u8]>, _: &str) -> Result<gltf::Gltf, BoxedError> {
+        Ok(gltf::Gltf::from_slice(&content)?)
     }
 }
 
@@ -294,7 +294,7 @@ macro_rules! serde_loaders {
 serde_loaders! {
     /// Loads assets from Bincode encoded files.
     #[cfg(feature = "bincode")]
-    struct BincodeLoader => serde_bincode::deserialize;
+    struct BincodeLoader => bincode::deserialize;
 
     /// Loads assets from JSON files.
     #[cfg(feature = "json")]
@@ -302,15 +302,15 @@ serde_loaders! {
 
     /// Loads assets from MessagePack files.
     #[cfg(feature = "msgpack")]
-    struct MessagePackLoader => serde_msgpack::from_slice;
+    struct MessagePackLoader => rmp_serde::from_slice;
 
     /// Loads assets from RON files.
     #[cfg(feature = "ron")]
-    struct RonLoader => serde_ron::de::from_bytes;
+    struct RonLoader => ron::de::from_bytes;
 
     /// Loads assets from TOML files.
     #[cfg(feature = "toml")]
-    struct TomlLoader => serde_toml::de::from_slice;
+    struct TomlLoader => toml::de::from_slice;
 
     /// Loads assets from YAML files.
     #[cfg(feature = "yaml")]

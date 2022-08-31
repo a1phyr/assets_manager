@@ -62,7 +62,7 @@ use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, io, sync::Arc};
 
 #[cfg(feature = "gltf")]
-pub use gltf::Gltf;
+pub use self::gltf::Gltf;
 
 /// An asset is a type loadable from raw bytes.
 ///
