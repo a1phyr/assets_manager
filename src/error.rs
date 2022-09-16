@@ -81,7 +81,7 @@ impl Error {
 
     /// The id of the asset that was being loaded when the error happened.
     #[inline]
-    pub fn id(&self) -> &str {
+    pub fn id(&self) -> &SharedString {
         &self.0.id
     }
 

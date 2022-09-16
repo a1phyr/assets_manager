@@ -212,7 +212,7 @@ where
     A: DirLoadable,
 {
     #[inline]
-    fn id(self) -> &'a str {
+    fn id(self) -> &'a SharedString {
         match self {
             Self::Simple(handle) => handle.id(),
             Self::Recursive(handle) => handle.id(),
@@ -254,14 +254,14 @@ where
 
     /// The id of the directory handle.
     #[inline]
-    pub fn id(self) -> &'a str {
+    pub fn id(self) -> &'a SharedString {
         self.inner.id()
     }
 
     /// Returns an iterator over the ids of the assets in the directory.
     #[inline]
-    pub fn ids(self) -> impl ExactSizeIterator<Item = &'a str> {
-        self.inner.ids().iter().map(|id| &**id)
+    pub fn ids(self) -> impl ExactSizeIterator<Item = &'a SharedString> {
+        self.inner.ids().iter()
     }
 }
 
