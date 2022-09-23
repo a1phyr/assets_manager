@@ -441,7 +441,7 @@ where
 {
     #[inline]
     fn as_ref(&self) -> &U {
-        (&**self).as_ref()
+        (**self).as_ref()
     }
 }
 
