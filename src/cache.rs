@@ -40,8 +40,14 @@ pub(crate) struct AssetMap {
 }
 
 impl AssetMap {
-    fn new(min_shards: usize) -> AssetMap {
-        let shards = min_shards.next_power_of_two();
+    fn new() -> AssetMap {
+        let shards = match std::thread::available_parallelism() {
+            Ok(n) => 4 * n.get().next_power_of_two(),
+            Err(err) => {
+                log::error!("Failed to get available parallelism: {err}");
+                32
+            }
+        };
 
         let hash_builder = RandomState::new();
         let shards = (0..shards)
@@ -256,7 +262,7 @@ impl<S: Source> AssetCache<S> {
             #[cfg(feature = "hot-reloading")]
             reloader: HotReloader::make(&source),
 
-            assets: AssetMap::new(32),
+            assets: AssetMap::new(),
             source,
         }
     }
@@ -269,7 +275,7 @@ impl<S> AssetCache<S> {
             #[cfg(feature = "hot-reloading")]
             reloader: None,
 
-            assets: AssetMap::new(32),
+            assets: AssetMap::new(),
             source,
         }
     }
