@@ -306,8 +306,8 @@ impl<T: RawCache> Cache for T {
         #[cfg(feature = "hot-reloading")]
         if typ.is_hot_reloaded() {
             if let Some(reloader) = self.reloader() {
-                let (id, entry) = match self.assets().get_key_entry(id, typ.type_id) {
-                    Some((key, entry)) => (key.id, Some(entry)),
+                let (id, entry) = match self.assets().get_entry(id, typ.type_id) {
+                    Some((id, entry)) => (id, Some(entry)),
                     None => (id.into(), None),
                 };
                 records::add_record(reloader, id, typ.type_id);
@@ -315,7 +315,7 @@ impl<T: RawCache> Cache for T {
             }
         }
 
-        self.assets().get_entry(id, typ.type_id)
+        self.assets().get(id, typ.type_id)
     }
 
     #[inline]

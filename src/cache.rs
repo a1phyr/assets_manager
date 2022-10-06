@@ -78,7 +78,7 @@ impl AssetMap {
         &mut self.shards[id]
     }
 
-    pub fn get_entry(&self, id: &str, type_id: TypeId) -> Option<UntypedHandle> {
+    pub fn get(&self, id: &str, type_id: TypeId) -> Option<UntypedHandle> {
         let key = BorrowedKey::new_with(id, type_id);
         let shard = self.get_shard(key).0.read();
         let entry = shard.get(&key as &dyn Key)?;
@@ -86,11 +86,11 @@ impl AssetMap {
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub fn get_key_entry(&self, id: &str, type_id: TypeId) -> Option<(OwnedKey, UntypedHandle)> {
+    pub fn get_entry(&self, id: &str, type_id: TypeId) -> Option<(SharedString, UntypedHandle)> {
         let key = BorrowedKey::new_with(id, type_id);
         let shard = self.get_shard(key).0.read();
         let (key, entry) = shard.get_key_value(&key as &dyn Key)?;
-        unsafe { Some((key.clone(), entry.inner().extend_lifetime())) }
+        unsafe { Some((key.id.clone(), entry.inner().extend_lifetime())) }
     }
 
     pub fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> UntypedHandle {

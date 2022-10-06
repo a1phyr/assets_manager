@@ -87,7 +87,7 @@ impl CacheKind {
     fn update(&mut self, key: OwnedKey, asset: Box<dyn AnyAsset>) {
         match self {
             CacheKind::Static(cache, _, to_reload) => {
-                if let Some(entry) = cache.get_entry(&key.id, key.type_id) {
+                if let Some(entry) = cache.get(&key.id, key.type_id) {
                     asset.reload(entry);
                     log::info!("Reloading \"{}\"", key.id);
                 }
