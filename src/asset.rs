@@ -227,11 +227,11 @@ pub trait Compound: Sized + Send + Sync + 'static {
     #[doc(hidden)]
     fn _load_entry<P: PrivateMarker>(
         cache: AnyCache,
-        id: &SharedString,
+        id: SharedString,
     ) -> Result<CacheEntry, Error> {
-        match Self::load(cache, id) {
-            Ok(asset) => Ok(CacheEntry::new(asset, id.clone())),
-            Err(err) => Err(Error::new(id.clone(), err)),
+        match Self::load(cache, &id) {
+            Ok(asset) => Ok(CacheEntry::new(asset, id)),
+            Err(err) => Err(Error::new(id, err)),
         }
     }
 
@@ -250,7 +250,7 @@ pub trait Compound: Sized + Send + Sync + 'static {
 #[inline]
 pub(crate) fn load_and_record(
     cache: AnyCache,
-    id: &SharedString,
+    id: SharedString,
     typ: Type,
 ) -> Result<CacheEntry, Error> {
     #[cfg(feature = "hot-reloading")]
@@ -259,16 +259,16 @@ pub(crate) fn load_and_record(
             match &typ.inner.typ {
                 crate::key::InnerType::Storable => (),
                 crate::key::InnerType::Asset(inner) => {
-                    let asset = (typ.inner.load)(cache, id)?;
-                    reloader.add_asset(id.clone(), crate::key::AssetType::new(typ.type_id, inner));
+                    let asset = (typ.inner.load)(cache, id.clone())?;
+                    reloader.add_asset(id, crate::key::AssetType::new(typ.type_id, inner));
                     return Ok(asset);
                 }
                 crate::key::InnerType::Compound(inner) => {
                     let (entry, deps) = crate::hot_reloading::records::record(reloader, || {
-                        (typ.inner.load)(cache, id)
+                        (typ.inner.load)(cache, id.clone())
                     });
                     let entry = entry?;
-                    reloader.add_compound(id.clone(), deps, typ, inner.reload);
+                    reloader.add_compound(id, deps, typ, inner.reload);
                     return Ok(entry);
                 }
             }
@@ -284,16 +284,16 @@ where
 {
     #[inline]
     fn load(cache: AnyCache, id: &str) -> Result<Self, BoxedError> {
-        Ok(load_from_source(&cache.source(), id)?)
+        Ok(load_from_source(&cache.source(), &id.into())?)
     }
 
     #[doc(hidden)]
     fn _load_entry<P: PrivateMarker>(
         cache: AnyCache,
-        id: &SharedString,
+        id: SharedString,
     ) -> Result<CacheEntry, Error> {
-        let asset: Self = load_from_source(&cache.source(), id)?;
-        Ok(CacheEntry::new(asset, id.clone()))
+        let asset: Self = load_from_source(&cache.source(), &id)?;
+        Ok(CacheEntry::new(asset, id))
     }
 
     const HOT_RELOADED: bool = Self::HOT_RELOADED;

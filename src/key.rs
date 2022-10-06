@@ -58,7 +58,7 @@ pub(crate) struct AssetTypeInner {
 
     #[cfg(feature = "hot-reloading")]
     #[allow(clippy::type_complexity)]
-    pub load_from_source: fn(&dyn Source, id: &str) -> Result<Box<dyn AnyAsset>, Error>,
+    pub load_from_source: fn(&dyn Source, id: &SharedString) -> Result<Box<dyn AnyAsset>, Error>,
 }
 
 pub(crate) struct CompoundTypeInner {
@@ -75,7 +75,10 @@ pub(crate) enum InnerType {
 impl Inner {
     fn of_asset<T: Asset>() -> &'static Self {
         #[cfg(feature = "hot-reloading")]
-        fn load<A: Asset>(source: &dyn Source, id: &str) -> Result<Box<dyn AnyAsset>, Error> {
+        fn load<A: Asset>(
+            source: &dyn Source,
+            id: &SharedString,
+        ) -> Result<Box<dyn AnyAsset>, Error> {
             let asset = load_from_source::<A, _>(source, id)?;
             Ok(Box::new(asset))
         }
@@ -103,7 +106,7 @@ impl Inner {
     }
 
     fn of_storable<T: Storable>() -> &'static Self {
-        fn load(_: AnyCache, _: &SharedString) -> Result<CacheEntry, Error> {
+        fn load(_: AnyCache, _: SharedString) -> Result<CacheEntry, Error> {
             panic!("Attempted to load `Storable` type")
         }
 
@@ -117,7 +120,7 @@ impl Inner {
 
 pub(crate) struct Inner {
     hot_reloaded: bool,
-    pub load: fn(AnyCache, id: &SharedString) -> Result<CacheEntry, Error>,
+    pub load: fn(AnyCache, id: SharedString) -> Result<CacheEntry, Error>,
     pub typ: InnerType,
 }
 
@@ -151,7 +154,7 @@ impl AssetType {
     pub(crate) fn load_from_source<S: Source>(
         self,
         source: &S,
-        id: &str,
+        id: &SharedString,
     ) -> Result<Box<dyn AnyAsset>, Error> {
         (self.inner.load_from_source)(source, id)
     }

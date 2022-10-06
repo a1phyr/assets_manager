@@ -555,7 +555,7 @@ where
     Ok(asset)
 }
 
-pub(crate) fn load_from_source<A, S>(source: &S, id: &str) -> Result<A, Error>
+pub(crate) fn load_from_source<A, S>(source: &S, id: &SharedString) -> Result<A, Error>
 where
     A: Asset,
     S: Source + ?Sized,
@@ -569,5 +569,5 @@ where
         }
     }
 
-    A::default_value(id, Error::from_kind(id.into(), error))
+    A::default_value(id, Error::from_kind(id.clone(), error))
 }
