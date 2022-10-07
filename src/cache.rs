@@ -544,26 +544,20 @@ impl<S> fmt::Debug for AssetCache<S> {
     }
 }
 
-#[inline]
-fn load_single<A, S>(source: &S, id: &str, ext: &str) -> Result<A, ErrorKind>
-where
-    A: Asset,
-    S: Source + ?Sized,
-{
-    let content = source.read(id, ext)?;
-    let asset = A::Loader::load(content, ext)?;
-    Ok(asset)
-}
+pub(crate) fn load_from_source<A: Asset>(
+    source: &dyn Source,
+    id: &SharedString,
+) -> Result<A, Error> {
+    let load_with_ext = |ext| -> Result<A, ErrorKind> {
+        let content = source.read(id, ext)?;
+        let asset = A::Loader::load(content, ext)?;
+        Ok(asset)
+    };
 
-pub(crate) fn load_from_source<A, S>(source: &S, id: &SharedString) -> Result<A, Error>
-where
-    A: Asset,
-    S: Source + ?Sized,
-{
     let mut error = ErrorKind::NoDefaultValue;
 
     for ext in A::EXTENSIONS {
-        match load_single(source, id, ext) {
+        match load_with_ext(ext) {
             Err(err) => error = err.or(error),
             Ok(asset) => return Ok(asset),
         }

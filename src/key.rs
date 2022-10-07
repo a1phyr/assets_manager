@@ -79,7 +79,7 @@ impl Inner {
             source: &dyn Source,
             id: &SharedString,
         ) -> Result<Box<dyn AnyAsset>, Error> {
-            let asset = load_from_source::<A, _>(source, id)?;
+            let asset = load_from_source::<A>(source, id)?;
             Ok(Box::new(asset))
         }
 
