@@ -278,7 +278,7 @@ where
         self.inner
             .ids()
             .iter()
-            .filter_map(move |id| self.cache.get_cached(&**id))
+            .filter_map(move |id| self.cache.get_cached(id))
     }
 }
 
@@ -292,10 +292,7 @@ where
     /// occured the last time it was tried.
     #[inline]
     pub fn iter(self) -> impl ExactSizeIterator<Item = Result<Handle<'a, A>, Error>> {
-        self.inner
-            .ids()
-            .iter()
-            .map(move |id| self.cache.load(&**id))
+        self.inner.ids().iter().map(move |id| self.cache.load(id))
     }
 }
 
