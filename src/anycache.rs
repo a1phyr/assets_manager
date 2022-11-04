@@ -282,9 +282,9 @@ pub(crate) trait RawCacheWithSource: RawCache {
     fn add_asset(&self, id: &str, typ: Type) -> Result<UntypedHandle, Error> {
         log::trace!("Loading \"{}\"", id);
 
-        let id = SharedString::from(id);
+        let [id, id_clone] = SharedString::n_from_str(id);
         let cache = AnyCache { cache: self };
-        let entry = crate::asset::load_and_record(cache, id.clone(), typ)?;
+        let entry = crate::asset::load_and_record(cache, id_clone, typ)?;
 
         Ok(self.assets().insert(id, typ.type_id, entry))
     }
@@ -345,13 +345,18 @@ impl<T: RawCacheWithSource> CacheWithSource for T {
     }
 
     fn load_owned_entry(&self, id: &str, typ: Type) -> Result<CacheEntry, Error> {
+        #[cfg(not(feature = "hot-reloading"))]
         let id = SharedString::from(id);
-        let asset = crate::asset::load_and_record(self._as_any_cache(), id.clone(), typ);
+
+        #[cfg(feature = "hot-reloading")]
+        let [id, id_clone] = SharedString::n_from_str(id);
+
+        let asset = crate::asset::load_and_record(self._as_any_cache(), id, typ);
 
         #[cfg(feature = "hot-reloading")]
         if typ.is_hot_reloaded() {
             if let Some(reloader) = self.reloader() {
-                records::add_record(reloader, id, typ.type_id);
+                records::add_record(reloader, id_clone, typ.type_id);
             }
         }
 
@@ -372,8 +377,8 @@ pub(crate) trait CacheExt: Cache {
 
     #[cold]
     fn add_any<A: Storable>(&self, id: &str, asset: A) -> UntypedHandle {
-        let id = SharedString::from(id);
-        let entry = CacheEntry::new(asset, id.clone());
+        let [id, id_clone] = SharedString::n_from_str(id);
+        let entry = CacheEntry::new(asset, id_clone);
 
         self.assets().insert(id, TypeId::of::<A>(), entry)
     }

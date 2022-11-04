@@ -1,6 +1,6 @@
 use super::SharedBytes;
 
-use std::{borrow::Cow, cmp, fmt, ops::Deref, str, sync::Arc};
+use std::{borrow::Cow, cmp, fmt, ops::Deref, str};
 
 /// A string that can easily be shared.
 ///
@@ -31,6 +31,11 @@ impl SharedString {
     #[inline]
     pub unsafe fn from_utf8_unchecked(bytes: SharedBytes) -> SharedString {
         SharedString { bytes }
+    }
+
+    #[inline]
+    pub(crate) fn n_from_str<const N: usize>(s: &str) -> [Self; N] {
+        SharedBytes::n_from_slice(s.as_bytes()).map(|bytes| Self { bytes })
     }
 
     /// Converts the `SharedString` into `SharedBytes`.
@@ -84,23 +89,10 @@ impl std::borrow::Borrow<str> for SharedString {
     }
 }
 
-impl From<Arc<str>> for SharedString {
-    #[inline]
-    fn from(arc: Arc<str>) -> SharedString {
-        unsafe {
-            let ptr = Arc::into_raw(arc);
-            // Safety: `str` and `[u8]` have the same layout
-            let bytes = Arc::from_raw(ptr as *const [u8]);
-            let bytes = SharedBytes::from(bytes);
-            SharedString { bytes }
-        }
-    }
-}
-
 impl From<String> for SharedString {
     #[inline]
     fn from(s: String) -> Self {
-        let bytes = SharedBytes::from(s.into_bytes());
+        let bytes = SharedBytes::from_vec(s.into_bytes());
         SharedString { bytes }
     }
 }
@@ -108,7 +100,7 @@ impl From<String> for SharedString {
 impl From<&str> for SharedString {
     #[inline]
     fn from(s: &str) -> Self {
-        let bytes = SharedBytes::from(s.as_bytes());
+        let bytes = SharedBytes::from_slice(s.as_bytes());
         SharedString { bytes }
     }
 }

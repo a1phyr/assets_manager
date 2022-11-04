@@ -9,8 +9,9 @@ mod shared_bytes {
         assert_eq!(&*bytes, b"test");
         let b2 = bytes.clone();
         assert_eq!(&*b2, b"test");
-        drop(b2);
         assert_eq!(&*bytes, b"test");
+        drop(bytes);
+        assert_eq!(&*b2, b"test");
     }
 
     #[test]
@@ -19,7 +20,8 @@ mod shared_bytes {
         assert_eq!(&*bytes, b"test");
         let b2 = bytes.clone();
         assert_eq!(&*b2, b"test");
-        drop(b2);
         assert_eq!(&*bytes, b"test");
+        drop(bytes);
+        assert_eq!(&*b2, b"test");
     }
 }
