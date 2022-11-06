@@ -1,7 +1,7 @@
 //! Definition of the cache
 
 use crate::{
-    anycache::{CacheExt, CacheWithSourceExt, RawCache, RawCacheWithSource},
+    anycache::{CacheExt, RawCache},
     asset::{DirLoadable, Storable},
     dirs::DirHandle,
     entry::{CacheEntry, UntypedHandle},
@@ -217,25 +217,23 @@ pub struct AssetCache<S = FileSystem> {
     source: S,
 }
 
-impl<S> RawCache for AssetCache<S> {
+impl<S: Source> RawCache for AssetCache<S> {
+    type Source = S;
+
     #[inline]
     fn assets(&self) -> &crate::cache::AssetMap {
         &self.assets
+    }
+
+    #[inline]
+    fn get_source(&self) -> &S {
+        &self.source
     }
 
     #[cfg(feature = "hot-reloading")]
     #[inline]
     fn reloader(&self) -> Option<&HotReloader> {
         self.reloader.as_ref()
-    }
-}
-
-impl<S: Source> RawCacheWithSource for AssetCache<S> {
-    type Source = S;
-
-    #[inline]
-    fn get_source(&self) -> &S {
-        &self.source
     }
 }
 
@@ -266,9 +264,7 @@ impl<S: Source> AssetCache<S> {
             source,
         }
     }
-}
 
-impl<S> AssetCache<S> {
     /// Creates a cache that loads assets from the given source.
     pub fn without_hot_reloading(source: S) -> AssetCache<S> {
         Self {
@@ -385,12 +381,7 @@ impl<S> AssetCache<S> {
             reloader.clear();
         }
     }
-}
 
-impl<S> AssetCache<S>
-where
-    S: Source,
-{
     /// Converts to an `AnyCache`.
     #[inline]
     pub fn as_any_cache(&self) -> AnyCache {

@@ -1,15 +1,14 @@
 //! This module defines `AnyCache` and many traits to reduce code redondancy.
 //!
-//! There are 6 traits here: `RawCache`, `Cache`, `CacheExt` and variants with
-//! source. The goal of this is to have an object-safe cache trait to use in
+//! There are 3 traits here: `RawCache`, `Cache`, `CacheExt`.
+//! The goal of this is to have an object-safe cache trait to use in
 //! `AnyCache`, while not losing the ability to use caches without virtual
 //! calls.
 //!
-//! - The `Cache` (and `CacheWithSource`) variants are the central ones, and are
-//!   designed to be object safe.
-//! - The `RawCache` variant is there to ease implementations of `Cache`
-//!   without repeating code.
-//! - The `CacheExt` variant adds generics on top of `Cache` to ease the use of
+//! - The `Cache` is the central one, and is designed to be object safe.
+//! - The `RawCache` is there to ease implementations of `Cache` without
+//!   repeating code.
+//! - The `CacheExt` adds generics on top of `Cache` to ease the use of
 //!   `Cache`'s methods.
 
 use std::{any::TypeId, borrow::Cow, fmt, io};
@@ -38,12 +37,12 @@ use crate::AssetCache;
 /// APIs.
 #[derive(Clone, Copy)]
 pub struct AnyCache<'a> {
-    cache: &'a dyn CacheWithSource,
+    cache: &'a dyn Cache,
 }
 
 #[derive(Clone, Copy)]
 struct AnySource<'a> {
-    cache: &'a dyn CacheWithSource,
+    cache: &'a dyn Cache,
 }
 
 impl Source for AnySource<'_> {
@@ -200,83 +199,30 @@ pub(crate) trait Cache {
     #[cfg(feature = "hot-reloading")]
     fn reloader(&self) -> Option<&HotReloader>;
 
-    fn get_cached_entry_inner(&self, id: &str, typ: Type) -> Option<UntypedHandle>;
-
-    fn contains(&self, id: &str, type_id: TypeId) -> bool;
-}
-
-pub(crate) trait CacheWithSource: Cache {
     fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>>;
 
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()>;
 
     fn exists(&self, entry: DirEntry) -> bool;
 
+    fn get_cached_entry_inner(&self, id: &str, typ: Type) -> Option<UntypedHandle>;
+
+    fn contains(&self, id: &str, type_id: TypeId) -> bool;
+
     fn load_entry(&self, id: &str, typ: Type) -> Result<UntypedHandle, Error>;
 
     fn load_owned_entry(&self, id: &str, typ: Type) -> Result<CacheEntry, Error>;
 }
 
-impl Cache for &dyn CacheWithSource {
-    #[inline]
-    fn assets(&self) -> &AssetMap {
-        (**self).assets()
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    #[inline]
-    fn reloader(&self) -> Option<&HotReloader> {
-        (**self).reloader()
-    }
-
-    #[inline]
-    fn get_cached_entry_inner(&self, id: &str, typ: Type) -> Option<UntypedHandle> {
-        (*self).get_cached_entry_inner(id, typ)
-    }
-
-    #[inline]
-    fn contains(&self, id: &str, type_id: TypeId) -> bool {
-        (*self).contains(id, type_id)
-    }
-}
-
-impl CacheWithSource for &dyn CacheWithSource {
-    #[inline]
-    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
-        (*self).read(id, ext)
-    }
-
-    #[inline]
-    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
-        (*self).read_dir(id, f)
-    }
-
-    #[inline]
-    fn exists(&self, entry: DirEntry) -> bool {
-        (**self).exists(entry)
-    }
-
-    #[inline]
-    fn load_entry(&self, id: &str, typ: Type) -> Result<UntypedHandle, Error> {
-        (*self).load_entry(id, typ)
-    }
-
-    fn load_owned_entry(&self, id: &str, typ: Type) -> Result<CacheEntry, Error> {
-        (*self).load_owned_entry(id, typ)
-    }
-}
-
 pub(crate) trait RawCache: Sized {
+    type Source: Source;
+
     fn assets(&self) -> &AssetMap;
+
+    fn get_source(&self) -> &Self::Source;
 
     #[cfg(feature = "hot-reloading")]
     fn reloader(&self) -> Option<&HotReloader>;
-}
-
-pub(crate) trait RawCacheWithSource: RawCache {
-    type Source: Source;
-
-    fn get_source(&self) -> &Self::Source;
 
     #[cold]
     fn add_asset(&self, id: &str, typ: Type) -> Result<UntypedHandle, Error> {
@@ -302,6 +248,18 @@ impl<T: RawCache> Cache for T {
         self.reloader()
     }
 
+    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
+        self.get_source().read(id, ext)
+    }
+
+    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+        self.get_source().read_dir(id, f)
+    }
+
+    fn exists(&self, entry: DirEntry) -> bool {
+        self.get_source().exists(entry)
+    }
+
     fn get_cached_entry_inner(&self, id: &str, typ: Type) -> Option<UntypedHandle> {
         #[cfg(feature = "hot-reloading")]
         if typ.is_hot_reloaded() {
@@ -321,20 +279,6 @@ impl<T: RawCache> Cache for T {
     #[inline]
     fn contains(&self, id: &str, type_id: TypeId) -> bool {
         self.assets().contains_key(id, type_id)
-    }
-}
-
-impl<T: RawCacheWithSource> CacheWithSource for T {
-    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
-        self.get_source().read(id, ext)
-    }
-
-    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
-        self.get_source().read_dir(id, f)
-    }
-
-    fn exists(&self, entry: DirEntry) -> bool {
-        self.get_source().exists(entry)
     }
 
     fn load_entry(&self, id: &str, typ: Type) -> Result<UntypedHandle, Error> {
@@ -365,6 +309,8 @@ impl<T: RawCacheWithSource> CacheWithSource for T {
 }
 
 pub(crate) trait CacheExt: Cache {
+    fn _as_any_cache(&self) -> AnyCache;
+
     #[inline]
     fn _get_cached<A: Storable>(&self, id: &str) -> Option<Handle<A>> {
         Some(self._get_cached_entry::<A>(id)?.downcast())
@@ -396,12 +342,6 @@ pub(crate) trait CacheExt: Cache {
     fn _contains<A: Storable>(&self, id: &str) -> bool {
         self.contains(id, TypeId::of::<A>())
     }
-}
-
-impl<T: Cache + ?Sized> CacheExt for T {}
-
-pub(crate) trait CacheWithSourceExt: CacheWithSource + CacheExt {
-    fn _as_any_cache(&self) -> AnyCache;
 
     fn _load<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
         let entry = self.load_entry(id, Type::of::<A>())?;
@@ -466,14 +406,14 @@ pub(crate) trait CacheWithSourceExt: CacheWithSource + CacheExt {
     }
 }
 
-impl<T: CacheWithSource> CacheWithSourceExt for T {
+impl<T: Cache> CacheExt for T {
     #[inline]
     fn _as_any_cache(&self) -> AnyCache {
         AnyCache { cache: self }
     }
 }
 
-impl CacheWithSourceExt for dyn CacheWithSource + '_ {
+impl CacheExt for dyn Cache + '_ {
     #[inline]
     fn _as_any_cache(&self) -> AnyCache {
         AnyCache { cache: self }
