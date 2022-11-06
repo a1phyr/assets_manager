@@ -38,7 +38,21 @@ impl SharedString {
         SharedBytes::n_from_slice(s.as_bytes()).map(|bytes| Self { bytes })
     }
 
+    /// Converts the `&SharedString` into a `&str`.
+    #[inline]
+    pub fn as_str(&self) -> &str {
+        self
+    }
+
+    /// Converts the `&SharedString` into a `String`.
+    #[inline]
+    pub fn to_string(&self) -> String {
+        String::from(&**self)
+    }
+
     /// Converts the `SharedString` into `SharedBytes`.
+    ///
+    /// This methods does not allocate nor copies memory.
     #[inline]
     pub fn into_bytes(self) -> SharedBytes {
         self.bytes
