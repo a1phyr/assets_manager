@@ -35,7 +35,7 @@ impl asset::NotHotReloaded for XS {}
 pub struct Y(pub i32);
 
 impl Compound for Y {
-    fn load(cache: AnyCache, id: &str) -> Result<Y, BoxedError> {
+    fn load(cache: AnyCache, id: &SharedString) -> Result<Y, BoxedError> {
         Ok(Y(cache.load::<X>(id)?.read().0))
     }
 }
@@ -43,7 +43,7 @@ impl Compound for Y {
 pub struct Z(pub i32);
 
 impl Compound for Z {
-    fn load(cache: AnyCache, id: &str) -> Result<Z, BoxedError> {
+    fn load(cache: AnyCache, id: &SharedString) -> Result<Z, BoxedError> {
         Ok(Z(cache.load::<Y>(id)?.read().0))
     }
 }

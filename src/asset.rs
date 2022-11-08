@@ -222,7 +222,7 @@ pub trait Compound: Sized + Send + Sync + 'static {
     ///
     /// This function should not perform any kind of I/O: such concern should be
     /// delegated to [`Asset`]s.
-    fn load(cache: AnyCache, id: &str) -> Result<Self, BoxedError>;
+    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError>;
 
     #[doc(hidden)]
     fn _load_entry<P: PrivateMarker>(
@@ -283,8 +283,8 @@ where
     A: Asset,
 {
     #[inline]
-    fn load(cache: AnyCache, id: &str) -> Result<Self, BoxedError> {
-        Ok(load_from_source(&cache.source(), &id.into())?)
+    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
+        Ok(load_from_source(&cache.source(), id)?)
     }
 
     #[doc(hidden)]
@@ -309,7 +309,7 @@ impl<A> Compound for Arc<A>
 where
     A: Compound,
 {
-    fn load(cache: AnyCache, id: &str) -> Result<Self, BoxedError> {
+    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
         let asset = cache.load_owned::<A>(id)?;
         Ok(Arc::new(asset))
     }

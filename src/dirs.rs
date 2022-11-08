@@ -36,7 +36,7 @@ use crate::AssetCache;
 ///
 /// // Specify how to load a playlist
 /// impl Compound for Playlist {
-///     fn load(cache: AnyCache, id: &str) -> Result<Self, BoxedError> {
+///     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
 ///         // Read the manifest (a list of ids)
 ///         let manifest = cache.load::<Json<Vec<String>>>(id)?.read();
 ///
@@ -51,7 +51,7 @@ use crate::AssetCache;
 ///
 /// // Specify how to get ids of playlists in a directory
 /// impl DirLoadable for Playlist {
-///     fn select_ids(cache: AnyCache, id: &str) -> std::io::Result<Vec<SharedString>> {
+///     fn select_ids(cache: AnyCache, id: &SharedString) -> std::io::Result<Vec<SharedString>> {
 ///         let mut ids = Vec::new();
 ///
 ///         // Select all files with "json" extension (manifest files)
@@ -73,7 +73,7 @@ pub trait DirLoadable: Send + Sync + 'static {
     ///
     /// Note that the order of the returned ids is not kept, and that redundant
     /// ids are removed.
-    fn select_ids(cache: AnyCache, id: &str) -> io::Result<Vec<SharedString>>;
+    fn select_ids(cache: AnyCache, id: &SharedString) -> io::Result<Vec<SharedString>>;
 }
 
 impl<A> DirLoadable for A
@@ -81,7 +81,7 @@ where
     A: Asset,
 {
     #[inline]
-    fn select_ids(cache: AnyCache, id: &str) -> io::Result<Vec<SharedString>> {
+    fn select_ids(cache: AnyCache, id: &SharedString) -> io::Result<Vec<SharedString>> {
         fn inner(cache: AnyCache, id: &str, extensions: &[&str]) -> io::Result<Vec<SharedString>> {
             let mut ids = Vec::new();
 
@@ -106,7 +106,7 @@ where
     A: DirLoadable,
 {
     #[inline]
-    fn select_ids(cache: AnyCache, id: &str) -> io::Result<Vec<SharedString>> {
+    fn select_ids(cache: AnyCache, id: &SharedString) -> io::Result<Vec<SharedString>> {
         A::select_ids(cache, id)
     }
 }
@@ -121,10 +121,10 @@ impl<A> Compound for CachedDir<A>
 where
     A: DirLoadable,
 {
-    fn load(cache: crate::AnyCache, id: &str) -> Result<Self, BoxedError> {
+    fn load(cache: crate::AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
         let mut ids = cache
             .no_record(|| A::select_ids(cache, id))
-            .map_err(|err| Error::from_io(id.into(), err))?;
+            .map_err(|err| Error::from_io(id.clone(), err))?;
 
         // Remove duplicated entries
         ids.sort_unstable();
@@ -157,7 +157,7 @@ impl<A> Compound for CachedRecDir<A>
 where
     A: DirLoadable,
 {
-    fn load(cache: crate::AnyCache, id: &str) -> Result<Self, BoxedError> {
+    fn load(cache: crate::AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
         // Load the current directory
         let this = cache.load::<CachedDir<A>>(id)?;
         let mut ids = this.get().ids.clone();
@@ -172,7 +172,7 @@ where
                     }
                 }
             })
-            .map_err(|err| Error::from_io(id.into(), err))?;
+            .map_err(|err| Error::from_io(id.clone(), err))?;
 
         Ok(CachedRecDir {
             ids,

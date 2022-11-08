@@ -1,4 +1,4 @@
-use crate::{loader, utils, AnyCache, Asset, BoxedError, Compound};
+use crate::{loader, utils, AnyCache, Asset, BoxedError, Compound, SharedString};
 use std::path;
 
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
@@ -192,7 +192,7 @@ fn load_image(
 
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
 impl Compound for Gltf {
-    fn load(cache: AnyCache, id: &str) -> Result<Self, BoxedError> {
+    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
         let gltf::Gltf { document, mut blob } = cache.load::<gltf::Gltf>(id)?.cloned();
 
         let base_id = match id.rfind('.') {
@@ -219,7 +219,7 @@ impl Compound for Gltf {
 
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
 impl super::DirLoadable for Gltf {
-    fn select_ids(cache: AnyCache, id: &str) -> std::io::Result<Vec<crate::SharedString>> {
+    fn select_ids(cache: AnyCache, id: &SharedString) -> std::io::Result<Vec<SharedString>> {
         gltf::Gltf::select_ids(cache, id)
     }
 }

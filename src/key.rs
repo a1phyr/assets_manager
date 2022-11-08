@@ -29,7 +29,7 @@ impl<A: Asset> AnyAsset for A {
 }
 
 #[cfg(feature = "hot-reloading")]
-fn reload<T: Compound>(cache: AnyCache, id: &str) -> Option<Dependencies> {
+fn reload<T: Compound>(cache: AnyCache, id: &SharedString) -> Option<Dependencies> {
     // Outline these functions to reduce the amount of monomorphized code
     fn log_ok(id: &str) {
         log::info!("Reloading \"{}\"", id);
@@ -63,7 +63,7 @@ pub(crate) struct AssetTypeInner {
 
 pub(crate) struct CompoundTypeInner {
     #[cfg(feature = "hot-reloading")]
-    pub reload: fn(AnyCache, &str) -> Option<Dependencies>,
+    pub reload: fn(AnyCache, &SharedString) -> Option<Dependencies>,
 }
 
 pub(crate) enum InnerType {

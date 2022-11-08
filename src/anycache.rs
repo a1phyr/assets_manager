@@ -175,7 +175,7 @@ impl<'a> AnyCache<'a> {
     #[inline]
     pub(crate) fn record_load<A: Compound>(
         self,
-        id: &str,
+        id: &SharedString,
     ) -> Result<(A, Dependencies), crate::BoxedError> {
         let (asset, records) = if let Some(reloader) = self.reloader() {
             records::record(reloader, || A::load(self, id))

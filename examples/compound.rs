@@ -1,12 +1,12 @@
 //! This example shows the use of Compound assets: assets able to load other
 //! assets, and their integration with hot-reloading.
 
-use assets_manager::{loader, AnyCache, Asset, AssetCache, BoxedError, Compound};
+use assets_manager::{loader, AnyCache, Asset, AssetCache, BoxedError, Compound, SharedString};
 use serde::Deserialize;
 use std::sync::Arc;
 
 /// The monster that can be found in different levels
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Debug)]
 #[allow(dead_code)]
 struct Monster {
     name: String,
@@ -39,7 +39,7 @@ impl Asset for LevelManifest {
 #[derive(Debug)]
 #[allow(dead_code)]
 struct Level {
-    id: String,
+    id: SharedString,
     name: String,
 
     /// A list of (Monster, spawn chance)
@@ -53,7 +53,7 @@ struct Level {
 /// a Compound depends on. When a dependency is reloading, the Coumpound is also
 /// reloaded. You don't have to write hot-reloading-specific code.
 impl Compound for Level {
-    fn load(cache: AnyCache, id: &str) -> Result<Self, BoxedError> {
+    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
         // Load the manifest
         let raw_level = cache.load::<LevelManifest>(id)?.read();
 
@@ -70,7 +70,7 @@ impl Compound for Level {
         }
 
         Ok(Level {
-            id: id.to_owned(),
+            id: id.clone(),
             name: raw_level.name.clone(),
             spawn_table,
         })
