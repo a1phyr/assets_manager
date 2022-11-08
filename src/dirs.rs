@@ -51,11 +51,11 @@ use crate::AssetCache;
 ///
 /// // Specify how to get ids of playlists in a directory
 /// impl DirLoadable for Playlist {
-///     fn select_ids<S: Source + ?Sized>(source: &S, id: &str) -> std::io::Result<Vec<SharedString>> {
+///     fn select_ids(cache: AnyCache, id: &str) -> std::io::Result<Vec<SharedString>> {
 ///         let mut ids = Vec::new();
 ///
 ///         // Select all files with "json" extension (manifest files)
-///         source.read_dir(id, &mut |entry| {
+///         cache.source().read_dir(id, &mut |entry| {
 ///             if let DirEntry::File(id, ext) = entry {
 ///                 if ext == "json" {
 ///                     ids.push(id.into());
@@ -73,7 +73,7 @@ pub trait DirLoadable: Send + Sync + 'static {
     ///
     /// Note that the order of the returned ids is not kept, and that redundant
     /// ids are removed.
-    fn select_ids<S: Source + ?Sized>(source: &S, id: &str) -> io::Result<Vec<SharedString>>;
+    fn select_ids(cache: AnyCache, id: &str) -> io::Result<Vec<SharedString>>;
 }
 
 impl<A> DirLoadable for A
@@ -81,16 +81,12 @@ where
     A: Asset,
 {
     #[inline]
-    fn select_ids<S: Source + ?Sized>(source: &S, id: &str) -> io::Result<Vec<SharedString>> {
-        fn inner<S: Source + ?Sized>(
-            source: &S,
-            id: &str,
-            extensions: &[&str],
-        ) -> io::Result<Vec<SharedString>> {
+    fn select_ids(cache: AnyCache, id: &str) -> io::Result<Vec<SharedString>> {
+        fn inner(cache: AnyCache, id: &str, extensions: &[&str]) -> io::Result<Vec<SharedString>> {
             let mut ids = Vec::new();
 
             // Select all files with an extension valid for type `A`
-            source.read_dir(id, &mut |entry| {
+            cache.source().read_dir(id, &mut |entry| {
                 if let DirEntry::File(id, ext) = entry {
                     if extensions.contains(&ext) {
                         ids.push(id.into());
@@ -101,7 +97,7 @@ where
             Ok(ids)
         }
 
-        inner(source, id, A::EXTENSIONS)
+        inner(cache, id, A::EXTENSIONS)
     }
 }
 
@@ -110,8 +106,8 @@ where
     A: DirLoadable,
 {
     #[inline]
-    fn select_ids<S: Source + ?Sized>(source: &S, id: &str) -> io::Result<Vec<SharedString>> {
-        A::select_ids(source, id)
+    fn select_ids(cache: AnyCache, id: &str) -> io::Result<Vec<SharedString>> {
+        A::select_ids(cache, id)
     }
 }
 
@@ -126,8 +122,9 @@ where
     A: DirLoadable,
 {
     fn load(cache: crate::AnyCache, id: &str) -> Result<Self, BoxedError> {
-        let mut ids =
-            A::select_ids(&cache.source(), id).map_err(|err| Error::from_io(id.into(), err))?;
+        let mut ids = cache
+            .no_record(|| A::select_ids(cache, id))
+            .map_err(|err| Error::from_io(id.into(), err))?;
 
         // Remove duplicated entries
         ids.sort_unstable();

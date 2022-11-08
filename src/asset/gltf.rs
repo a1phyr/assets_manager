@@ -219,10 +219,7 @@ impl Compound for Gltf {
 
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
 impl super::DirLoadable for Gltf {
-    fn select_ids<S: crate::source::Source + ?Sized>(
-        source: &S,
-        id: &str,
-    ) -> std::io::Result<Vec<crate::SharedString>> {
-        gltf::Gltf::select_ids(source, id)
+    fn select_ids(cache: AnyCache, id: &str) -> std::io::Result<Vec<crate::SharedString>> {
+        gltf::Gltf::select_ids(cache, id)
     }
 }
