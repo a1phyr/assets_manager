@@ -77,7 +77,7 @@ base64 = {version = "0.13", optional = true}
 cfg-if = "1.0"
 rand = "0.8"
 serde = {version = "1.0", features = ["derive"]}
-env_logger = "0.9"
+env_logger = "0.10"
 
 [[example]]
 name = "basic"
