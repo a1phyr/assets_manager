@@ -13,38 +13,29 @@ jobs:
       matrix:
         rust:
           - stable
-          - "1.60"
+          - "1.61"
     steps:
       - name: Install development libraries
         run: sudo apt update && sudo apt install libasound2-dev -y
 
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.rust }}
-          override: true
+        run: rustup toolchain add ${{ matrix.rust }}
 
       - name: cargo test
         run: cargo test
 
       - name: cargo test --all-features
-        run: cargo test --all-features
+        run: cargo +${{ matrix.rust }} test --all-features
 
   fmt:
     name: Check formatting
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+        uses: actions/checkout@v3
 
       - name: cargo fmt -- --check
         run: cargo fmt -- --check
