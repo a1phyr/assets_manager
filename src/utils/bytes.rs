@@ -137,7 +137,7 @@ impl SharedBytes {
         [(); N].map(|_| Self { ptr })
     }
 
-    /// TODO
+    /// Create a `SharedBytes` from a slice.
     #[inline]
     pub fn from_slice(bytes: &[u8]) -> Self {
         let ptr = Self::inner_from_slice(bytes, 1);
@@ -165,7 +165,7 @@ impl SharedBytes {
         }
     }
 
-    /// TODO
+    /// Create a `SharedBytes` from a `Vec`
     #[inline]
     pub fn from_vec(bytes: Vec<u8>) -> Self {
         let ptr = Self::inner_from_vec(bytes, 1);
