@@ -71,7 +71,7 @@ image = {version = "0.24", default-features = false, optional = true}
 ab_glyph = {version = "0.2.12", optional = true}
 
 gltf = {version = "1.0", default-features = false, optional = true}
-base64 = {version = "0.13", optional = true}
+base64 = {version = "0.20", optional = true}
 
 [dev-dependencies]
 cfg-if = "1.0"
