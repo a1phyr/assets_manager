@@ -91,15 +91,20 @@ impl CacheEntry {
 
     /// Consumes the `CacheEntry` and returns its inner value.
     #[inline]
-    pub fn into_inner<T: 'static>(self) -> (T, SharedString) {
-        let _this = match self.0.downcast::<StaticInner<T>>() {
-            Ok(inner) => return (inner.value, inner.id),
-            Err(this) => this,
-        };
+    pub fn into_inner<T: Storable>(self) -> (T, SharedString) {
+        #[allow(unused_mut)]
+        let mut this = self.0;
 
         #[cfg(feature = "hot-reloading")]
-        if let Ok(inner) = _this.downcast::<DynamicInner<T>>() {
-            return (inner.value.into_inner(), inner.id);
+        if T::HOT_RELOADED {
+            match this.downcast::<DynamicInner<T>>() {
+                Ok(inner) => return (inner.value.into_inner(), inner.id),
+                Err(t) => this = t,
+            }
+        }
+
+        if let Ok(inner) = this.downcast::<StaticInner<T>>() {
+            return (inner.value, inner.id);
         }
 
         wrong_handle_type()
@@ -123,12 +128,12 @@ impl<'a> UntypedHandle<'a> {
     }
 
     #[inline]
-    pub fn try_downcast<T: 'static>(self) -> Option<Handle<'a, T>> {
+    pub fn try_downcast<T: Storable>(self) -> Option<Handle<'a, T>> {
         Handle::new(self)
     }
 
     #[inline]
-    pub fn downcast<T: 'static>(self) -> Handle<'a, T> {
+    pub fn downcast<T: Storable>(self) -> Handle<'a, T> {
         match self.try_downcast() {
             Some(h) => h,
             None => wrong_handle_type(),
@@ -180,17 +185,19 @@ impl<'a, T> Handle<'a, T> {
     /// `inner` must contain a `StaticInner<T>` or a `DynamicInner<T>`.
     fn new(inner: UntypedHandle<'a>) -> Option<Self>
     where
-        T: 'static,
+        T: Storable,
     {
         #[allow(clippy::never_loop)]
         let inner = loop {
-            if let Some(inner) = inner.0.downcast_ref::<StaticInner<T>>() {
-                break HandleInner::Static(inner);
+            #[cfg(feature = "hot-reloading")]
+            if T::HOT_RELOADED {
+                if let Some(inner) = inner.0.downcast_ref::<DynamicInner<T>>() {
+                    break HandleInner::Dynamic(inner);
+                }
             }
 
-            #[cfg(feature = "hot-reloading")]
-            if let Some(inner) = inner.0.downcast_ref::<DynamicInner<T>>() {
-                break HandleInner::Dynamic(inner);
+            if let Some(inner) = inner.0.downcast_ref::<StaticInner<T>>() {
+                break HandleInner::Static(inner);
             }
 
             return None;
