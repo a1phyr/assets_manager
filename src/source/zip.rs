@@ -256,7 +256,7 @@ where
     pub fn from_reader(reader: R) -> io::Result<Zip<R>> {
         let mut archive = ZipArchive::new(reader)?;
 
-        let len = archive.len() as usize;
+        let len = archive.len();
         let mut files = HashMap::with_capacity(len);
         let mut dirs = HashMap::new();
         let mut id_builder = IdBuilder::default();
