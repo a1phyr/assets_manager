@@ -185,6 +185,11 @@ impl<'a> AnyCache<'a> {
 
         Ok((asset?, records))
     }
+
+    #[inline]
+    pub(crate) fn has_reloader(&self) -> bool {
+        self.cache._has_reloader()
+    }
 }
 
 impl fmt::Debug for AnyCache<'_> {
@@ -312,6 +317,15 @@ pub(crate) trait CacheExt: Cache {
     fn _as_any_cache(&self) -> AnyCache;
 
     #[inline]
+    fn _has_reloader(&self) -> bool {
+        #[cfg(not(feature = "hot-reloading"))]
+        return false;
+
+        #[cfg(feature = "hot-reloading")]
+        self.reloader().is_some()
+    }
+
+    #[inline]
     fn _get_cached<A: Storable>(&self, id: &str) -> Option<Handle<A>> {
         Some(self._get_cached_entry::<A>(id)?.downcast())
     }
@@ -324,7 +338,7 @@ pub(crate) trait CacheExt: Cache {
     #[cold]
     fn add_any<A: Storable>(&self, id: &str, asset: A) -> UntypedHandle {
         let [id, id_clone] = SharedString::n_from_str(id);
-        let entry = CacheEntry::new(asset, id_clone);
+        let entry = CacheEntry::new(asset, id_clone, || self._has_reloader());
 
         self.assets().insert(id, TypeId::of::<A>(), entry)
     }

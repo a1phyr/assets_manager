@@ -68,12 +68,13 @@ impl CacheEntry {
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new<T: Storable>(asset: T, id: SharedString) -> Self {
+    pub fn new<T: Storable>(asset: T, id: SharedString, _mutable: impl FnOnce() -> bool) -> Self {
         #[cfg(not(feature = "hot-reloading"))]
         let inner = Box::new(StaticInner::new(asset, id));
 
+        // Even if hot-reloading is enabled, we can avoid the lock in some cases.
         #[cfg(feature = "hot-reloading")]
-        let inner: Box<dyn Any + Send + Sync> = if T::HOT_RELOADED {
+        let inner: Box<dyn Any + Send + Sync> = if T::HOT_RELOADED && _mutable() {
             Box::new(DynamicInner::new(asset, id))
         } else {
             Box::new(StaticInner::new(asset, id))

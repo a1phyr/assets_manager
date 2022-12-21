@@ -24,7 +24,7 @@ impl<A: Asset> AnyAsset for A {
     }
 
     fn create(self: Box<Self>, id: SharedString) -> CacheEntry {
-        CacheEntry::new(*self, id)
+        CacheEntry::new(*self, id, || true)
     }
 }
 

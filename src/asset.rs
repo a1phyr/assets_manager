@@ -230,7 +230,7 @@ pub trait Compound: Sized + Send + Sync + 'static {
         id: SharedString,
     ) -> Result<CacheEntry, Error> {
         match Self::load(cache, &id) {
-            Ok(asset) => Ok(CacheEntry::new(asset, id)),
+            Ok(asset) => Ok(CacheEntry::new(asset, id, || cache.has_reloader())),
             Err(err) => Err(Error::new(id, err)),
         }
     }
@@ -293,7 +293,7 @@ where
         id: SharedString,
     ) -> Result<CacheEntry, Error> {
         let asset: Self = load_from_source(&cache.source(), &id)?;
-        Ok(CacheEntry::new(asset, id))
+        Ok(CacheEntry::new(asset, id, || cache.has_reloader()))
     }
 
     const HOT_RELOADED: bool = Self::HOT_RELOADED;
