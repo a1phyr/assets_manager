@@ -199,8 +199,6 @@ impl fmt::Debug for AnyCache<'_> {
 }
 
 pub(crate) trait Cache {
-    fn assets(&self) -> &AssetMap;
-
     #[cfg(feature = "hot-reloading")]
     fn reloader(&self) -> Option<&HotReloader>;
 
@@ -217,6 +215,8 @@ pub(crate) trait Cache {
     fn load_entry(&self, id: &str, typ: Type) -> Result<UntypedHandle, Error>;
 
     fn load_owned_entry(&self, id: &str, typ: Type) -> Result<CacheEntry, Error>;
+
+    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> UntypedHandle;
 }
 
 pub(crate) trait RawCache: Sized {
@@ -242,11 +242,6 @@ pub(crate) trait RawCache: Sized {
 }
 
 impl<T: RawCache> Cache for T {
-    #[inline]
-    fn assets(&self) -> &AssetMap {
-        self.assets()
-    }
-
     #[cfg(feature = "hot-reloading")]
     #[inline]
     fn reloader(&self) -> Option<&HotReloader> {
@@ -311,6 +306,11 @@ impl<T: RawCache> Cache for T {
 
         asset
     }
+
+    #[inline]
+    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> UntypedHandle {
+        self.assets().insert(id, type_id, entry)
+    }
 }
 
 pub(crate) trait CacheExt: Cache {
@@ -340,7 +340,7 @@ pub(crate) trait CacheExt: Cache {
         let [id, id_clone] = SharedString::n_from_str(id);
         let entry = CacheEntry::new(asset, id_clone, || self._has_reloader());
 
-        self.assets().insert(id, TypeId::of::<A>(), entry)
+        self.insert(id, TypeId::of::<A>(), entry)
     }
 
     fn _get_or_insert<A: Storable>(&self, id: &str, default: A) -> Handle<A> {
