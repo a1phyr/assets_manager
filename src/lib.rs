@@ -32,8 +32,6 @@
 //! - Image formats (with [`image`] crate): `bmp`, `jpeg`, `png` `webp`.
 //! - 3D formats (with [`gltf`] crate): `gltf`.
 //!
-//! [`gltf`]: `_gltf`
-//!
 //! ### Internal features
 //!
 //! These features change inner data structures implementations. They usually
