@@ -366,7 +366,7 @@ pub trait Storable: Sized + Send + Sync + 'static {
     /// let _ = handle.get();
     /// # Ok::<(), assets_manager::BoxedError>(())
     /// ```
-    const _CHECK_NOT_HOT_RELOADED: () = [()][Self::HOT_RELOADED as usize];
+    const _CHECK_NOT_HOT_RELOADED: () = assert!(!Self::HOT_RELOADED);
 
     #[doc(hidden)]
     #[inline]
