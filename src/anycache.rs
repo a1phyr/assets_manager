@@ -186,8 +186,9 @@ impl<'a> AnyCache<'a> {
         Ok((asset?, records))
     }
 
+    /// Returns `true` if values stored in this cache may be hot-reloaded.
     #[inline]
-    pub(crate) fn has_reloader(&self) -> bool {
+    pub fn is_hot_reloaded(&self) -> bool {
         self.cache._has_reloader()
     }
 }
