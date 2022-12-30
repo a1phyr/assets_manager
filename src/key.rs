@@ -85,7 +85,7 @@ impl Inner {
 
         &Self {
             hot_reloaded: T::HOT_RELOADED,
-            load: T::_load_entry::<utils::Private>,
+            load: T::_load_entry,
             typ: InnerType::Asset(AssetTypeInner {
                 extensions: T::EXTENSIONS,
                 #[cfg(feature = "hot-reloading")]
@@ -97,7 +97,7 @@ impl Inner {
     fn of_compound<T: Compound>() -> &'static Self {
         &Self {
             hot_reloaded: T::HOT_RELOADED,
-            load: T::_load_entry::<utils::Private>,
+            load: T::_load_entry,
             typ: InnerType::Compound(CompoundTypeInner {
                 #[cfg(feature = "hot-reloading")]
                 reload: reload::<T>,
