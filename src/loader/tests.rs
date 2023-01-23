@@ -145,7 +145,7 @@ test_loader!(
     toml_loader_ok,
     toml_loader_err,
     TomlLoader,
-    toml::ser::to_vec
+    toml_edit::ser::to_string
 );
 
 #[cfg(feature = "yaml")]

@@ -264,7 +264,7 @@ macro_rules! serde_loaders {
         $(
             #[doc = $doc:literal]
             #[cfg(feature = $feature:literal)]
-            struct $name:ident => $fun:path;
+            struct $name:ident => $fun:expr;
         )*
     ) => {
         $(
@@ -310,7 +310,7 @@ serde_loaders! {
 
     /// Loads assets from TOML files.
     #[cfg(feature = "toml")]
-    struct TomlLoader => toml::de::from_slice;
+    struct TomlLoader => toml_edit::de::from_slice;
 
     /// Loads assets from YAML files.
     #[cfg(feature = "yaml")]
