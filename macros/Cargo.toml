@@ -4,7 +4,7 @@ version = "0.2.0"
 authors = ["Benoît du Garreau"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
-readme = "../README.md"
+readme = "README.md"
 description= "Procedural macros for assets_manager"
 
 repository = "https://github.com/a1phyr/assets_manager"
