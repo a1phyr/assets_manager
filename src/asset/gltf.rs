@@ -95,6 +95,7 @@ impl<'a> UriContent<'a> {
                 None => (mime_type, fst),
             };
 
+            #[allow(deprecated)]
             let content = base64::decode(b64)?;
             Ok(Self::Bin { mime_type, content })
         } else {
@@ -119,11 +120,11 @@ impl<'a> UriContent<'a> {
                         id.push_str(comp.to_str().unwrap());
                     }
                     path::Component::CurDir => (),
-                    _ => return Err(format!("unsupported path component: {:?}", comp).into()),
+                    _ => return Err(format!("unsupported path component: {comp:?}").into()),
                 }
             }
 
-            println!("{}", id);
+            println!("{id}");
 
             Ok(Self::File { id, ext })
         }

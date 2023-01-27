@@ -13,7 +13,7 @@ type Res = Result<(), Box<dyn std::error::Error>>;
 
 fn write_i32(path: &Path, n: i32) -> io::Result<()> {
     let mut file = File::create(path)?;
-    write!(file, "{}", n)
+    write!(file, "{n}")
 }
 
 macro_rules! test_scenario {
@@ -146,7 +146,7 @@ fn messages() {
         fn send_update(&self, message: UpdateMessage) {
             match self.0.lock().pop() {
                 Some(expected) => assert_eq!(message, expected),
-                None => panic!("Unexpected message {:?}", message),
+                None => panic!("Unexpected message {message:?}"),
             }
         }
     }

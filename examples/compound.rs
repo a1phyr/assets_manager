@@ -88,7 +88,7 @@ fn main() -> Result<(), BoxedError> {
     let level = cache.load::<Level>("example.levels.forest")?;
     let mut watcher = level.reload_watcher();
 
-    println!("{:#?}", level);
+    println!("{level:#?}");
 
     loop {
         cache.hot_reload();
@@ -98,7 +98,7 @@ fn main() -> Result<(), BoxedError> {
         //  - assets/example/monsters/goblin.ron
         //  - assets/example/monsters/giant_bat.ron
         if watcher.reloaded() {
-            println!("{:#?}", level);
+            println!("{level:#?}");
         }
 
         std::thread::sleep(std::time::Duration::from_millis(100));

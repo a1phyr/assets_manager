@@ -38,7 +38,7 @@ fn bytes_loader_ok() {
 #[test]
 fn parse_loader_ok() {
     let n = rand::random::<i32>();
-    let s = &format!("{}", n);
+    let s = &format!("{n}");
     let raw = raw(s);
 
     let loaded: i32 = ParseLoader::load(raw, "").unwrap();
@@ -55,7 +55,7 @@ fn parse_loader_err() {
 #[test]
 fn from_other() {
     let n = rand::random::<i32>();
-    let s = &format!("{}", n);
+    let s = &format!("{n}");
     let raw = raw(s);
 
     let loaded: X = LoadFrom::<i32, ParseLoader>::load(raw, "").unwrap();
