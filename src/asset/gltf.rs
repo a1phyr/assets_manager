@@ -124,8 +124,6 @@ impl<'a> UriContent<'a> {
                 }
             }
 
-            println!("{id}");
-
             Ok(Self::File { id, ext })
         }
     }
