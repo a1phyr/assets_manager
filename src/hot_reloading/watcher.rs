@@ -199,7 +199,7 @@ impl notify::EventHandler for NotifyEventHandler {
             }
         }
 
-        log::trace!("Received filesystem event: {:?}", event);
+        log::trace!("Received filesystem event: {event:?}");
 
         match event {
             Ok(event) => {
@@ -218,7 +218,7 @@ impl notify::EventHandler for NotifyEventHandler {
                     }
                 }
             }
-            Err(err) => log::warn!("Error from notify: {}", err),
+            Err(err) => log::warn!("Error from notify: {err}"),
         }
     }
 }

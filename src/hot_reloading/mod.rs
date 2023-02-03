@@ -232,7 +232,7 @@ impl HotReloader {
         let updates = source
             .configure_hot_reloading(EventSender(events_tx))
             .map_err(|err| {
-                log::error!("Unable to start hot-reloading: {}", err);
+                log::error!("Unable to start hot-reloading: {err}");
             })
             .ok()?;
 

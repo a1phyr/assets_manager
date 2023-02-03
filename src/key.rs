@@ -32,10 +32,10 @@ impl<A: Asset> AnyAsset for A {
 fn reload<T: Compound>(cache: AnyCache, id: &SharedString) -> Option<Dependencies> {
     // Outline these functions to reduce the amount of monomorphized code
     fn log_ok(id: &str) {
-        log::info!("Reloading \"{}\"", id);
+        log::info!("Reloading \"{id}\"");
     }
     fn log_err(id: &str, err: crate::BoxedError) {
-        log::warn!("Error reloading \"{}\": {}", id, err);
+        log::warn!("Error reloading \"{id}\": {err}");
     }
 
     let handle = cache.get_cached::<T>(id)?;

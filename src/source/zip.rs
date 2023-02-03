@@ -199,7 +199,7 @@ fn register_file(
     .is_some();
 
     if !ok {
-        log::warn!("Unsupported path in zip archive: {:?}", path);
+        log::warn!("Unsupported path in zip archive: {path:?}");
     }
 }
 
