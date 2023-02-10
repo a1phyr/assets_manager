@@ -1,7 +1,7 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     path::{Path, PathBuf},
 };
 use syn::parse::{Parse, ParseStream};
@@ -28,6 +28,7 @@ impl Input {
         read_dir(&self.0, &mut content, Id::new(), &mut errors);
 
         if errors.is_empty() {
+            content.sort();
             Ok(content.to_token_stream())
         } else {
             Err(errors)
@@ -81,7 +82,7 @@ fn read_dir(path: &Path, content: &mut Content, id: Id, errors: &mut Vec<syn::Er
     }
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 struct Id(String);
 
 impl Id {
@@ -100,6 +101,7 @@ impl Id {
 
 struct FileDesc(Id, String, PathBuf);
 
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 enum DirEntry {
     File(Id, String),
     Dir(Id),
@@ -107,14 +109,14 @@ enum DirEntry {
 
 struct Content {
     files: Vec<FileDesc>,
-    dirs: HashMap<Id, Vec<DirEntry>>,
+    dirs: BTreeMap<Id, Vec<DirEntry>>,
 }
 
 impl Content {
     fn new() -> Content {
         Content {
             files: Vec::new(),
-            dirs: HashMap::new(),
+            dirs: BTreeMap::new(),
         }
     }
 
@@ -136,6 +138,17 @@ impl Content {
                 .push(entry);
         }
         self.dirs.insert(id, Vec::new());
+    }
+
+    /// Sorts directory content to ensure reproducible builds.
+    fn sort(&mut self) {
+        // We can't use `sort_unstable_by_key` for some lifetime reason.
+        self.files
+            .sort_unstable_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+
+        for (_, dir) in &mut self.dirs {
+            dir.sort_unstable();
+        }
     }
 
     fn to_token_stream(&self) -> TokenStream {
