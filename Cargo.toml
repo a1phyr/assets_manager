@@ -34,7 +34,7 @@ yaml = ["dep:serde_yaml", "serde"]
 toml = ["dep:toml_edit", "serde"]
 
 flac = ["rodio/flac"]
-mp3 = ["rodio/mp3"]
+mp3 = ["rodio/minimp3"]
 vorbis = ["rodio/vorbis"]
 wav = ["rodio/wav"]
 
@@ -68,7 +68,7 @@ ron = {version = "0.8", optional = true}
 toml_edit = {version = "0.19", optional = true, features = ["serde"]}
 serde_yaml = {version = "0.9.1", optional = true}
 
-rodio = {version = "0.16", default-features = false, optional = true}
+rodio = {version = "0.17", default-features = false, optional = true}
 image = {version = "0.24", default-features = false, optional = true}
 ab_glyph = {version = "0.2.12", optional = true}
 
