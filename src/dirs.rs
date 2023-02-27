@@ -74,6 +74,21 @@ pub trait DirLoadable: Send + Sync + 'static {
     /// Note that the order of the returned ids is not kept, and that redundant
     /// ids are removed.
     fn select_ids(cache: AnyCache, id: &SharedString) -> io::Result<Vec<SharedString>>;
+
+    /// Executes the given closure for each id of a child directory of the given
+    /// directory. The default implementation reads the cache's source.
+    #[inline]
+    fn sub_directories(
+        cache: AnyCache,
+        id: &SharedString,
+        mut f: impl FnMut(&str),
+    ) -> io::Result<()> {
+        cache.source().read_dir(id, &mut |entry| {
+            if let DirEntry::Directory(id) = entry {
+                f(id);
+            }
+        })
+    }
 }
 
 impl<A> DirLoadable for A
@@ -163,16 +178,12 @@ where
         let mut ids = this.get().ids.clone();
 
         // Recursively load child directories
-        cache
-            .source()
-            .read_dir(id, &mut |entry| {
-                if let DirEntry::Directory(id) = entry {
-                    if let Ok(child) = cache.load::<CachedRecDir<A>>(id) {
-                        ids.extend_from_slice(&child.get().ids);
-                    }
-                }
-            })
-            .map_err(|err| Error::from_io(id.clone(), err))?;
+        A::sub_directories(cache, id, |id| {
+            if let Ok(child) = cache.load::<CachedRecDir<A>>(id) {
+                ids.extend_from_slice(&child.get().ids);
+            }
+        })
+        .map_err(|err| Error::from_io(id.clone(), err))?;
 
         Ok(CachedRecDir {
             ids,
