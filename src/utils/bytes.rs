@@ -266,7 +266,7 @@ impl PartialOrd<[u8]> for SharedBytes {
 
 impl PartialOrd for SharedBytes {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        (**self).partial_cmp(other)
+        (**self).partial_cmp(&**other)
     }
 }
 
