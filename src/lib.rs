@@ -201,6 +201,8 @@ pub mod source;
 pub mod hot_reloading;
 
 mod utils;
+#[cfg(feature = "utils")]
+pub use utils::cell::OnceInitCell;
 pub use utils::{SharedBytes, SharedString};
 
 #[cfg(test)]

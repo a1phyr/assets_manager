@@ -11,3 +11,6 @@ pub(crate) use private::*;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "utils")]
+pub mod cell;

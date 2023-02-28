@@ -20,6 +20,7 @@ default = ["ahash", "parking_lot"]
 
 hot-reloading = ["dep:notify", "dep:crossbeam-channel"]
 embedded = ["dep:assets_manager_macros"]
+utils = ["dep:once_cell"]
 
 zip = ["dep:zip", "dep:sync_file"]
 zip-bzip2 = ["zip", "zip/bzip2"]
@@ -46,6 +47,7 @@ gltf = ["dep:gltf", "dep:base64", "png", "jpeg"]
 
 [dependencies]
 log = {version = "0.4"}
+once_cell = {version = "1.16", optional = true}
 
 assets_manager_macros = {path = "macros", version = "0.2", optional = true}
 
