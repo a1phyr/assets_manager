@@ -146,7 +146,7 @@ impl Content {
         self.files
             .sort_unstable_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
 
-        for (_, dir) in &mut self.dirs {
+        for dir in self.dirs.values_mut() {
             dir.sort_unstable();
         }
     }
