@@ -8,7 +8,6 @@ use crate::{
 use crate::AssetCache;
 
 use std::{
-    borrow::Cow,
     fmt, fs, io,
     path::{Path, PathBuf},
 };
@@ -66,9 +65,9 @@ impl FileSystem {
 }
 
 impl Source for FileSystem {
-    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
         let path = self.path_of(DirEntry::File(id, ext));
-        fs::read(path).map(Into::into)
+        fs::read(path).map(super::FileContent::Buffer)
     }
 
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {

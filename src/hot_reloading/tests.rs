@@ -3,7 +3,7 @@ use crate::{
     tests::{X, XS, Y, Z},
     AssetCache,
 };
-use std::{borrow::Cow, fs::File, io, io::Write, path::Path, sync::Arc};
+use std::{fs::File, io, io::Write, path::Path, sync::Arc};
 
 fn sleep() {
     std::thread::sleep(std::time::Duration::from_millis(20));
@@ -163,8 +163,8 @@ fn messages() {
     struct TestSource;
 
     impl crate::source::Source for TestSource {
-        fn read(&self, _id: &str, _ext: &str) -> io::Result<Cow<[u8]>> {
-            Ok(Cow::Borrowed(b"10"))
+        fn read(&self, _id: &str, _ext: &str) -> io::Result<crate::source::FileContent> {
+            Ok(crate::source::FileContent::Slice(b"10"))
         }
 
         fn read_dir(&self, _id: &str, _f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {

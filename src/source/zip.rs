@@ -5,7 +5,6 @@ use crate::{
 };
 
 use std::{
-    borrow::Cow,
     fmt, hash, io,
     path::{self, Path},
     sync::Arc,
@@ -279,7 +278,7 @@ impl<R> Source for Zip<R>
 where
     R: io::Read + io::Seek + Clone,
 {
-    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
         use io::Read;
 
         // Get the file within the archive
@@ -292,7 +291,7 @@ where
         let mut content = Vec::with_capacity(file.size() as usize + 1);
         file.read_to_end(&mut content)?;
 
-        Ok(Cow::Owned(content))
+        Ok(super::FileContent::Buffer(content))
     }
 
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {

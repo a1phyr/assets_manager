@@ -11,7 +11,7 @@
 //! - The `CacheExt` adds generics on top of `Cache` to ease the use of
 //!   `Cache`'s methods.
 
-use std::{any::TypeId, borrow::Cow, fmt, io};
+use std::{any::TypeId, fmt, io};
 
 use crate::{
     asset::DirLoadable,
@@ -47,7 +47,7 @@ struct AnySource<'a> {
 
 impl Source for AnySource<'_> {
     #[inline]
-    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<crate::source::FileContent> {
         self.cache.read(id, ext)
     }
 
@@ -203,7 +203,7 @@ pub(crate) trait Cache {
     #[cfg(feature = "hot-reloading")]
     fn reloader(&self) -> Option<&HotReloader>;
 
-    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>>;
+    fn read(&self, id: &str, ext: &str) -> io::Result<crate::source::FileContent>;
 
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()>;
 
@@ -249,7 +249,7 @@ impl<T: RawCache> Cache for T {
         self.reloader()
     }
 
-    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<crate::source::FileContent> {
         self.get_source().read(id, ext)
     }
 

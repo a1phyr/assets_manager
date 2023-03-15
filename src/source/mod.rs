@@ -31,7 +31,7 @@
 //! # Ok::<(), std::io::Error>(())
 //! ```
 
-use std::{borrow::Cow, io};
+use std::{borrow::Cow, fmt, io};
 
 #[cfg(doc)]
 use crate::{asset::DirLoadable, AssetCache};
@@ -135,6 +135,69 @@ impl<'a> DirEntry<'a> {
     }
 }
 
+/// The raw content of a file.
+///
+/// This enum enables returning the raw bytes of a file in the most efficient
+/// representation.
+pub enum FileContent<'a> {
+    /// The content of the file as a borrowed byte slice.
+    Slice(&'a [u8]),
+
+    /// The content of the file as an owned buffer.
+    Buffer(Vec<u8>),
+
+    /// The content of the file as an owned value that contains bytes.
+    Owned(Box<dyn AsRef<[u8]> + 'a>),
+}
+
+impl<'a> FileContent<'a> {
+    /// Creates a `FileContent` from an owned value that contains bytes.
+    #[inline(always)]
+    pub fn from_owned(x: impl AsRef<[u8]> + 'a) -> Self {
+        Self::Owned(Box::new(x))
+    }
+
+    #[inline]
+    pub(crate) fn with_cow<T>(self, f: impl FnOnce(Cow<[u8]>) -> T) -> T {
+        match self {
+            FileContent::Slice(b) => f(Cow::Borrowed(b)),
+            FileContent::Buffer(b) => f(Cow::Owned(b)),
+            FileContent::Owned(b) => f(Cow::Borrowed((*b).as_ref())),
+        }
+    }
+}
+
+impl fmt::Debug for FileContent<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("FileContent { .. }")
+    }
+}
+
+impl AsRef<[u8]> for FileContent<'_> {
+    #[inline]
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            Self::Slice(b) => b,
+            Self::Buffer(b) => &b,
+            Self::Owned(b) => (**b).as_ref(),
+        }
+    }
+}
+
+impl<'a> From<&'a [u8]> for FileContent<'a> {
+    #[inline]
+    fn from(slice: &'a [u8]) -> Self {
+        Self::Slice(slice)
+    }
+}
+
+impl From<Vec<u8>> for FileContent<'_> {
+    #[inline]
+    fn from(buffer: Vec<u8>) -> Self {
+        Self::Buffer(buffer)
+    }
+}
+
 /// Bytes sources to load assets from.
 ///
 /// This trait provides an abstraction over a basic filesystem, which is used to
@@ -147,14 +210,14 @@ impl<'a> DirEntry<'a> {
 pub trait Source {
     /// Try reading the source given an id and an extension.
     ///
-    /// If no error occurs, this function returns an `Cow`, which can be useful
-    /// to avoid allocations.
+    /// If no error occurs, this function returns the raw content of the file as
+    /// a  [`FileContent`], so it can avoid copying bytes around if possible.
     ///
     /// Most of the time, you won't need to use this method, directly, as it is
     /// done for you by an [`AssetCache`] when you load [`Asset`]s.
     ///
     /// [`Asset`]: crate::Asset
-    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>>;
+    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent>;
 
     /// Reads the content of a directory.
     ///
@@ -229,7 +292,7 @@ where
     S: Source + ?Sized,
 {
     #[inline]
-    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent> {
         self.as_ref().read(id, ext)
     }
 
@@ -259,7 +322,7 @@ where
     S: Source + ?Sized,
 {
     #[inline]
-    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent> {
         (**self).read(id, ext)
     }
 
@@ -289,7 +352,7 @@ where
     S: Source + ?Sized,
 {
     #[inline]
-    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent> {
         self.as_ref().read(id, ext)
     }
 
@@ -322,7 +385,7 @@ pub struct Empty;
 
 impl Source for Empty {
     #[inline]
-    fn read(&self, _id: &str, _ext: &str) -> io::Result<Cow<[u8]>> {
+    fn read(&self, _id: &str, _ext: &str) -> io::Result<FileContent> {
         Err(io::Error::from(io::ErrorKind::NotFound))
     }
 

@@ -7,11 +7,10 @@
 
 use assets_manager::{
     hot_reloading::{DynUpdateSender, EventSender, FsWatcherBuilder},
-    source::{DirEntry, FileSystem, Source},
+    source::{DirEntry, FileContent, FileSystem, Source},
     AssetCache, BoxedError,
 };
 use std::{
-    borrow::Cow,
     io,
     path::{Path, PathBuf},
 };
@@ -45,7 +44,7 @@ impl FsWithOverride {
 }
 
 impl Source for FsWithOverride {
-    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent> {
         // Try override path
         if let Some(dir) = &self.override_dir {
             match dir.read(id, ext) {

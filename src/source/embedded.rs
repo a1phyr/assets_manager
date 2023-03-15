@@ -1,6 +1,5 @@
-use std::{borrow::Cow, collections::HashMap, io};
-
 use super::{DirEntry, Source};
+use std::{collections::HashMap, io};
 
 /// The raw representation of embedded files.
 ///
@@ -67,9 +66,9 @@ impl<'a> From<RawEmbedded<'a>> for Embedded<'a> {
 
 #[cfg_attr(docsrs, doc(cfg(feature = "embedded")))]
 impl<'a> Source for Embedded<'a> {
-    fn read(&self, id: &str, ext: &str) -> io::Result<Cow<[u8]>> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
         match self.files.get(&(id, ext)) {
-            Some(content) => Ok(Cow::Borrowed(content)),
+            Some(content) => Ok(super::FileContent::Slice(content)),
             None => Err(io::ErrorKind::NotFound.into()),
         }
     }

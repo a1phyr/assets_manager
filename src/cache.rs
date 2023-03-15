@@ -540,8 +540,9 @@ pub(crate) fn load_from_source<A: Asset>(
     id: &SharedString,
 ) -> Result<A, Error> {
     let load_with_ext = |ext| -> Result<A, ErrorKind> {
-        let content = source.read(id, ext)?;
-        let asset = A::Loader::load(content, ext)?;
+        let asset = source
+            .read(id, ext)?
+            .with_cow(|content| A::Loader::load(content, ext))?;
         Ok(asset)
     };
 
