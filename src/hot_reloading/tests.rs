@@ -43,7 +43,7 @@ macro_rules! test_scenario {
 
             test_scenario!(@leak cache $is_static);
 
-            let path = cache.source().path_of(DirEntry::File(id, "x"));
+            let path = cache.raw_source().path_of(DirEntry::File(id, "x"));
             write_i32(&path, $n)?;
             sleep();
 

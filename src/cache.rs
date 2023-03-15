@@ -278,7 +278,7 @@ impl<S: Source> AssetCache<S> {
 
     /// Returns a reference to the cache's [`Source`].
     #[inline]
-    pub fn source(&self) -> &S {
+    pub fn raw_source(&self) -> &S {
         &self.source
     }
 

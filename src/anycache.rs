@@ -65,7 +65,7 @@ impl Source for AnySource<'_> {
 impl<'a> AnyCache<'a> {
     /// The `Source` from which assets are loaded.
     #[inline]
-    pub fn source(self) -> impl Source + 'a {
+    pub fn raw_source(self) -> impl Source + 'a {
         AnySource { cache: self.cache }
     }
 

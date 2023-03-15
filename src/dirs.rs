@@ -55,7 +55,7 @@ use crate::AssetCache;
 ///         let mut ids = Vec::new();
 ///
 ///         // Select all files with "json" extension (manifest files)
-///         cache.source().read_dir(id, &mut |entry| {
+///         cache.raw_source().read_dir(id, &mut |entry| {
 ///             if let DirEntry::File(id, ext) = entry {
 ///                 if ext == "json" {
 ///                     ids.push(id.into());
@@ -83,7 +83,7 @@ pub trait DirLoadable: Send + Sync + 'static {
         id: &SharedString,
         mut f: impl FnMut(&str),
     ) -> io::Result<()> {
-        cache.source().read_dir(id, &mut |entry| {
+        cache.raw_source().read_dir(id, &mut |entry| {
             if let DirEntry::Directory(id) = entry {
                 f(id);
             }
@@ -101,7 +101,7 @@ where
             let mut ids = Vec::new();
 
             // Select all files with an extension valid for type `A`
-            cache.source().read_dir(id, &mut |entry| {
+            cache.raw_source().read_dir(id, &mut |entry| {
                 if let DirEntry::File(id, ext) = entry {
                     if extensions.contains(&ext) {
                         ids.push(id.into());

@@ -281,12 +281,12 @@ where
 {
     #[inline]
     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
-        Ok(load_from_source(&cache.source(), id)?)
+        Ok(load_from_source(&cache.raw_source(), id)?)
     }
 
     #[doc(hidden)]
     fn _load_entry(cache: AnyCache, id: SharedString) -> Result<CacheEntry, Error> {
-        let asset: Self = load_from_source(&cache.source(), &id)?;
+        let asset: Self = load_from_source(&cache.raw_source(), &id)?;
         Ok(CacheEntry::new(asset, id, || cache.is_hot_reloaded()))
     }
 
