@@ -136,7 +136,7 @@ mod asset_cache {
         let mut loaded: Vec<_> = cache
             .load_dir::<X>("test", false)
             .unwrap()
-            .iter()
+            .iter(cache.as_any_cache())
             .filter_map(|x| Some(x.ok()?.read().0))
             .collect();
         assert!(cache.contains_dir::<X>("test", false));

@@ -241,7 +241,6 @@ where
 /// This type provides methods to access assets within a directory.
 pub struct DirHandle<'a, A> {
     inner: DirHandleInner<'a, A>,
-    cache: AnyCache<'a>,
 }
 
 impl<'a, A> DirHandle<'a, A>
@@ -249,15 +248,15 @@ where
     A: DirLoadable,
 {
     #[inline]
-    pub(crate) fn new(handle: Handle<'a, CachedDir<A>>, cache: AnyCache<'a>) -> Self {
+    pub(crate) fn new(handle: Handle<'a, CachedDir<A>>) -> Self {
         let inner = DirHandleInner::Simple(handle);
-        DirHandle { inner, cache }
+        DirHandle { inner }
     }
 
     #[inline]
-    pub(crate) fn new_rec(handle: Handle<'a, CachedRecDir<A>>, cache: AnyCache<'a>) -> Self {
+    pub(crate) fn new_rec(handle: Handle<'a, CachedRecDir<A>>) -> Self {
         let inner = DirHandleInner::Recursive(handle);
-        DirHandle { inner, cache }
+        DirHandle { inner }
     }
 
     /// The id of the directory handle.
@@ -273,7 +272,7 @@ where
     }
 }
 
-impl<'a, A> DirHandle<'a, A>
+impl<'h, A> DirHandle<'h, A>
 where
     A: DirLoadable + crate::Storable,
 {
@@ -282,15 +281,15 @@ where
     /// This fonction does not do any I/O and assets that previously failed to
     /// load are ignored.
     #[inline]
-    pub fn iter_cached(self) -> impl Iterator<Item = Handle<'a, A>> {
-        self.inner
-            .ids()
-            .iter()
-            .filter_map(move |id| self.cache.get_cached(id))
+    pub fn iter_cached<'a: 'h>(
+        self,
+        cache: AnyCache<'a>,
+    ) -> impl Iterator<Item = Handle<'a, A>> + 'h {
+        self.ids().filter_map(move |id| cache.get_cached(id))
     }
 }
 
-impl<'a, A> DirHandle<'a, A>
+impl<'h, A> DirHandle<'h, A>
 where
     A: DirLoadable + Compound,
 {
@@ -299,8 +298,11 @@ where
     /// This function will happily try to load all assets, even if an error
     /// occured the last time it was tried.
     #[inline]
-    pub fn iter(self) -> impl ExactSizeIterator<Item = Result<Handle<'a, A>, Error>> {
-        self.inner.ids().iter().map(move |id| self.cache.load(id))
+    pub fn iter<'a: 'h>(
+        self,
+        cache: AnyCache<'a>,
+    ) -> impl ExactSizeIterator<Item = Result<Handle<'a, A>, Error>> + 'h {
+        self.ids().map(move |id| cache.load(id))
     }
 }
 

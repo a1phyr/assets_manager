@@ -387,10 +387,10 @@ pub(crate) trait CacheExt: Cache {
     fn _get_cached_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> Option<DirHandle<A>> {
         Some(if recursive {
             let handle = self._get_cached(id)?;
-            DirHandle::new_rec(handle, self._as_any_cache())
+            DirHandle::new_rec(handle)
         } else {
             let handle = self._get_cached(id)?;
-            DirHandle::new(handle, self._as_any_cache())
+            DirHandle::new(handle)
         })
     }
 
@@ -398,10 +398,10 @@ pub(crate) trait CacheExt: Cache {
     fn _load_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> Result<DirHandle<A>, Error> {
         Ok(if recursive {
             let handle = self._load(id)?;
-            DirHandle::new_rec(handle, self._as_any_cache())
+            DirHandle::new_rec(handle)
         } else {
             let handle = self._load(id)?;
-            DirHandle::new(handle, self._as_any_cache())
+            DirHandle::new(handle)
         })
     }
 
