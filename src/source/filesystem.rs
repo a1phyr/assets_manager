@@ -10,6 +10,7 @@ use crate::AssetCache;
 use std::{
     fmt, fs, io,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use super::{DirEntry, Source};
@@ -30,6 +31,8 @@ use super::{DirEntry, Source};
 #[derive(Clone)]
 pub struct FileSystem {
     path: PathBuf,
+    #[cfg(feature = "mmap")]
+    mmap_if: Option<Arc<dyn Fn(&fs::File, &Path) -> bool + Send + Sync>>,
 }
 
 impl FileSystem {
@@ -46,7 +49,11 @@ impl FileSystem {
         let path = path.as_ref().canonicalize()?;
         let _ = path.read_dir()?;
 
-        Ok(FileSystem { path })
+        Ok(FileSystem {
+            path,
+            #[cfg(feature = "mmap")]
+            mmap_if: None,
+        })
     }
 
     /// Gets the path of the source's root.
@@ -55,6 +62,16 @@ impl FileSystem {
     #[inline]
     pub fn root(&self) -> &Path {
         &self.path
+    }
+
+    /// Use a memory mapping
+    #[cfg(feature = "mmap")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "mmap")))]
+    pub unsafe fn mmap_if<F>(&mut self, f: F)
+    where
+        F: Fn(&fs::File, &Path) -> bool + Send + Sync + 'static,
+    {
+        self.mmap_if = Some(Arc::new(f))
     }
 
     /// Returns the path that the directory entry would have if it exists.
@@ -67,10 +84,24 @@ impl FileSystem {
 impl Source for FileSystem {
     fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
         let path = self.path_of(DirEntry::File(id, ext));
-        match fs::read(&path) {
-            Ok(buf) => Ok(super::FileContent::Buffer(buf)),
-            Err(err) => Err(read_error(err, path)),
-        }
+
+        let res = (|| {
+            let mut file = fs::File::open(&path)?;
+
+            #[cfg(feature = "mmap")]
+            if let Some(allowed) = &self.mmap_if {
+                if allowed(&file, &path) {
+                    let map = unsafe { memmap2::Mmap::map(&file)? };
+                    return Ok(super::FileContent::Owned(Box::new(map)));
+                }
+            }
+
+            let mut buf = Vec::new();
+            io::Read::read_to_end(&mut file, &mut buf)?;
+            Ok(super::FileContent::Buffer(buf))
+        })();
+
+        res.map_err(|err| read_error(err, path))
     }
 
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
