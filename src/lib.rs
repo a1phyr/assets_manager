@@ -207,6 +207,9 @@ mod map;
 mod entry;
 pub use entry::{AssetReadGuard, AtomicReloadId, Handle, ReloadId, ReloadWatcher, UntypedHandle};
 
+mod id;
+pub use id::{Id, OwnedId};
+
 mod key;
 
 pub mod source;
