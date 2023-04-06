@@ -178,7 +178,7 @@ impl AsRef<[u8]> for FileContent<'_> {
     fn as_ref(&self) -> &[u8] {
         match self {
             Self::Slice(b) => b,
-            Self::Buffer(b) => &b,
+            Self::Buffer(b) => b,
             Self::Owned(b) => (**b).as_ref(),
         }
     }
