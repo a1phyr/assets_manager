@@ -284,14 +284,7 @@ impl<S: Source> AssetCache<S> {
 
     /// Temporarily prevent `Compound` dependencies to be recorded.
     ///
-    /// This function disables dependencies recording in [`Compound::load`].
-    /// Assets loaded during the given closure will not be recorded as
-    /// dependencies and the currently loading asset will not be reloaded when
-    /// they are.
-    ///
-    /// When hot-reloading is disabled or if the cache's [`Source`] does not
-    /// support hot-reloading, this function only returns the result of the
-    /// closure given as parameter.
+    /// See [`AnyCache::no_record`] for more details.
     #[inline]
     pub fn no_record<T, F: FnOnce() -> T>(&self, f: F) -> T {
         #[cfg(feature = "hot-reloading")]
@@ -305,13 +298,26 @@ impl<S: Source> AssetCache<S> {
         }
     }
 
+    /// Loads an asset.
+    ///
+    /// See [`AnyCache::load`] for more details.
+    #[inline]
+    pub fn load<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
+        self._load(id)
+    }
+
+    /// Loads an asset and panic if an error happens.
+    ///
+    /// See [`AnyCache::load_expect`] for more details.
+    #[inline]
+    #[track_caller]
+    pub fn load_expect<A: Compound>(&self, id: &str) -> Handle<A> {
+        self._load_expect(id)
+    }
+
     /// Gets a value from the cache.
     ///
-    /// The value does not have to be an asset, but if it is not, its type must
-    /// be marked with the [`Storable`] trait.
-    ///
-    /// This function does not attempt to load the value from the source if it
-    /// is not found in the cache.
+    /// See [`AnyCache::get_cached`] for more details.
     #[inline]
     pub fn get_cached<A: Storable>(&self, id: &str) -> Option<Handle<A>> {
         self._get_cached(id)
@@ -319,18 +325,68 @@ impl<S: Source> AssetCache<S> {
 
     /// Gets a value from the cache or inserts one.
     ///
-    /// As for `get_cached`, non-assets types must be marked with [`Storable`].
+    /// See [`AnyCache::get_or_insert`] for more details.
     #[inline]
     pub fn get_or_insert<A: Storable>(&self, id: &str, default: A) -> Handle<A> {
         self._get_or_insert(id, default)
     }
 
     /// Returns `true` if the cache contains the specified asset.
+    ///
+    /// See [`AnyCache::contains`] for more details.
     #[inline]
     pub fn contains<A: Storable>(&self, id: &str) -> bool {
         self.assets.contains_key(id, TypeId::of::<A>())
     }
 
+    /// Loads a directory.
+    ///
+    /// See [`AnyCache::load_dir`] for more details.
+    #[inline]
+    pub fn load_dir<A: DirLoadable>(
+        &self,
+        id: &str,
+        recursive: bool,
+    ) -> Result<DirHandle<A>, Error> {
+        self._load_dir(id, recursive)
+    }
+
+    /// Gets an directory from the cache.
+    ///
+    /// See [`AnyCache::get_cached_dir`] for more details.
+    #[inline]
+    pub fn get_cached_dir<A: DirLoadable>(
+        &self,
+        id: &str,
+        recursive: bool,
+    ) -> Option<DirHandle<A>> {
+        self._get_cached_dir(id, recursive)
+    }
+
+    /// Returns `true` if the cache contains the specified directory.
+    ///
+    /// See [`AnyCache::contains_dir`] for more details.
+    #[inline]
+    pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
+        self._contains_dir::<A>(id, recursive)
+    }
+
+    /// Loads an owned version of an asset.
+    ///
+    /// See [`AnyCache::load_owned`] for more details.
+    #[inline]
+    pub fn load_owned<A: Compound>(&self, id: &str) -> Result<A, Error> {
+        self._load_owned(id)
+    }
+
+    /// Converts to an `AnyCache`.
+    #[inline]
+    pub fn as_any_cache(&self) -> AnyCache {
+        self._as_any_cache()
+    }
+}
+
+impl<S: Source> AssetCache<S> {
     /// Removes an asset from the cache, and returns whether it was present in
     /// the cache.
     ///
@@ -380,99 +436,6 @@ impl<S: Source> AssetCache<S> {
         if let Some(reloader) = &self.reloader {
             reloader.clear();
         }
-    }
-
-    /// Converts to an `AnyCache`.
-    #[inline]
-    pub fn as_any_cache(&self) -> AnyCache {
-        self._as_any_cache()
-    }
-
-    /// Loads an asset.
-    ///
-    /// If the asset is not found in the cache, it is loaded from the source.
-    ///
-    /// # Errors
-    ///
-    /// Errors for `Asset`s can occur in several cases :
-    /// - The source could not be read
-    /// - Loaded data could not be converted properly
-    /// - The asset has no extension
-    #[inline]
-    pub fn load<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
-        self._load(id)
-    }
-
-    /// Loads an asset and panic if an error happens.
-    ///
-    /// # Panics
-    ///
-    /// Panics if an error happens while loading the asset (see [`load`]).
-    ///
-    /// [`load`]: `Self::load`
-    #[inline]
-    #[track_caller]
-    pub fn load_expect<A: Compound>(&self, id: &str) -> Handle<A> {
-        self._load_expect(id)
-    }
-
-    /// Loads an directory from the cache.
-    ///
-    /// This function does not attempt to load the it from the source if it is
-    /// not found in the cache.
-    #[inline]
-    pub fn get_cached_dir<A: DirLoadable>(
-        &self,
-        id: &str,
-        recursive: bool,
-    ) -> Option<DirHandle<A>> {
-        self._get_cached_dir(id, recursive)
-    }
-
-    /// Returns `true` if the cache contains the specified directory with the
-    /// given `recursive` parameter.
-    #[inline]
-    pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
-        self._contains_dir::<A>(id, recursive)
-    }
-
-    /// Loads all assets of a given type from a directory.
-    ///
-    /// If `recursive` is `true`, this function also loads assets recursively
-    /// from subdirectories.
-    ///
-    /// The directory's id is constructed the same way as assets. To specify
-    /// the cache's root, give the empty string (`""`) as id.
-    ///
-    /// The returned structure can be use to iterate over the loaded assets.
-    ///
-    /// # Errors
-    ///
-    /// An error is returned if the given id does not match a valid readable
-    /// directory.
-    ///
-    /// When loading a directory recursively, directories that can't be read are
-    /// ignored.
-    #[inline]
-    pub fn load_dir<A: DirLoadable>(
-        &self,
-        id: &str,
-        recursive: bool,
-    ) -> Result<DirHandle<A>, Error> {
-        self._load_dir(id, recursive)
-    }
-
-    /// Loads an owned version of an asset
-    ///
-    /// Note that the asset will not be fetched from the cache nor will it be
-    /// cached. In addition, hot-reloading does not affect the returned value
-    /// (if used during [`Compound::load`]. It will still be registered as a
-    /// dependency).
-    ///
-    /// This can be useful if you need ownership on a non-clonable value.
-    #[inline]
-    pub fn load_owned<A: Compound>(&self, id: &str) -> Result<A, Error> {
-        self._load_owned(id)
     }
 }
 
