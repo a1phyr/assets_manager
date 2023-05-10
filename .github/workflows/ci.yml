@@ -24,6 +24,10 @@ jobs:
       - name: Install toolchain
         run: rustup toolchain add ${{ matrix.rust }}
 
+      - name: Downgrade winnow to MSRV
+        if: ${{ matrix.rust }} == "1.61"
+        run: cargo update -p winnow --precise 0.4.1
+
       - name: cargo test
         run: cargo test
 
