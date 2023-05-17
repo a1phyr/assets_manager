@@ -199,10 +199,10 @@ impl notify::EventHandler for NotifyEventHandler {
             }
         }
 
-        log::trace!("Received filesystem event: {event:?}");
-
         match event {
             Ok(event) => {
+                log::trace!("Received filesystem event: {event:?}");
+
                 if matches!(
                     event.kind,
                     notify::EventKind::Any
