@@ -23,7 +23,7 @@ use crate::{
 };
 
 #[cfg(feature = "hot-reloading")]
-use crate::hot_reloading::{records, Dependencies, HotReloader};
+use crate::hot_reloading::{records, HotReloader};
 
 #[cfg(doc)]
 use crate::AssetCache;
@@ -209,21 +209,6 @@ impl<'a> AnyCache<'a> {
         {
             f()
         }
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    #[inline]
-    pub(crate) fn record_load<A: Compound>(
-        self,
-        id: &SharedString,
-    ) -> Result<(A, Dependencies), crate::BoxedError> {
-        let (asset, records) = if let Some(reloader) = self.reloader() {
-            records::record(reloader, || A::load(self, id))
-        } else {
-            (A::load(self, id), Dependencies::empty())
-        };
-
-        Ok((asset?, records))
     }
 
     /// Returns `true` if values stored in this cache may be hot-reloaded.

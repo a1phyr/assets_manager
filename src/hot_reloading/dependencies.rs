@@ -109,7 +109,7 @@ impl AssetDepGraph {
         for key in self.0.iter().rev() {
             if let Some(entry) = deps.0.get_mut(key) {
                 if let Some(reload) = entry.reload {
-                    let new_deps = reload(cache, &key.id);
+                    let new_deps = reload(cache, key.id.clone());
 
                     if let Some(new_deps) = new_deps {
                         deps.insert(key.clone(), new_deps, Some(reload));

@@ -29,25 +29,34 @@ impl<A: Asset> AnyAsset for A {
 }
 
 #[cfg(feature = "hot-reloading")]
-fn reload<T: Compound>(cache: AnyCache, id: &SharedString) -> Option<Dependencies> {
+fn reload<T: Compound>(cache: AnyCache, id: SharedString) -> Option<Dependencies> {
     // Outline these functions to reduce the amount of monomorphized code
-    fn log_ok(id: &str) {
+    fn log_ok(id: SharedString) {
         log::info!("Reloading \"{id}\"");
     }
-    fn log_err(id: &str, err: crate::BoxedError) {
-        log::warn!("Error reloading \"{id}\": {err}");
+    fn log_err(err: Error) {
+        log::warn!("Error reloading \"{}\": {}", err.id(), err.reason());
     }
 
-    let handle = cache.get_cached::<T>(id)?;
+    let handle = cache.get_cached::<T>(&id)?;
+    let typ = Type::of::<T>();
+    let load_fn = || (typ.inner.load)(cache, id);
 
-    match cache.record_load::<T>(id) {
-        Ok((asset, deps)) => {
+    let (entry, deps) = if let Some(reloader) = cache.reloader() {
+        crate::hot_reloading::records::record(reloader, load_fn)
+    } else {
+        (load_fn(), Dependencies::empty())
+    };
+
+    match entry {
+        Ok(entry) => {
+            let (asset, id) = entry.into_inner();
             handle.as_dynamic().write(asset);
             log_ok(id);
             Some(deps)
         }
         Err(err) => {
-            log_err(id, err);
+            log_err(err);
             None
         }
     }
@@ -63,7 +72,7 @@ pub(crate) struct AssetTypeInner {
 
 pub(crate) struct CompoundTypeInner {
     #[cfg(feature = "hot-reloading")]
-    pub reload: fn(AnyCache, &SharedString) -> Option<Dependencies>,
+    pub reload: crate::hot_reloading::ReloadFn,
 }
 
 pub(crate) enum InnerType {
