@@ -20,7 +20,7 @@ pub(crate) trait AnyAsset: Send + Sync + 'static {
 #[cfg(feature = "hot-reloading")]
 impl<A: Asset> AnyAsset for A {
     fn reload(self: Box<Self>, entry: UntypedHandle) {
-        entry.downcast().as_dynamic().write(*self);
+        entry.downcast().write(*self);
     }
 
     fn create(self: Box<Self>, id: SharedString) -> CacheEntry {
@@ -51,7 +51,7 @@ fn reload<T: Compound>(cache: AnyCache, id: SharedString) -> Option<Dependencies
     match entry {
         Ok(entry) => {
             let (asset, id) = entry.into_inner();
-            handle.as_dynamic().write(asset);
+            handle.write(asset);
             log_ok(id);
             Some(deps)
         }

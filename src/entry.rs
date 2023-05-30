@@ -221,8 +221,8 @@ impl<'a, T> Handle<'a, T> {
 
     #[inline]
     #[cfg(feature = "hot-reloading")]
-    pub(crate) fn as_dynamic(&self) -> &DynamicInner<T> {
-        self.either(|_| wrong_handle_type(), |this| this)
+    pub(crate) fn write(&self, value: T) {
+        self.either(|_| wrong_handle_type(), |this| this.write(value))
     }
 
     /// Locks the pointed asset for reading.
