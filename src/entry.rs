@@ -52,6 +52,7 @@ impl<T> DynamicInner<T> {
         }
     }
 
+    #[inline]
     pub fn write(&self, value: T) {
         let mut data = self.value.write();
         *data = value;

@@ -34,32 +34,34 @@ fn reload<T: Compound>(cache: AnyCache, id: SharedString) -> Option<Dependencies
     fn log_ok(id: SharedString) {
         log::info!("Reloading \"{id}\"");
     }
-    fn log_err(err: Error) {
-        log::warn!("Error reloading \"{}\": {}", err.id(), err.reason());
-    }
+    fn load_untyped(
+        cache: AnyCache,
+        id: SharedString,
+        typ: Type,
+    ) -> Option<(UntypedHandle, CacheEntry, Dependencies)> {
+        let handle = cache.get_cached_untyped(&id, typ)?;
 
-    let handle = cache.get_cached::<T>(&id)?;
-    let typ = Type::of::<T>();
-    let load_fn = || (typ.inner.load)(cache, id);
-
-    let (entry, deps) = if let Some(reloader) = cache.reloader() {
-        crate::hot_reloading::records::record(reloader, load_fn)
-    } else {
-        (load_fn(), Dependencies::empty())
-    };
-
-    match entry {
-        Ok(entry) => {
-            let (asset, id) = entry.into_inner();
-            handle.write(asset);
-            log_ok(id);
-            Some(deps)
-        }
-        Err(err) => {
-            log_err(err);
-            None
+        let load_fn = || (typ.inner.load)(cache, id);
+        let (entry, deps) = if let Some(reloader) = cache.reloader() {
+            crate::hot_reloading::records::record(reloader, load_fn)
+        } else {
+            (load_fn(), Dependencies::empty())
+        };
+        match entry {
+            Ok(e) => Some((handle, e, deps)),
+            Err(err) => {
+                log::warn!("Error reloading \"{}\": {}", err.id(), err.reason());
+                None
+            }
         }
     }
+
+    let (handle, entry, deps) = load_untyped(cache, id, Type::of::<T>())?;
+
+    let (asset, id) = entry.into_inner();
+    handle.downcast::<T>().write(asset);
+    log_ok(id);
+    Some(deps)
 }
 
 pub(crate) struct AssetTypeInner {

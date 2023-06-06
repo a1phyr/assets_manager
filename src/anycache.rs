@@ -114,6 +114,12 @@ impl<'a> AnyCache<'a> {
         self.cache._get_cached(id)
     }
 
+    #[inline]
+    #[cfg(feature = "hot-reloading")]
+    pub(crate) fn get_cached_untyped(self, id: &str, typ: Type) -> Option<UntypedHandle<'a>> {
+        self.cache.get_cached_entry_inner(id, typ)
+    }
+
     /// Gets a value from the cache or inserts one.
     ///
     /// As for `get_cached`, non-assets types must be marked with [`Storable`].
