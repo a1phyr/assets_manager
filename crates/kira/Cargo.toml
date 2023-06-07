@@ -1,0 +1,32 @@
+[package]
+name = "assets_manager-kira"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.61"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+description = "`kira` support for `assets_manager`"
+
+repository = "https://github.com/a1phyr/assets_manager/tree/master/crates/kira"
+documentation = "https://docs.rs/assets_manager-kira"
+
+categories = ["caching", "game-development", "multimedia::audio"]
+keywords = ["assets", "audio", "cache", "hot-reloading", "kira"]
+
+
+[features]
+flac = ["kira/flac"]
+mp3 = ["kira/mp3"]
+ogg = ["kira/ogg"]
+wav = ["kira/wav"]
+
+
+[dependencies]
+assets_manager = { version = "0.10", default-features = false }
+kira = { version = "0.8", default-features = false, features = ["symphonia"] }
+
+[dev-dependencies]
+assets_manager = { version = "0.10", default-features = false, features = ["hot-reloading"] }
+env_logger = "0.10"
+kira = { version = "0.8", default-features = false, features = ["cpal"] }
+log = { version = "0.4" }

@@ -101,7 +101,7 @@ name = "custom-source"
 
 
 [workspace]
-members = [".", "macros"]
+members = [".", "crates/kira", "macros"]
 
 
 [profile.dev]
