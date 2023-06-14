@@ -71,7 +71,7 @@ impl<'a> AnyCache<'a> {
 
     #[cfg(feature = "hot-reloading")]
     #[inline]
-    pub(crate) fn reloader(&self) -> Option<&'a HotReloader> {
+    pub(crate) fn reloader(self) -> Option<&'a HotReloader> {
         self.cache.reloader()
     }
 
@@ -177,7 +177,7 @@ impl<'a> AnyCache<'a> {
     /// Returns `true` if the cache contains the specified directory with the
     /// given `recursive` parameter.
     #[inline]
-    pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
+    pub fn contains_dir<A: DirLoadable>(self, id: &str, recursive: bool) -> bool {
         self.cache._contains_dir::<A>(id, recursive)
     }
 
@@ -219,7 +219,7 @@ impl<'a> AnyCache<'a> {
 
     /// Returns `true` if values stored in this cache may be hot-reloaded.
     #[inline]
-    pub fn is_hot_reloaded(&self) -> bool {
+    pub fn is_hot_reloaded(self) -> bool {
         self.cache._has_reloader()
     }
 }
