@@ -15,7 +15,6 @@ use std::{any::TypeId, fmt, io};
 
 use crate::{
     asset::DirLoadable,
-    cache::AssetMap,
     entry::{CacheEntry, UntypedHandle},
     key::Type,
     source::{DirEntry, Source},
@@ -230,6 +229,16 @@ impl fmt::Debug for AnyCache<'_> {
     }
 }
 
+pub(crate) trait AssetMap {
+    fn get(&self, id: &str, type_id: TypeId) -> Option<UntypedHandle>;
+
+    fn get_entry(&self, id: &str, type_id: TypeId) -> Option<(SharedString, UntypedHandle)>;
+
+    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> UntypedHandle;
+
+    fn contains_key(&self, id: &str, type_id: TypeId) -> bool;
+}
+
 pub(crate) trait Cache {
     #[cfg(feature = "hot-reloading")]
     fn reloader(&self) -> Option<&HotReloader>;
@@ -252,9 +261,10 @@ pub(crate) trait Cache {
 }
 
 pub(crate) trait RawCache: Sized {
+    type AssetMap: AssetMap;
     type Source: Source;
 
-    fn assets(&self) -> &AssetMap;
+    fn assets(&self) -> &Self::AssetMap;
 
     fn get_source(&self) -> &Self::Source;
 

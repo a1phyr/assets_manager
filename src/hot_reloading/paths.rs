@@ -1,4 +1,5 @@
 use crate::{
+    anycache::AssetMap as _,
     cache::AssetMap,
     key::AnyAsset,
     source::Source,
@@ -16,6 +17,7 @@ struct BorrowedCache<'a> {
 }
 
 impl<'a> crate::anycache::RawCache for BorrowedCache<'a> {
+    type AssetMap = AssetMap;
     type Source = &'a dyn Source;
 
     fn assets(&self) -> &AssetMap {

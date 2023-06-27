@@ -1,7 +1,7 @@
 //! Definition of the cache
 
 use crate::{
-    anycache::{CacheExt, RawCache},
+    anycache::{AssetMap as _, CacheExt},
     asset::{DirLoadable, Storable},
     dirs::DirHandle,
     entry::{CacheEntry, UntypedHandle},
@@ -78,28 +78,6 @@ impl AssetMap {
         &mut self.shards[id]
     }
 
-    pub fn get(&self, id: &str, type_id: TypeId) -> Option<UntypedHandle> {
-        let key = BorrowedKey::new_with(id, type_id);
-        let shard = self.get_shard(key).0.read();
-        let entry = shard.get(&key as &dyn Key)?;
-        unsafe { Some(entry.inner().extend_lifetime()) }
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    pub fn get_entry(&self, id: &str, type_id: TypeId) -> Option<(SharedString, UntypedHandle)> {
-        let key = BorrowedKey::new_with(id, type_id);
-        let shard = self.get_shard(key).0.read();
-        let (key, entry) = shard.get_key_value(&key as &dyn Key)?;
-        unsafe { Some((key.id.clone(), entry.inner().extend_lifetime())) }
-    }
-
-    pub fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> UntypedHandle {
-        let key = OwnedKey::new_with(id, type_id);
-        let shard = &mut *self.get_shard(key.borrow()).0.write();
-        let entry = shard.entry(key).or_insert(entry);
-        unsafe { entry.inner().extend_lifetime() }
-    }
-
     #[cfg(feature = "hot-reloading")]
     pub fn update_or_insert(&self, id: SharedString, type_id: TypeId, value: Box<dyn AnyAsset>) {
         use std::collections::hash_map::Entry;
@@ -116,12 +94,6 @@ impl AssetMap {
         }
     }
 
-    pub fn contains_key(&self, id: &str, type_id: TypeId) -> bool {
-        let key = BorrowedKey::new_with(id, type_id);
-        let shard = self.get_shard(key).0.read();
-        shard.contains_key(&key as &dyn Key)
-    }
-
     fn take(&mut self, id: &str, type_id: TypeId) -> Option<CacheEntry> {
         let key = BorrowedKey::new_with(id, type_id);
         self.get_shard_mut(key).0.get_mut().remove(&key as &dyn Key)
@@ -136,6 +108,35 @@ impl AssetMap {
         for shard in &mut *self.shards {
             shard.0.get_mut().clear();
         }
+    }
+}
+
+impl crate::anycache::AssetMap for AssetMap {
+    fn get(&self, id: &str, type_id: TypeId) -> Option<UntypedHandle> {
+        let key = BorrowedKey::new_with(id, type_id);
+        let shard = self.get_shard(key).0.read();
+        let entry = shard.get(&key as &dyn Key)?;
+        unsafe { Some(entry.inner().extend_lifetime()) }
+    }
+
+    fn get_entry(&self, id: &str, type_id: TypeId) -> Option<(SharedString, UntypedHandle)> {
+        let key = BorrowedKey::new_with(id, type_id);
+        let shard = self.get_shard(key).0.read();
+        let (key, entry) = shard.get_key_value(&key as &dyn Key)?;
+        unsafe { Some((key.id.clone(), entry.inner().extend_lifetime())) }
+    }
+
+    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> UntypedHandle {
+        let key = OwnedKey::new_with(id, type_id);
+        let shard = &mut *self.get_shard(key.borrow()).0.write();
+        let entry = shard.entry(key).or_insert(entry);
+        unsafe { entry.inner().extend_lifetime() }
+    }
+
+    fn contains_key(&self, id: &str, type_id: TypeId) -> bool {
+        let key = BorrowedKey::new_with(id, type_id);
+        let shard = self.get_shard(key).0.read();
+        shard.contains_key(&key as &dyn Key)
     }
 }
 
@@ -217,11 +218,12 @@ pub struct AssetCache<S = FileSystem> {
     source: S,
 }
 
-impl<S: Source> RawCache for AssetCache<S> {
+impl<S: Source> crate::anycache::RawCache for AssetCache<S> {
+    type AssetMap = AssetMap;
     type Source = S;
 
     #[inline]
-    fn assets(&self) -> &crate::cache::AssetMap {
+    fn assets(&self) -> &AssetMap {
         &self.assets
     }
 
