@@ -43,9 +43,8 @@ mod cell {
         assert!(cell.get().is_none());
 
         // Panics are well supported
-        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            cell.get_or_try_init(|_| -> Result<_, ()> { panic!() })
-        }));
+        let res =
+            std::panic::catch_unwind(|| cell.get_or_try_init(|_| -> Result<_, ()> { panic!() }));
         assert!(res.is_err());
         assert!(cell.get().is_none());
 
@@ -68,8 +67,7 @@ mod cell {
         }
 
         let cell = OnceInitCell::new(Bomb(Box::new(0)));
-        let res =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| cell.get_or_init(|_| ())));
+        let res = std::panic::catch_unwind(|| cell.get_or_init(|_| ()));
         assert!(res.is_err());
         assert!(cell.get().is_some());
     }

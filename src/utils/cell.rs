@@ -72,6 +72,18 @@ where
     U: Send,
 {
 }
+impl<U, T> std::panic::UnwindSafe for OnceInitCell<U, T>
+where
+    T: std::panic::UnwindSafe,
+    U: std::panic::UnwindSafe,
+{
+}
+impl<U, T> std::panic::RefUnwindSafe for OnceInitCell<U, T>
+where
+    T: std::panic::UnwindSafe + std::panic::RefUnwindSafe,
+    U: std::panic::UnwindSafe,
+{
+}
 
 impl<U, T> OnceInitCell<U, T> {
     /// Creates a new uninitialized cell.
