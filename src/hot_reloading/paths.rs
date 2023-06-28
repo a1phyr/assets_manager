@@ -140,9 +140,13 @@ impl HotReloadingData {
 
     fn update_if_static(&mut self) {
         if let CacheKind::Static(cache, reloader, to_reload) = &mut self.cache {
-            let to_update = super::dependencies::AssetDepGraph::new(&self.deps, to_reload.iter());
             let cache = BorrowedCache::new(cache, reloader, &self.source);
-            to_update.update(&mut self.deps, cache.as_any_cache());
+
+            let to_update = self.deps.topological_sort_from(to_reload.iter());
+            for key in to_update.iter() {
+                self.deps.reload(cache.as_any_cache(), key);
+            }
+
             to_reload.clear();
         }
     }
@@ -178,15 +182,17 @@ impl LocalCache {
     /// Update the `AssetCache` with data collected in the `LocalCache` since
     /// the last reload.
     fn update(&mut self, deps: &mut DepsGraph, cache: BorrowedCache) {
-        let to_update =
-            super::dependencies::AssetDepGraph::new(deps, self.changed.iter().map(|(k, _)| k));
+        let to_update = deps.topological_sort_from(self.changed.iter().map(|(k, _)| k));
 
-        // Update assets
+        // Update `Asset`s
         for (key, value) in self.changed.drain() {
             log::info!("Reloading \"{}\"", key.id);
             cache.assets.update_or_insert(key.id, key.type_id, value);
         }
 
-        to_update.update(deps, cache.as_any_cache());
+        // Update `Compound`s
+        for key in to_update.iter() {
+            deps.reload(cache.as_any_cache(), key);
+        }
     }
 }
