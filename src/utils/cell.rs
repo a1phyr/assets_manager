@@ -137,6 +137,16 @@ impl<U, T> OnceInitCell<U, T> {
     /// It is an error to reentrantly initialize the cell from `f`. The
     /// exact outcome is unspecified.
     pub fn get_or_try_init<E>(&self, f: impl FnOnce(&mut U) -> Result<T, E>) -> Result<&T, E> {
+        // Pick the best implementation depending on whether `U` needs to be dropped
+        if std::mem::needs_drop::<U>() {
+            self.get_or_try_init_default(f)
+        } else {
+            self.get_or_try_init_no_drop(f)
+        }
+    }
+
+    /// Default implementation of `get_or_try_init`.
+    fn get_or_try_init_default<E>(&self, f: impl FnOnce(&mut U) -> Result<T, E>) -> Result<&T, E> {
         unsafe {
             let mut uninit_value = None;
 
@@ -164,6 +174,29 @@ impl<U, T> OnceInitCell<U, T> {
             if let Some(value) = uninit_value {
                 drop_cold(value);
             }
+
+            Ok(self.get_unchecked())
+        }
+    }
+
+    /// Specialized implementation of `get_or_try_init` when uninit data don't
+    /// need to be dropped.
+    fn get_or_try_init_no_drop<E>(&self, f: impl FnOnce(&mut U) -> Result<T, E>) -> Result<&T, E> {
+        unsafe {
+            self.once.get_or_try_init(|| {
+                // Safety: synchronisation through the `OnceCell`
+                let state = &mut *self.data.get();
+
+                let value = f(&mut state.uninit)?;
+
+                // The uninit value is forgotten here which is what the caller
+                // asked
+                *state = State {
+                    init: ManuallyDrop::new(value),
+                };
+
+                Ok(())
+            })?;
 
             Ok(self.get_unchecked())
         }

@@ -59,16 +59,18 @@ mod cell {
     }
 
     #[test]
-    #[should_panic]
     fn drop_bomb() {
-        struct Bomb;
+        struct Bomb(Box<i32>);
         impl Drop for Bomb {
             fn drop(&mut self) {
                 panic!("bomb");
             }
         }
 
-        let cell = OnceInitCell::new(Bomb);
-        cell.get_or_init(|_| ());
+        let cell = OnceInitCell::new(Bomb(Box::new(0)));
+        let res =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| cell.get_or_init(|_| ())));
+        assert!(res.is_err());
+        assert!(cell.get().is_some());
     }
 }
