@@ -310,7 +310,7 @@ serde_loaders! {
 
     /// Loads assets from TOML files.
     #[cfg(feature = "toml")]
-    struct TomlLoader => toml_edit::de::from_slice;
+    struct TomlLoader => basic_toml::from_slice;
 
     /// Loads assets from YAML files.
     #[cfg(feature = "yaml")]
