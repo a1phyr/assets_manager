@@ -78,12 +78,12 @@ impl fmt::Debug for AssetMap {
 /// synchronization. It still requires stored assets to be thread-safe.
 ///
 /// This cache **does not** support hot-reloading.
-pub struct LocalCache<S = crate::source::FileSystem> {
+pub struct LocalAssetCache<S = crate::source::FileSystem> {
     source: S,
     assets: AssetMap,
 }
 
-impl<S: Source> crate::anycache::RawCache for LocalCache<S> {
+impl<S: Source> crate::anycache::RawCache for LocalAssetCache<S> {
     type AssetMap = AssetMap;
     type Source = S;
 
@@ -104,16 +104,16 @@ impl<S: Source> crate::anycache::RawCache for LocalCache<S> {
     }
 }
 
-impl LocalCache {
-    /// Creates a new `LocalCache` that reads assets from the given directory.
+impl LocalAssetCache {
+    /// Creates a new `LocalAssetCache` that reads assets from the given directory.
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<Self> {
         let source = crate::source::FileSystem::new(path)?;
         Ok(Self::with_source(source))
     }
 }
 
-impl<S> LocalCache<S> {
-    /// Creates a new `LocalCache` with the given source.
+impl<S> LocalAssetCache<S> {
+    /// Creates a new `LocalAssetCache` with the given source.
     #[inline]
     pub fn with_source(source: S) -> Self {
         Self {
@@ -123,7 +123,7 @@ impl<S> LocalCache<S> {
     }
 }
 
-impl<S: Source> LocalCache<S> {
+impl<S: Source> LocalAssetCache<S> {
     /// Gets a value from the cache.
     ///
     /// See [`AnyCache::get_cached`] for more details.
@@ -211,7 +211,7 @@ impl<S: Source> LocalCache<S> {
     }
 }
 
-impl<S> LocalCache<S> {
+impl<S> LocalAssetCache<S> {
     /// Removes an asset from the cache, and returns whether it was present in
     /// the cache.
     ///
@@ -240,9 +240,9 @@ impl<S> LocalCache<S> {
     }
 }
 
-impl<S> fmt::Debug for LocalCache<S> {
+impl<S> fmt::Debug for LocalAssetCache<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("LocalCache")
+        f.debug_struct("LocalAssetCache")
             .field("assets", &self.assets)
             .finish()
     }

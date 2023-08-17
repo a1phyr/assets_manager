@@ -191,7 +191,7 @@ pub use error::{BoxedError, Error};
 pub mod loader;
 
 mod local_cache;
-pub use local_cache::LocalCache;
+pub use local_cache::LocalAssetCache;
 
 mod entry;
 pub use entry::{AssetGuard, AtomicReloadId, Handle, ReloadId, ReloadWatcher};
