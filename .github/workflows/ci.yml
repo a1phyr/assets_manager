@@ -30,6 +30,7 @@ jobs:
           cargo update -p serde_yaml --precise 0.9.21
           cargo update -p is-terminal --precise 0.4.7
           cargo update -p ron --precise 0.8.0
+          cargo update -p flate2 --precise 1.0.26
 
       - name: cargo test
         run: cargo test --workspace
