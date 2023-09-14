@@ -291,10 +291,10 @@ impl<'a, T> Handle<'a, T> {
     /// Returns the last `ReloadId` associated with this asset.
     ///
     /// It is only meaningful when compared to other `ReloadId`s returned by the
-    /// [same handle](`Self::same_handle`).
+    /// [same handle](`Self::same_handle`) or [`ReloadId::NEVER`].
     #[inline]
     pub fn last_reload_id(&self) -> ReloadId {
-        self.either(|_| ReloadId(0), |this| this.reload.load())
+        self.either(|_| ReloadId::NEVER, |this| this.reload.load())
     }
 
     /// Returns `true` if the asset has been reloaded since last call to this
@@ -536,7 +536,7 @@ impl<'a> ReloadWatcher<'a> {
             return inner.reload_id.load();
         }
 
-        ReloadId(0)
+        ReloadId::NEVER
     }
 }
 
@@ -563,6 +563,9 @@ impl Default for ReloadWatcher<'_> {
 pub struct ReloadId(usize);
 
 impl ReloadId {
+    /// A `ReloadId` for values that were never updated.
+    pub const NEVER: Self = Self(0);
+
     /// Updates `self` if the argument if the argument is newer. Returns `true`
     /// if `self` was updated.
     #[inline]
@@ -589,12 +592,12 @@ impl AtomicReloadId {
     /// Creates a new atomic `ReloadId`.
     #[inline]
     pub const fn new() -> Self {
-        Self(AtomicUsize::new(0))
+        Self::with_value(ReloadId::NEVER)
     }
 
     /// Creates a new atomic `ReloadId`, initialized with the given value.
     #[inline]
-    pub fn with_value(value: ReloadId) -> Self {
+    pub const fn with_value(value: ReloadId) -> Self {
         Self(AtomicUsize::new(value.0))
     }
 
