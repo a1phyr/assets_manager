@@ -587,6 +587,80 @@ pub type ArcUntypedHandle = ArcHandle<dyn Any + Send + Sync>;
 /// Like a `Weak<UntypedHandle>`
 pub type WeakUntypedHandle = WeakHandle<dyn Any + Send + Sync>;
 
+#[cfg(feature = "serde")]
+impl<T> serde::Serialize for ArcHandle<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.id())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T: crate::Compound> serde::Deserialize<'de> for ArcHandle<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor<T>(PhantomData<T>);
+
+        impl<'de, T: crate::Compound> serde::de::Visitor<'de> for Visitor<T> {
+            type Value = ArcHandle<T>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("an asset id")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                crate::AnyCache::with_current(|cache| {
+                    let cache = cache.ok_or_else(|| E::custom("no current cache"))?;
+
+                    let handle = cache.load(v).map_err(E::custom)?;
+                    Ok(handle.strong())
+                })
+            }
+        }
+
+        deserializer.deserialize_str(Visitor(PhantomData))
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T: crate::Compound> serde::Deserialize<'de> for WeakHandle<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor<T>(PhantomData<T>);
+
+        impl<'de, T: crate::Compound> serde::de::Visitor<'de> for Visitor<T> {
+            type Value = WeakHandle<T>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("an asset id")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                crate::AnyCache::with_current(|cache| {
+                    let cache = cache.ok_or_else(|| E::custom("no current cache"))?;
+
+                    let handle = cache.load(v).map_err(E::custom)?;
+                    Ok(handle.weak())
+                })
+            }
+        }
+
+        deserializer.deserialize_str(Visitor(PhantomData))
+    }
+}
+
 /// RAII guard used to keep a read lock on an asset and release it when dropped.
 ///
 /// This type is a smart pointer to type `T`.

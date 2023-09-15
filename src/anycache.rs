@@ -11,7 +11,7 @@
 //! - The `CacheExt` adds generics on top of `Cache` to ease the use of
 //!   `Cache`'s methods.
 
-use std::{any::TypeId, fmt, io};
+use std::{any::TypeId, cell::Cell, fmt, io};
 
 use crate::{
     asset::DirLoadable,
@@ -26,6 +26,10 @@ use crate::hot_reloading::{records, Dependencies, HotReloader};
 
 #[cfg(doc)]
 use crate::AssetCache;
+
+thread_local! {
+    static CURRENT_CACHE: Cell<Option<crate::AnyCache<'static>>> = const { Cell::new(None) };
+}
 
 /// A non-generic version of [`AssetCache`].
 ///
@@ -62,6 +66,10 @@ impl Source for AnySource<'_> {
 }
 
 impl<'a> AnyCache<'a> {
+    pub(crate) fn with_current<T>(f: impl FnOnce(Option<Self>) -> T) -> T {
+        f(CURRENT_CACHE.get())
+    }
+
     /// The `Source` from which assets are loaded.
     #[inline]
     pub fn raw_source(self) -> impl Source + 'a {
@@ -213,6 +221,28 @@ impl<'a> AnyCache<'a> {
         }
     }
 
+    #[inline]
+    pub(crate) fn set_current<T>(self, f: impl FnOnce() -> T) -> T {
+        struct Guard<'a>(
+            &'a Cell<Option<AnyCache<'static>>>,
+            Option<AnyCache<'static>>,
+        );
+
+        impl Drop for Guard<'_> {
+            fn drop(&mut self) {
+                self.0.set(self.1);
+            }
+        }
+
+        CURRENT_CACHE.with(|tls| {
+            let cache = unsafe { std::mem::transmute::<AnyCache<'_>, AnyCache<'static>>(self) };
+            let old = tls.replace(Some(cache));
+            let _g = Guard(tls, old);
+
+            f()
+        })
+    }
+
     /// Returns `true` if values stored in this cache may be hot-reloaded.
     #[inline]
     pub fn is_hot_reloaded(self) -> bool {
@@ -224,7 +254,9 @@ impl<'a> AnyCache<'a> {
         let handle = self.get_cached_untyped(&id, typ.type_id)?;
 
         let load_asset = || {
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (typ.inner.load)(self, id)))
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                self.set_current(|| (typ.inner.load)(self, id))
+            }))
         };
         let (entry, deps) = if let Some(reloader) = self.reloader() {
             records::record(reloader, load_asset)
