@@ -5,6 +5,7 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
+#![forbid(unsafe_code)]
 
 const AVAILABLE_EXTENSIONS: &[&str] = &[
     #[cfg(feature = "ogg")]
