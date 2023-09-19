@@ -116,7 +116,7 @@ dependencies = [
 
 [[package]]
 name = "assets_manager-kira"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "assets_manager 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger",
