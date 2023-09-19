@@ -30,3 +30,7 @@ assets_manager = { version = "0.10", default-features = false, features = ["hot-
 env_logger = "0.10"
 kira = { version = "0.8", default-features = false, features = ["cpal"] }
 log = { version = "0.4" }
+
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
