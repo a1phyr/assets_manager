@@ -14,6 +14,8 @@ documentation = "https://docs.rs/assets_manager"
 categories = ["caching", "filesystem", "game-development"]
 keywords = ["asset", "assets", "cache", "hot-reloading", "resources"]
 
+exclude = ["/assets/"]
+
 
 [features]
 default = ["ahash", "parking_lot"]
