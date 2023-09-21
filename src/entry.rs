@@ -324,18 +324,6 @@ where
     }
 }
 
-impl<T, U> PartialEq<Handle<U>> for Handle<T>
-where
-    T: PartialEq<U>,
-{
-    #[inline]
-    fn eq(&self, other: &Handle<U>) -> bool {
-        self.read().eq(&other.read())
-    }
-}
-
-impl<A> Eq for Handle<A> where A: Eq {}
-
 #[cfg(feature = "serde")]
 #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 impl<A> serde::Serialize for Handle<A>
