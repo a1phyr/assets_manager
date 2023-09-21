@@ -203,8 +203,8 @@ impl<A> fmt::Debug for CachedRecDir<A> {
 }
 
 enum DirHandleInner<'a, A> {
-    Simple(Handle<'a, CachedDir<A>>),
-    Recursive(Handle<'a, CachedRecDir<A>>),
+    Simple(&'a Handle<CachedDir<A>>),
+    Recursive(&'a Handle<CachedRecDir<A>>),
 }
 
 impl<A> Clone for DirHandleInner<'_, A> {
@@ -248,13 +248,13 @@ where
     A: DirLoadable,
 {
     #[inline]
-    pub(crate) fn new(handle: Handle<'a, CachedDir<A>>) -> Self {
+    pub(crate) fn new(handle: &'a Handle<CachedDir<A>>) -> Self {
         let inner = DirHandleInner::Simple(handle);
         DirHandle { inner }
     }
 
     #[inline]
-    pub(crate) fn new_rec(handle: Handle<'a, CachedRecDir<A>>) -> Self {
+    pub(crate) fn new_rec(handle: &'a Handle<CachedRecDir<A>>) -> Self {
         let inner = DirHandleInner::Recursive(handle);
         DirHandle { inner }
     }
@@ -284,7 +284,7 @@ where
     pub fn iter_cached<'a: 'h>(
         self,
         cache: AnyCache<'a>,
-    ) -> impl Iterator<Item = Handle<'a, A>> + 'h {
+    ) -> impl Iterator<Item = &'a Handle<A>> + 'h {
         self.ids().filter_map(move |id| cache.get_cached(id))
     }
 }
@@ -301,7 +301,7 @@ where
     pub fn iter<'a: 'h>(
         self,
         cache: AnyCache<'a>,
-    ) -> impl ExactSizeIterator<Item = Result<Handle<'a, A>, Error>> + 'h {
+    ) -> impl ExactSizeIterator<Item = Result<&'a Handle<A>, Error>> + 'h {
         self.ids().map(move |id| cache.load(id))
     }
 }

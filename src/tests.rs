@@ -209,7 +209,7 @@ mod handle {
         let cache = AssetCache::new("assets").unwrap();
         let handle1 = cache.load::<X>("test.cache").unwrap();
         let handle2 = cache.load::<X>("test.cache").unwrap();
-        assert!(handle1.same_handle(&handle2));
+        assert!(std::ptr::eq(handle1, handle2));
     }
 
     #[test]

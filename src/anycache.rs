@@ -85,7 +85,7 @@ impl<'a> AnyCache<'a> {
     /// - Loaded data could not be converted properly
     /// - The asset has no extension
     #[inline]
-    pub fn load<A: Compound>(self, id: &str) -> Result<Handle<'a, A>, Error> {
+    pub fn load<A: Compound>(self, id: &str) -> Result<&'a Handle<A>, Error> {
         self.cache._load(id)
     }
 
@@ -97,7 +97,7 @@ impl<'a> AnyCache<'a> {
     ///
     /// [`load`]: `Self::load`
     #[inline]
-    pub fn load_expect<A: Compound>(self, id: &str) -> Handle<'a, A> {
+    pub fn load_expect<A: Compound>(self, id: &str) -> &'a Handle<A> {
         self.cache._load_expect(id)
     }
 
@@ -109,13 +109,13 @@ impl<'a> AnyCache<'a> {
     /// This function does not attempt to load the value from the source if it
     /// is not found in the cache.
     #[inline]
-    pub fn get_cached<A: Storable>(self, id: &str) -> Option<Handle<'a, A>> {
+    pub fn get_cached<A: Storable>(self, id: &str) -> Option<&'a Handle<A>> {
         self.cache._get_cached(id)
     }
 
     #[inline]
     #[cfg(feature = "hot-reloading")]
-    pub(crate) fn get_cached_untyped(self, id: &str, typ: Type) -> Option<UntypedHandle<'a>> {
+    pub(crate) fn get_cached_untyped(self, id: &str, typ: Type) -> Option<&'a UntypedHandle> {
         self.cache.get_cached_entry_inner(id, typ)
     }
 
@@ -123,7 +123,7 @@ impl<'a> AnyCache<'a> {
     ///
     /// As for `get_cached`, non-assets types must be marked with [`Storable`].
     #[inline]
-    pub fn get_or_insert<A: Storable>(self, id: &str, default: A) -> Handle<'a, A> {
+    pub fn get_or_insert<A: Storable>(self, id: &str, default: A) -> &'a Handle<A> {
         self.cache._get_or_insert(id, default)
     }
 
@@ -230,11 +230,11 @@ impl fmt::Debug for AnyCache<'_> {
 }
 
 pub(crate) trait AssetMap {
-    fn get(&self, id: &str, type_id: TypeId) -> Option<UntypedHandle>;
+    fn get(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle>;
 
-    fn get_entry(&self, id: &str, type_id: TypeId) -> Option<(SharedString, UntypedHandle)>;
+    fn get_entry(&self, id: &str, type_id: TypeId) -> Option<(SharedString, &UntypedHandle)>;
 
-    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> UntypedHandle;
+    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> &UntypedHandle;
 
     fn contains_key(&self, id: &str, type_id: TypeId) -> bool;
 }
@@ -249,15 +249,15 @@ pub(crate) trait Cache {
 
     fn exists(&self, entry: DirEntry) -> bool;
 
-    fn get_cached_entry_inner(&self, id: &str, typ: Type) -> Option<UntypedHandle>;
+    fn get_cached_entry_inner(&self, id: &str, typ: Type) -> Option<&UntypedHandle>;
 
     fn contains(&self, id: &str, type_id: TypeId) -> bool;
 
-    fn load_entry(&self, id: &str, typ: Type) -> Result<UntypedHandle, Error>;
+    fn load_entry(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error>;
 
     fn load_owned_entry(&self, id: &str, typ: Type) -> Result<CacheEntry, Error>;
 
-    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> UntypedHandle;
+    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> &UntypedHandle;
 }
 
 pub(crate) trait RawCache: Sized {
@@ -272,7 +272,7 @@ pub(crate) trait RawCache: Sized {
     fn reloader(&self) -> Option<&HotReloader>;
 
     #[cold]
-    fn add_asset(&self, id: &str, typ: Type) -> Result<UntypedHandle, Error> {
+    fn add_asset(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
         log::trace!("Loading \"{}\"", id);
 
         let [id, id_clone] = SharedString::n_from_str(id);
@@ -302,7 +302,7 @@ impl<T: RawCache> Cache for T {
         self.get_source().exists(entry)
     }
 
-    fn get_cached_entry_inner(&self, id: &str, typ: Type) -> Option<UntypedHandle> {
+    fn get_cached_entry_inner(&self, id: &str, typ: Type) -> Option<&UntypedHandle> {
         #[cfg(feature = "hot-reloading")]
         if typ.is_hot_reloaded() {
             if let Some(reloader) = self.reloader() {
@@ -323,7 +323,7 @@ impl<T: RawCache> Cache for T {
         self.assets().contains_key(id, type_id)
     }
 
-    fn load_entry(&self, id: &str, typ: Type) -> Result<UntypedHandle, Error> {
+    fn load_entry(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
         match self.get_cached_entry_inner(id, typ) {
             Some(entry) => Ok(entry),
             None => self.add_asset(id, typ),
@@ -350,7 +350,7 @@ impl<T: RawCache> Cache for T {
     }
 
     #[inline]
-    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> UntypedHandle {
+    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> &UntypedHandle {
         self.assets().insert(id, type_id, entry)
     }
 }
@@ -368,30 +368,30 @@ pub(crate) trait CacheExt: Cache {
     }
 
     #[inline]
-    fn _get_cached<A: Storable>(&self, id: &str) -> Option<Handle<A>> {
-        Some(self._get_cached_entry::<A>(id)?.downcast())
+    fn _get_cached<A: Storable>(&self, id: &str) -> Option<&Handle<A>> {
+        Some(self._get_cached_entry::<A>(id)?.downcast_ref())
     }
 
     #[inline]
-    fn _get_cached_entry<A: Storable>(&self, id: &str) -> Option<UntypedHandle> {
+    fn _get_cached_entry<A: Storable>(&self, id: &str) -> Option<&UntypedHandle> {
         self.get_cached_entry_inner(id, Type::of::<A>())
     }
 
     #[cold]
-    fn add_any<A: Storable>(&self, id: &str, asset: A) -> UntypedHandle {
+    fn add_any<A: Storable>(&self, id: &str, asset: A) -> &UntypedHandle {
         let [id, id_clone] = SharedString::n_from_str(id);
         let entry = CacheEntry::new(asset, id_clone, || self._has_reloader());
 
         self.insert(id, TypeId::of::<A>(), entry)
     }
 
-    fn _get_or_insert<A: Storable>(&self, id: &str, default: A) -> Handle<A> {
+    fn _get_or_insert<A: Storable>(&self, id: &str, default: A) -> &Handle<A> {
         let entry = match self._get_cached_entry::<A>(id) {
             Some(entry) => entry,
             None => self.add_any(id, default),
         };
 
-        entry.downcast()
+        entry.downcast_ref()
     }
 
     #[inline]
@@ -399,14 +399,14 @@ pub(crate) trait CacheExt: Cache {
         self.contains(id, TypeId::of::<A>())
     }
 
-    fn _load<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
+    fn _load<A: Compound>(&self, id: &str) -> Result<&Handle<A>, Error> {
         let entry = self.load_entry(id, Type::of::<A>())?;
-        Ok(entry.downcast())
+        Ok(entry.downcast_ref())
     }
 
     #[inline]
     #[track_caller]
-    fn _load_expect<A: Compound>(&self, id: &str) -> Handle<A> {
+    fn _load_expect<A: Compound>(&self, id: &str) -> &Handle<A> {
         #[cold]
         #[track_caller]
         fn expect_failed(err: Error) -> ! {

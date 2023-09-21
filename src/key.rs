@@ -13,14 +13,14 @@ use crate::{
 
 #[cfg(feature = "hot-reloading")]
 pub(crate) trait AnyAsset: Send + Sync + 'static {
-    fn reload(self: Box<Self>, entry: UntypedHandle);
+    fn reload(self: Box<Self>, entry: &UntypedHandle);
     fn create(self: Box<Self>, id: SharedString) -> CacheEntry;
 }
 
 #[cfg(feature = "hot-reloading")]
 impl<A: Asset> AnyAsset for A {
-    fn reload(self: Box<Self>, entry: UntypedHandle) {
-        entry.downcast().write(*self);
+    fn reload(self: Box<Self>, entry: &UntypedHandle) {
+        entry.downcast_ref().write(*self);
     }
 
     fn create(self: Box<Self>, id: SharedString) -> CacheEntry {
@@ -38,7 +38,7 @@ fn reload<T: Compound>(cache: AnyCache, id: SharedString) -> Option<Dependencies
         cache: AnyCache,
         id: SharedString,
         typ: Type,
-    ) -> Option<(UntypedHandle, CacheEntry, Dependencies)> {
+    ) -> Option<(&UntypedHandle, CacheEntry, Dependencies)> {
         let handle = cache.get_cached_untyped(&id, typ)?;
 
         let load_fn = || (typ.inner.load)(cache, id);
@@ -59,7 +59,7 @@ fn reload<T: Compound>(cache: AnyCache, id: SharedString) -> Option<Dependencies
     let (handle, entry, deps) = load_untyped(cache, id, Type::of::<T>())?;
 
     let (asset, id) = entry.into_inner();
-    handle.downcast::<T>().write(asset);
+    handle.downcast_ref::<T>().write(asset);
     log_ok(id);
     Some(deps)
 }

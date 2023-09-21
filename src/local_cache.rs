@@ -38,21 +38,21 @@ impl AssetMap {
 }
 
 impl crate::anycache::AssetMap for AssetMap {
-    fn get(&self, id: &str, type_id: TypeId) -> Option<UntypedHandle> {
+    fn get(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
         let key = BorrowedKey::new_with(id, type_id);
         let map = self.map.borrow();
         let entry = map.get(&key as &dyn Key)?;
         unsafe { Some(entry.inner().extend_lifetime()) }
     }
 
-    fn get_entry(&self, id: &str, type_id: TypeId) -> Option<(SharedString, UntypedHandle)> {
+    fn get_entry(&self, id: &str, type_id: TypeId) -> Option<(SharedString, &UntypedHandle)> {
         let key = BorrowedKey::new_with(id, type_id);
         let map = self.map.borrow();
         let (key, entry) = map.get_key_value(&key as &dyn Key)?;
         unsafe { Some((key.id.clone(), entry.inner().extend_lifetime())) }
     }
 
-    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> UntypedHandle {
+    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> &UntypedHandle {
         let key = OwnedKey::new_with(id, type_id);
         let mut map = self.map.borrow_mut();
         let entry = map.entry(key).or_insert(entry);
@@ -128,7 +128,7 @@ impl<S: Source> LocalAssetCache<S> {
     ///
     /// See [`AnyCache::get_cached`] for more details.
     #[inline]
-    pub fn get_cached<A: Storable>(&self, id: &str) -> Option<Handle<A>> {
+    pub fn get_cached<A: Storable>(&self, id: &str) -> Option<&Handle<A>> {
         self._get_cached(id)
     }
 
@@ -136,7 +136,7 @@ impl<S: Source> LocalAssetCache<S> {
     ///
     /// See [`AnyCache::get_or_insert`] for more details.
     #[inline]
-    pub fn get_or_insert<A: Storable>(&self, id: &str, default: A) -> Handle<A> {
+    pub fn get_or_insert<A: Storable>(&self, id: &str, default: A) -> &Handle<A> {
         self._get_or_insert(id, default)
     }
 
@@ -152,7 +152,7 @@ impl<S: Source> LocalAssetCache<S> {
     ///
     /// See [`AnyCache::load`] for more details.
     #[inline]
-    pub fn load<A: Compound>(&self, id: &str) -> Result<Handle<A>, Error> {
+    pub fn load<A: Compound>(&self, id: &str) -> Result<&Handle<A>, Error> {
         self._load(id)
     }
 
@@ -160,7 +160,7 @@ impl<S: Source> LocalAssetCache<S> {
     ///
     /// See [`AnyCache::load_expect`] for more details.
     #[inline]
-    pub fn load_expect<A: Compound>(&self, id: &str) -> Handle<A> {
+    pub fn load_expect<A: Compound>(&self, id: &str) -> &Handle<A> {
         self._load_expect(id)
     }
 
