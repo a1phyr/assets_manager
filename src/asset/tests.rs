@@ -13,7 +13,9 @@ macro_rules! sound_test {
             $( #[$attr] )*
             fn $name() {
                 let cache = AssetCache::new("assets").unwrap();
-                assert!(cache.load::<$kind>("test.sounds.silence").is_ok());
+                let s = cache.load::<$kind>("test.sounds.silence").unwrap();
+                assert!(s.cloned().decoder().count() >= 10000);
+                assert!(s.cloned().decoder().all(|s| s.abs() < 10));
             }
         )*
     };
@@ -24,7 +26,6 @@ sound_test! {
     test_flac => asset::Flac,
 
     #[cfg(feature ="mp3")]
-    #[ignore = "Blocks on https://github.com/RustAudio/rodio/issues/411"]
     test_mp3 => asset::Mp3,
 
     #[cfg(feature ="vorbis")]
