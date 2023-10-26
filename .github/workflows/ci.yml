@@ -30,6 +30,7 @@ jobs:
           cargo update -p is-terminal --precise 0.4.7
           cargo update -p ron --precise 0.8.0
           cargo update -p flate2 --precise 1.0.26
+          cargo update -p regex --precise 1.9.6
 
       - run: cargo test --workspace
       - run: cargo test --workspace --all-features
