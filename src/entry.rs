@@ -342,6 +342,7 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Handle")
+            .field("id", self.id())
             .field("value", &*self.read())
             .finish()
     }
