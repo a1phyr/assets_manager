@@ -5,7 +5,7 @@ authors = ["Benoît du Garreau"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-description= "Procedural macros for assets_manager"
+description = "Procedural macros for assets_manager"
 
 repository = "https://github.com/a1phyr/assets_manager"
 documentation = "https://docs.rs/assets_manager"
@@ -17,4 +17,4 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "1.0"
 quote = "1.0"
-syn = {version = "2.0", default-features = false, features = ["parsing", "proc-macro"]}
+syn = { version = "2.0", default-features = false, features = ["parsing", "proc-macro"] }
