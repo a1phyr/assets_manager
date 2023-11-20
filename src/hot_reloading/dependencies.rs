@@ -43,7 +43,7 @@ impl DepsGraph {
 
     pub fn insert(&mut self, asset_key: OwnedKey, deps: Dependencies, reload: Option<ReloadFn>) {
         for key in deps.iter() {
-            let entry = self.0.entry(key.clone()).or_insert_with(GraphNode::default);
+            let entry = self.0.entry(key.clone()).or_default();
             entry.rdeps.insert(asset_key.clone());
         }
 

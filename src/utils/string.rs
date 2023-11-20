@@ -169,13 +169,13 @@ impl Eq for SharedString {}
 
 impl PartialOrd<str> for SharedString {
     fn partial_cmp(&self, other: &str) -> Option<cmp::Ordering> {
-        (**self).partial_cmp(other)
+        Some((**self).cmp(other))
     }
 }
 
 impl PartialOrd for SharedString {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        (**self).partial_cmp(&**other)
+        Some(self.cmp(other))
     }
 }
 

@@ -260,13 +260,13 @@ impl Eq for SharedBytes {}
 
 impl PartialOrd<[u8]> for SharedBytes {
     fn partial_cmp(&self, other: &[u8]) -> Option<cmp::Ordering> {
-        (**self).partial_cmp(other)
+        Some((**self).cmp(other))
     }
 }
 
 impl PartialOrd for SharedBytes {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        (**self).partial_cmp(&**other)
+        Some(self.cmp(other))
     }
 }
 

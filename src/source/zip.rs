@@ -191,7 +191,7 @@ fn register_file(
             }
             OwnedEntry::Dir(id)
         };
-        dirs.entry(parent_id).or_insert_with(Vec::new).push(entry);
+        dirs.entry(parent_id).or_default().push(entry);
 
         Some(())
     })()

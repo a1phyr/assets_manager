@@ -190,7 +190,7 @@ impl Eq for AssetType {}
 impl PartialOrd for AssetType {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        self.type_id.partial_cmp(&other.type_id)
+        Some(self.cmp(other))
     }
 }
 
@@ -309,7 +309,7 @@ impl Eq for Type {}
 impl PartialOrd for Type {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        self.type_id.partial_cmp(&other.type_id)
+        Some(self.cmp(other))
     }
 }
 
