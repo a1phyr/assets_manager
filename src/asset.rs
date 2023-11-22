@@ -39,16 +39,15 @@ mod tests;
 
 pub use crate::dirs::DirLoadable;
 
-use crate::key::Type;
 #[allow(unused)]
 use crate::{
-    cache::load_from_source,
     entry::CacheEntry,
     loader,
     source::Source,
     utils::{PrivateMarker, SharedBytes, SharedString},
     AnyCache, AssetCache, BoxedError, Error,
 };
+use crate::{error::ErrorKind, key::Type, loader::Loader};
 
 #[cfg(feature = "rodio")]
 #[allow(unused)]
@@ -132,7 +131,7 @@ pub trait Asset: Sized + Send + Sync + 'static {
     /// Specifies a way to convert raw bytes into the asset.
     ///
     /// See module [`loader`] for implementations of common conversions.
-    type Loader: loader::Loader<Self>;
+    type Loader: Loader<Self>;
 
     /// Specifies a eventual default value to use if an asset fails to load. If
     /// this method returns `Ok`, the returned value is used as an asset. In
@@ -179,6 +178,29 @@ pub trait Asset: Sized + Send + Sync + 'static {
     /// default). If so, you may want to implement [`NotHotReloaded`] for this
     /// type to enable additional functions.
     const HOT_RELOADED: bool = true;
+}
+
+pub(crate) fn load_from_source<A: Asset>(
+    source: &dyn Source,
+    id: &SharedString,
+) -> Result<A, Error> {
+    let load_with_ext = |ext| -> Result<A, ErrorKind> {
+        let asset = source
+            .read(id, ext)?
+            .with_cow(|content| A::Loader::load(content, ext))?;
+        Ok(asset)
+    };
+
+    let mut error = ErrorKind::NoDefaultValue;
+
+    for ext in A::EXTENSIONS {
+        match load_with_ext(ext) {
+            Err(err) => error = err.or(error),
+            Ok(asset) => return Ok(asset),
+        }
+    }
+
+    A::default_value(id, Error::from_kind(id.clone(), error))
 }
 
 impl<A> Asset for Box<A>

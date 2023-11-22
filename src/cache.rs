@@ -5,11 +5,9 @@ use crate::{
     asset::{DirLoadable, Storable},
     dirs::DirHandle,
     entry::{CacheEntry, UntypedHandle},
-    error::ErrorKind,
-    loader::Loader,
     source::{FileSystem, Source},
     utils::{BorrowedKey, HashMap, Key, OwnedKey, RandomState, RwLock},
-    AnyCache, Asset, Compound, Error, Handle, SharedString,
+    AnyCache, Compound, Error, Handle, SharedString,
 };
 
 #[cfg(doc)]
@@ -498,27 +496,4 @@ impl<S> fmt::Debug for AssetCache<S> {
             .field("assets", &self.assets)
             .finish()
     }
-}
-
-pub(crate) fn load_from_source<A: Asset>(
-    source: &dyn Source,
-    id: &SharedString,
-) -> Result<A, Error> {
-    let load_with_ext = |ext| -> Result<A, ErrorKind> {
-        let asset = source
-            .read(id, ext)?
-            .with_cow(|content| A::Loader::load(content, ext))?;
-        Ok(asset)
-    };
-
-    let mut error = ErrorKind::NoDefaultValue;
-
-    for ext in A::EXTENSIONS {
-        match load_with_ext(ext) {
-            Err(err) => error = err.or(error),
-            Ok(asset) => return Ok(asset),
-        }
-    }
-
-    A::default_value(id, Error::from_kind(id.clone(), error))
 }

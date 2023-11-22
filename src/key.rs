@@ -8,7 +8,7 @@ use crate::{
 
 #[cfg(feature = "hot-reloading")]
 use crate::{
-    cache::load_from_source, entry::UntypedHandle, hot_reloading::Dependencies, source::Source,
+    asset::load_from_source, entry::UntypedHandle, hot_reloading::Dependencies, source::Source,
 };
 
 #[cfg(feature = "hot-reloading")]
