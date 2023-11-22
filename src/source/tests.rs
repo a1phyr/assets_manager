@@ -61,6 +61,7 @@ macro_rules! test_source {
 
 mod filesystem {
     use super::*;
+    use std::error::Error;
 
     test_source!(FileSystem::new("assets").unwrap());
 
@@ -77,6 +78,19 @@ mod filesystem {
         };
 
         assert_eq!(path, fs.path_of(DirEntry::File("test.a", "x")));
+    }
+
+    #[test]
+    fn errors() {
+        let fs = FileSystem::new("assets").unwrap();
+
+        let err = fs.read("file_name", "ext").unwrap_err();
+        assert!(err.to_string().contains("file_name.ext"));
+        assert!(err.kind() == io::ErrorKind::NotFound);
+
+        let inner = err.source().unwrap().downcast_ref::<io::Error>().unwrap();
+        assert!(inner.raw_os_error().is_some());
+        assert!(err.kind() == io::ErrorKind::NotFound);
     }
 }
 

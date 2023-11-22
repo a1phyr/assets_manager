@@ -67,12 +67,15 @@ impl FileSystem {
 impl Source for FileSystem {
     fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
         let path = self.path_of(DirEntry::File(id, ext));
-        fs::read(path).map(super::FileContent::Buffer)
+        match fs::read(&path) {
+            Ok(buf) => Ok(super::FileContent::Buffer(buf)),
+            Err(err) => Err(read_error(err, path)),
+        }
     }
 
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
         let dir_path = self.path_of(DirEntry::Directory(id));
-        let entries = fs::read_dir(dir_path)?;
+        let entries = fs::read_dir(&dir_path).map_err(|err| read_error(err, dir_path))?;
 
         let mut entry_id = id.to_owned();
 
@@ -127,4 +130,27 @@ impl fmt::Debug for FileSystem {
             .field("root", &self.path)
             .finish()
     }
+}
+
+#[cold]
+pub fn read_error(err: io::Error, path: PathBuf) -> io::Error {
+    #[derive(Debug)]
+    struct Error {
+        err: io::Error,
+        path: PathBuf,
+    }
+
+    impl fmt::Display for Error {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "failed to read {}", self.path.display())
+        }
+    }
+
+    impl std::error::Error for Error {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+            Some(&self.err)
+        }
+    }
+
+    io::Error::new(err.kind(), Error { err, path })
 }
