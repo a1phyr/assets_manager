@@ -13,7 +13,7 @@ jobs:
       matrix:
         rust:
           - stable
-          - "1.61"
+          - "1.70"
     steps:
       - name: Install development libraries
         run: sudo apt update && sudo apt install libasound2-dev -y
@@ -22,15 +22,6 @@ jobs:
 
       - name: Install toolchain
         run: rustup toolchain add ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
-
-      - name: Downgrade dependencies to MSRV
-        if: ${{ matrix.rust == '1.61' }}
-        run: |
-          cargo update -p serde_yaml --precise 0.9.21
-          cargo update -p is-terminal --precise 0.4.7
-          cargo update -p ron --precise 0.8.0
-          cargo update -p flate2 --precise 1.0.26
-          cargo update -p regex --precise 1.9.6
 
       - run: cargo test --workspace
       - run: cargo test --workspace --all-features
