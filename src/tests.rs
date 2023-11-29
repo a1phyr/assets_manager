@@ -132,14 +132,15 @@ mod asset_cache {
     fn load_dir_ok() {
         let cache = AssetCache::new("assets").unwrap();
 
-        assert!(!cache.contains_dir::<X>("test", false));
+        assert!(!cache.contains::<crate::Directory<X>>("test"));
         let mut loaded: Vec<_> = cache
-            .load_dir::<X>("test", false)
+            .load_dir::<X>("test")
             .unwrap()
+            .read()
             .iter(cache.as_any_cache())
             .filter_map(|x| Some(x.ok()?.read().0))
             .collect();
-        assert!(cache.contains_dir::<X>("test", false));
+        assert!(cache.contains::<crate::Directory<X>>("test"));
 
         loaded.sort();
         assert_eq!(loaded, [-7, 42]);
@@ -149,12 +150,8 @@ mod asset_cache {
     fn load_dir_all() {
         let cache = AssetCache::new("assets").unwrap();
 
-        let mut loaded: Vec<_> = cache
-            .load_dir::<X>("test", false)
-            .unwrap()
-            .ids()
-            .map(|id| (id, cache.load::<X>(id)))
-            .collect();
+        let dir = cache.load_dir::<X>("test").unwrap().read();
+        let mut loaded: Vec<_> = dir.ids().map(|id| (id, cache.load::<X>(id))).collect();
         loaded.sort_by_key(|i| i.0);
         let mut loaded = loaded.into_iter();
 

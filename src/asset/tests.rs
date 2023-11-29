@@ -60,8 +60,9 @@ pub fn gltf_embedded() {
 #[test]
 pub fn gltf_dir() {
     let cache = AssetCache::new("assets").unwrap();
-    let dir = cache.load_dir::<asset::Gltf>("test.gltf", false).unwrap();
+    let dir = cache.load_dir::<asset::Gltf>("test.gltf").unwrap();
 
+    let dir = dir.read();
     let mut ids: Vec<_> = dir.ids().collect();
     ids.sort_unstable();
     assert_eq!(

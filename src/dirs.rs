@@ -126,26 +126,26 @@ where
     }
 }
 
-/// Stores ids in a directory containing assets of type `A`
-pub(crate) struct CachedDir<A> {
+/// Stores ids in a directory containing assets of type `T`
+pub struct Directory<T> {
     ids: Vec<SharedString>,
-    _marker: PhantomData<A>,
+    _marker: PhantomData<T>,
 }
 
-impl<A> Compound for CachedDir<A>
+impl<T> Compound for Directory<T>
 where
-    A: DirLoadable,
+    T: DirLoadable,
 {
-    fn load(cache: crate::AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
+    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
         let mut ids = cache
-            .no_record(|| A::select_ids(cache, id))
+            .no_record(|| T::select_ids(cache, id))
             .map_err(|err| Error::from_io(id.clone(), err))?;
 
         // Remove duplicated entries
         ids.sort_unstable();
         ids.dedup();
 
-        Ok(CachedDir {
+        Ok(Directory {
             ids,
             _marker: PhantomData,
         })
@@ -154,173 +154,130 @@ where
     const HOT_RELOADED: bool = false;
 }
 
-impl<A: DirLoadable> crate::asset::NotHotReloaded for CachedDir<A> {}
-
-impl<A> fmt::Debug for CachedDir<A> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.ids.fmt(f)
-    }
-}
-
-/// Stores ids in a recursive directory containing assets of type `A`
-pub(crate) struct CachedRecDir<A> {
-    ids: Vec<SharedString>,
-    _marker: PhantomData<A>,
-}
-
-impl<A> Compound for CachedRecDir<A>
-where
-    A: DirLoadable,
-{
-    fn load(cache: crate::AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
-        // Load the current directory
-        let this = cache.load::<CachedDir<A>>(id)?;
-        let mut ids = this.get().ids.clone();
-
-        // Recursively load child directories
-        A::sub_directories(cache, id, |id| {
-            if let Ok(child) = cache.load::<CachedRecDir<A>>(id) {
-                ids.extend_from_slice(&child.get().ids);
-            }
-        })
-        .map_err(|err| Error::from_io(id.clone(), err))?;
-
-        Ok(CachedRecDir {
-            ids,
-            _marker: PhantomData,
-        })
-    }
-
-    const HOT_RELOADED: bool = false;
-}
-
-impl<A: DirLoadable> crate::asset::NotHotReloaded for CachedRecDir<A> {}
-
-impl<A> fmt::Debug for CachedRecDir<A> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.ids.fmt(f)
-    }
-}
-
-enum DirHandleInner<'a, A> {
-    Simple(&'a Handle<CachedDir<A>>),
-    Recursive(&'a Handle<CachedRecDir<A>>),
-}
-
-impl<A> Clone for DirHandleInner<'_, A> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<A> Copy for DirHandleInner<'_, A> {}
-
-impl<'a, A> DirHandleInner<'a, A>
-where
-    A: DirLoadable,
-{
-    #[inline]
-    fn id(self) -> &'a SharedString {
-        match self {
-            Self::Simple(handle) => handle.id(),
-            Self::Recursive(handle) => handle.id(),
-        }
-    }
-
-    #[inline]
-    fn ids(self) -> &'a [SharedString] {
-        match self {
-            Self::Simple(handle) => &handle.get().ids,
-            Self::Recursive(handle) => &handle.get().ids,
-        }
-    }
-}
-
-/// A handle on a asset directory.
-///
-/// This type provides methods to access assets within a directory.
-pub struct DirHandle<'a, A> {
-    inner: DirHandleInner<'a, A>,
-}
-
-impl<'a, A> DirHandle<'a, A>
-where
-    A: DirLoadable,
-{
-    #[inline]
-    pub(crate) fn new(handle: &'a Handle<CachedDir<A>>) -> Self {
-        let inner = DirHandleInner::Simple(handle);
-        DirHandle { inner }
-    }
-
-    #[inline]
-    pub(crate) fn new_rec(handle: &'a Handle<CachedRecDir<A>>) -> Self {
-        let inner = DirHandleInner::Recursive(handle);
-        DirHandle { inner }
-    }
-
-    /// The id of the directory handle.
-    #[inline]
-    pub fn id(self) -> &'a SharedString {
-        self.inner.id()
-    }
-
+impl<T> Directory<T> {
     /// Returns an iterator over the ids of the assets in the directory.
-    #[inline]
-    pub fn ids(self) -> impl ExactSizeIterator<Item = &'a SharedString> {
-        self.inner.ids().iter()
+    pub fn ids(&self) -> impl ExactSizeIterator<Item = &SharedString> {
+        self.ids.iter()
     }
 }
 
-impl<'h, A> DirHandle<'h, A>
+impl<T> Directory<T>
 where
-    A: DirLoadable + crate::Storable,
+    T: crate::Storable,
 {
     /// Returns an iterator over the assets in the directory.
     ///
     /// This fonction does not do any I/O and assets that previously failed to
     /// load are ignored.
     #[inline]
-    pub fn iter_cached<'a: 'h>(
-        self,
+    pub fn iter_cached<'h, 'a: 'h>(
+        &'h self,
         cache: AnyCache<'a>,
-    ) -> impl Iterator<Item = &'a Handle<A>> + 'h {
+    ) -> impl Iterator<Item = &'a Handle<T>> + 'h {
         self.ids().filter_map(move |id| cache.get_cached(id))
     }
 }
 
-impl<'h, A> DirHandle<'h, A>
+impl<T> Directory<T>
 where
-    A: DirLoadable + Compound,
+    T: Compound,
 {
     /// Returns an iterator over the assets in the directory.
     ///
     /// This function will happily try to load all assets, even if an error
     /// occured the last time it was tried.
     #[inline]
-    pub fn iter<'a: 'h>(
-        self,
+    pub fn iter<'h, 'a: 'h>(
+        &'h self,
         cache: AnyCache<'a>,
-    ) -> impl ExactSizeIterator<Item = Result<&'a Handle<A>, Error>> + 'h {
+    ) -> impl ExactSizeIterator<Item = Result<&'a Handle<T>, Error>> + 'h {
         self.ids().map(move |id| cache.load(id))
     }
 }
 
-impl<A> Clone for DirHandle<'_, A> {
-    fn clone(&self) -> Self {
-        *self
+impl<T> fmt::Debug for Directory<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Directory").field("ids", &self.ids).finish()
     }
 }
 
-impl<A> Copy for DirHandle<'_, A> {}
+/// Stores ids in a recursive directory containing assets of type `T`
+pub struct RecursiveDirectory<T> {
+    ids: Vec<SharedString>,
+    _marker: PhantomData<T>,
+}
 
-impl<A> fmt::Debug for DirHandle<'_, A>
+impl<T> Compound for RecursiveDirectory<T>
 where
-    A: DirLoadable,
+    T: DirLoadable,
 {
+    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
+        // Load the current directory
+        let this = cache.load::<Directory<T>>(id)?;
+        let mut ids = this.read().ids.clone();
+
+        // Recursively load child directories
+        T::sub_directories(cache, id, |id| {
+            if let Ok(child) = cache.load::<RecursiveDirectory<T>>(id) {
+                ids.extend_from_slice(&child.read().ids);
+            }
+        })
+        .map_err(|err| Error::from_io(id.clone(), err))?;
+
+        Ok(RecursiveDirectory {
+            ids,
+            _marker: PhantomData,
+        })
+    }
+
+    const HOT_RELOADED: bool = false;
+}
+
+impl<T> RecursiveDirectory<T> {
+    /// Returns an iterator over the ids of the assets in the directory.
+    pub fn ids(&self) -> impl ExactSizeIterator<Item = &SharedString> {
+        self.ids.iter()
+    }
+}
+
+impl<T> RecursiveDirectory<T>
+where
+    T: crate::Storable,
+{
+    /// Returns an iterator over the assets in the directory.
+    ///
+    /// This fonction does not do any I/O and assets that previously failed to
+    /// load are ignored.
+    #[inline]
+    pub fn iter_cached<'h, 'a: 'h>(
+        &'h self,
+        cache: AnyCache<'a>,
+    ) -> impl Iterator<Item = &'a Handle<T>> + 'h {
+        self.ids().filter_map(move |id| cache.get_cached(id))
+    }
+}
+
+impl<T> RecursiveDirectory<T>
+where
+    T: Compound,
+{
+    /// Returns an iterator over the assets in the directory.
+    ///
+    /// This function will happily try to load all assets, even if an error
+    /// occured the last time it was tried.
+    #[inline]
+    pub fn iter<'h, 'a: 'h>(
+        &'h self,
+        cache: AnyCache<'a>,
+    ) -> impl ExactSizeIterator<Item = Result<&'a Handle<T>, Error>> + 'h {
+        self.ids().map(move |id| cache.load(id))
+    }
+}
+
+impl<T> fmt::Debug for RecursiveDirectory<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("DirHandle")
-            .field("ids", &self.inner.ids())
+        f.debug_struct("RecursiveDirectory")
+            .field("ids", &self.ids)
             .finish()
     }
 }

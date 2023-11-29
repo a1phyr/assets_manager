@@ -183,7 +183,7 @@ mod cache;
 pub use cache::AssetCache;
 
 mod dirs;
-pub use dirs::DirHandle;
+pub use dirs::{Directory, RecursiveDirectory};
 
 mod error;
 pub use error::{BoxedError, Error};

@@ -4,7 +4,7 @@ use crate::{
     entry::{CacheEntry, UntypedHandle},
     source::Source,
     utils::{BorrowedKey, HashMap, Key, OwnedKey},
-    AnyCache, Compound, DirHandle, Error, Handle, SharedString, Storable,
+    AnyCache, Compound, Error, Handle, SharedString, Storable,
 };
 use std::{any::TypeId, cell::RefCell, fmt};
 
@@ -164,26 +164,6 @@ impl<S: Source> LocalAssetCache<S> {
         self._load_expect(id)
     }
 
-    /// Gets a directory from the cache.
-    ///
-    /// See [`AnyCache::get_cached_dir`] for more details.
-    #[inline]
-    pub fn get_cached_dir<A: DirLoadable>(
-        &self,
-        id: &str,
-        recursive: bool,
-    ) -> Option<DirHandle<A>> {
-        self._get_cached_dir(id, recursive)
-    }
-
-    /// Returns `true` if the cache contains the specified directory.
-    ///
-    /// See [`AnyCache::contains_dir`] for more details.
-    #[inline]
-    pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
-        self._contains_dir::<A>(id, recursive)
-    }
-
     /// Loads all assets of a given type from a directory.
     ///
     /// See [`AnyCache::load_dir`] for more details.
@@ -191,9 +171,19 @@ impl<S: Source> LocalAssetCache<S> {
     pub fn load_dir<A: DirLoadable>(
         &self,
         id: &str,
-        recursive: bool,
-    ) -> Result<DirHandle<A>, Error> {
-        self._load_dir(id, recursive)
+    ) -> Result<&Handle<crate::Directory<A>>, Error> {
+        self.load::<crate::Directory<A>>(id)
+    }
+
+    /// Loads all assets of a given type from a directory.
+    ///
+    /// See [`AnyCache::load_dir`] for more details.
+    #[inline]
+    pub fn load_rec_dir<A: DirLoadable>(
+        &self,
+        id: &str,
+    ) -> Result<&Handle<crate::RecursiveDirectory<A>>, Error> {
+        self.load::<crate::RecursiveDirectory<A>>(id)
     }
 
     /// Loads an owned version of an asset.

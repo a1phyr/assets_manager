@@ -3,7 +3,6 @@
 use crate::{
     anycache::{AssetMap as _, CacheExt},
     asset::{DirLoadable, Storable},
-    dirs::DirHandle,
     entry::{CacheEntry, UntypedHandle},
     source::{FileSystem, Source},
     utils::{BorrowedKey, HashMap, Key, OwnedKey, RandomState, RwLock},
@@ -346,29 +345,19 @@ impl<S: Source> AssetCache<S> {
     pub fn load_dir<A: DirLoadable>(
         &self,
         id: &str,
-        recursive: bool,
-    ) -> Result<DirHandle<A>, Error> {
-        self._load_dir(id, recursive)
+    ) -> Result<&Handle<crate::Directory<A>>, Error> {
+        self.load::<crate::Directory<A>>(id)
     }
 
-    /// Gets an directory from the cache.
+    /// Loads a directory.
     ///
-    /// See [`AnyCache::get_cached_dir`] for more details.
+    /// See [`AnyCache::load_dir`] for more details.
     #[inline]
-    pub fn get_cached_dir<A: DirLoadable>(
+    pub fn load_rec_dir<A: DirLoadable>(
         &self,
         id: &str,
-        recursive: bool,
-    ) -> Option<DirHandle<A>> {
-        self._get_cached_dir(id, recursive)
-    }
-
-    /// Returns `true` if the cache contains the specified directory.
-    ///
-    /// See [`AnyCache::contains_dir`] for more details.
-    #[inline]
-    pub fn contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
-        self._contains_dir::<A>(id, recursive)
+    ) -> Result<&Handle<crate::RecursiveDirectory<A>>, Error> {
+        self.load::<crate::RecursiveDirectory<A>>(id)
     }
 
     /// Loads an owned version of an asset.

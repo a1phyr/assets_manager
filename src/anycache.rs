@@ -18,7 +18,7 @@ use crate::{
     entry::{CacheEntry, UntypedHandle},
     key::Type,
     source::{DirEntry, Source},
-    Compound, DirHandle, Error, Handle, SharedString, Storable,
+    Compound, Error, Handle, SharedString, Storable,
 };
 
 #[cfg(feature = "hot-reloading")]
@@ -135,8 +135,25 @@ impl<'a> AnyCache<'a> {
 
     /// Loads a directory.
     ///
-    /// If `recursive` is `true`, this function also loads sub-directories
-    /// recursively from subdirectories.
+    /// The directory's id is constructed the same way as assets. To specify
+    /// the cache's root, give the empty string (`""`) as id.
+    ///
+    /// Note that this function only gets the ids of assets, and that are not
+    /// actually loaded. The returned handle can be use to iterate over them.
+    ///
+    /// # Errors
+    ///
+    /// An error is returned if the given id does not match a valid readable
+    /// directory.
+    #[inline]
+    pub fn load_dir<A: DirLoadable>(
+        self,
+        id: &str,
+    ) -> Result<&'a Handle<crate::Directory<A>>, Error> {
+        self.load::<crate::Directory<A>>(id)
+    }
+
+    /// Loads a directory and its subdirectories.
     ///
     /// The directory's id is constructed the same way as assets. To specify
     /// the cache's root, give the empty string (`""`) as id.
@@ -152,32 +169,11 @@ impl<'a> AnyCache<'a> {
     /// When loading a directory recursively, directories that can't be read are
     /// ignored.
     #[inline]
-    pub fn load_dir<A: DirLoadable>(
+    pub fn load_rec_dir<A: DirLoadable>(
         self,
         id: &str,
-        recursive: bool,
-    ) -> Result<DirHandle<'a, A>, Error> {
-        self.cache._load_dir(id, recursive)
-    }
-
-    /// Gets a directory from the cache.
-    ///
-    /// This function does not attempt to load the it from the source if it is
-    /// not found in the cache.
-    #[inline]
-    pub fn get_cached_dir<A: DirLoadable>(
-        self,
-        id: &str,
-        recursive: bool,
-    ) -> Option<DirHandle<'a, A>> {
-        self.cache._get_cached_dir(id, recursive)
-    }
-
-    /// Returns `true` if the cache contains the specified directory with the
-    /// given `recursive` parameter.
-    #[inline]
-    pub fn contains_dir<A: DirLoadable>(self, id: &str, recursive: bool) -> bool {
-        self.cache._contains_dir::<A>(id, recursive)
+    ) -> Result<&'a Handle<crate::RecursiveDirectory<A>>, Error> {
+        self.load::<crate::RecursiveDirectory<A>>(id)
     }
 
     /// Loads an owned version of an asset.
@@ -421,37 +417,6 @@ pub(crate) trait CacheExt: Cache {
         match self._load(id) {
             Ok(h) => h,
             Err(err) => expect_failed(err),
-        }
-    }
-
-    #[inline]
-    fn _get_cached_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> Option<DirHandle<A>> {
-        Some(if recursive {
-            let handle = self._get_cached(id)?;
-            DirHandle::new_rec(handle)
-        } else {
-            let handle = self._get_cached(id)?;
-            DirHandle::new(handle)
-        })
-    }
-
-    #[inline]
-    fn _load_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> Result<DirHandle<A>, Error> {
-        Ok(if recursive {
-            let handle = self._load(id)?;
-            DirHandle::new_rec(handle)
-        } else {
-            let handle = self._load(id)?;
-            DirHandle::new(handle)
-        })
-    }
-
-    #[inline]
-    fn _contains_dir<A: DirLoadable>(&self, id: &str, recursive: bool) -> bool {
-        if recursive {
-            self._contains::<crate::dirs::CachedRecDir<A>>(id)
-        } else {
-            self._contains::<crate::dirs::CachedDir<A>>(id)
         }
     }
 
