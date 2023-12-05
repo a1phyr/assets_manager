@@ -1,9 +1,7 @@
 use crate::{
-    anycache::AssetMap as _,
     cache::AssetMap,
-    key::AnyAsset,
     source::Source,
-    utils::{HashMap, OwnedKey},
+    utils::{HashSet, OwnedKey},
     AnyCache, SharedString,
 };
 
@@ -51,103 +49,57 @@ impl<'a> BorrowedCache<'a> {
     }
 }
 
-pub(crate) struct CompoundReloadInfos(OwnedKey, Dependencies, ReloadFn);
+pub(crate) struct AssetReloadInfos(OwnedKey, Dependencies, ReloadFn);
 
-impl CompoundReloadInfos {
+impl AssetReloadInfos {
     #[inline]
-    pub(crate) fn from_type(
-        id: SharedString,
-        deps: Dependencies,
-        typ: crate::key::Type,
-        reload_fn: ReloadFn,
-    ) -> Self {
+    pub(crate) fn from_type(id: SharedString, deps: Dependencies, typ: crate::key::Type) -> Self {
         let key = OwnedKey::new_with(id, typ.type_id);
-        Self(key, deps, reload_fn)
+        Self(key, deps, typ.inner.reload)
     }
-}
-
-/// Store assets until we can sync with the `AssetCache`.
-pub struct LocalCache {
-    changed: HashMap<OwnedKey, Box<dyn AnyAsset>>,
 }
 
 enum CacheKind {
-    Local(LocalCache),
-    Static(
-        &'static AssetMap,
-        &'static super::HotReloader,
-        Vec<OwnedKey>,
-    ),
-}
-
-impl CacheKind {
-    /// Reloads an asset
-    ///
-    /// `key.type_id == asset.type_id()`
-    fn update(&mut self, key: OwnedKey, asset: Box<dyn AnyAsset>) {
-        match self {
-            CacheKind::Static(cache, _, to_reload) => {
-                if let Some(entry) = cache.get(&key.id, key.type_id) {
-                    asset.reload(entry);
-                    log::info!("Reloading \"{}\"", key.id);
-                }
-                to_reload.push(key);
-            }
-            CacheKind::Local(cache) => {
-                cache.changed.insert(key, asset);
-            }
-        }
-    }
+    Local,
+    Static(&'static AssetMap, &'static super::HotReloader),
 }
 
 pub(super) struct HotReloadingData {
     source: Box<dyn Source>,
+    to_reload: HashSet<OwnedKey>,
     cache: CacheKind,
     deps: DepsGraph,
 }
 
 impl HotReloadingData {
     pub fn new(source: Box<dyn Source>) -> Self {
-        let cache = LocalCache {
-            changed: HashMap::new(),
-        };
-
         HotReloadingData {
             source,
-            cache: CacheKind::Local(cache),
+            to_reload: HashSet::new(),
+            cache: CacheKind::Local,
             deps: DepsGraph::new(),
         }
     }
 
-    pub fn load_asset(&mut self, events: super::Events) {
-        events.for_each(
-            |key| match key.typ.load_from_source(&self.source, &key.id) {
-                Ok(asset) => {
-                    self.cache.update(key.into_owned_key(), asset);
-                    self.update_if_static();
-                }
-                Err(err) => log::warn!("Error reloading \"{}\": {}", key.id, err.reason()),
-            },
-        )
+    pub fn handle_events(&mut self, events: super::Events) {
+        events.for_each(|asset_key| {
+            let key = OwnedKey::new_with(asset_key.id, asset_key.typ.type_id);
+            self.to_reload.insert(key);
+        });
+        self.update_if_static();
     }
 
     pub fn update_if_local(&mut self, cache: &AssetMap, reloader: &super::HotReloader) {
-        if let CacheKind::Local(local_cache) = &mut self.cache {
+        if let CacheKind::Local = &mut self.cache {
             let cache = BorrowedCache::new(cache, reloader, &self.source);
-            local_cache.update(&mut self.deps, cache);
+            run_update(&mut self.to_reload, &mut self.deps, cache);
         }
     }
 
     fn update_if_static(&mut self) {
-        if let CacheKind::Static(cache, reloader, to_reload) = &mut self.cache {
+        if let CacheKind::Static(cache, reloader) = &mut self.cache {
             let cache = BorrowedCache::new(cache, reloader, &self.source);
-
-            let to_update = self.deps.topological_sort_from(to_reload.iter());
-            for key in to_update.iter() {
-                self.deps.reload(cache.as_any_cache(), key);
-            }
-
-            to_reload.clear();
+            run_update(&mut self.to_reload, &mut self.deps, cache);
         }
     }
 
@@ -158,41 +110,30 @@ impl HotReloadingData {
         asset_cache: &'static AssetMap,
         reloader: &'static super::HotReloader,
     ) {
-        if let CacheKind::Local(local_cache) = &mut self.cache {
-            let cache = BorrowedCache::new(asset_cache, reloader, &self.source);
-            local_cache.update(&mut self.deps, cache);
-            self.cache = CacheKind::Static(asset_cache, reloader, Vec::new());
+        if let CacheKind::Local = &mut self.cache {
+            self.cache = CacheKind::Static(asset_cache, reloader);
             log::trace!("Hot-reloading now use a 'static reference");
+
+            let cache = BorrowedCache::new(asset_cache, reloader, &self.source);
+            run_update(&mut self.to_reload, &mut self.deps, cache);
         }
     }
 
-    pub fn add_compound(&mut self, infos: CompoundReloadInfos) {
-        let CompoundReloadInfos(key, new_deps, reload) = infos;
+    pub fn add_asset(&mut self, infos: AssetReloadInfos) {
+        let AssetReloadInfos(key, new_deps, reload) = infos;
         self.deps.insert(key, new_deps, Some(reload));
     }
 
     pub fn clear_local_cache(&mut self) {
-        if let CacheKind::Local(cache) = &mut self.cache {
-            cache.changed.clear();
-        }
+        self.to_reload.clear();
     }
 }
 
-impl LocalCache {
-    /// Update the `AssetCache` with data collected in the `LocalCache` since
-    /// the last reload.
-    fn update(&mut self, deps: &mut DepsGraph, cache: BorrowedCache) {
-        let to_update = deps.topological_sort_from(self.changed.iter().map(|(k, _)| k));
+fn run_update(changed: &mut HashSet<OwnedKey>, deps: &mut DepsGraph, cache: BorrowedCache) {
+    let to_update = deps.topological_sort_from(changed.iter());
+    changed.clear();
 
-        // Update `Asset`s
-        for (key, value) in self.changed.drain() {
-            log::info!("Reloading \"{}\"", key.id);
-            cache.assets.update_or_insert(key.id, key.type_id, value);
-        }
-
-        // Update `Compound`s
-        for key in to_update.iter() {
-            deps.reload(cache.as_any_cache(), key);
-        }
+    for key in to_update.iter() {
+        deps.reload(cache.as_any_cache(), key);
     }
 }

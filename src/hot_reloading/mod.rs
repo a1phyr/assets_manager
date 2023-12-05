@@ -11,7 +11,7 @@ mod watcher;
 #[cfg(test)]
 mod tests;
 
-use paths::{CompoundReloadInfos, HotReloadingData};
+use paths::{AssetReloadInfos, HotReloadingData};
 
 use crossbeam_channel::{self as channel, Receiver, Sender};
 use std::{
@@ -61,7 +61,7 @@ enum CacheMessage {
     Static(&'static crate::cache::AssetMap, &'static HotReloader),
 
     Clear,
-    AddCompound(CompoundReloadInfos),
+    AddAsset(AssetReloadInfos),
 }
 unsafe impl Send for CacheMessage where crate::cache::AssetMap: Sync {}
 
@@ -243,7 +243,11 @@ impl HotReloader {
     // without hot-reloading if it stopped, and an error should have already
     // been logged.
 
-    pub(crate) fn add_asset(&self, id: SharedString, typ: AssetType) {
+    pub(crate) fn add_asset(&self, id: SharedString, asset_type: AssetType, typ: Type) {
+        let infos = AssetReloadInfos::from_type(id.clone(), Dependencies::empty(), typ);
+        let _ = self.sender.send(CacheMessage::AddAsset(infos));
+
+        let typ = asset_type;
         let key = AssetKey { id, typ };
         self.updates.send_update(UpdateMessage::AddAsset(key));
     }
@@ -255,15 +259,9 @@ impl HotReloader {
         }
     }
 
-    pub(crate) fn add_compound(
-        &self,
-        id: SharedString,
-        deps: Dependencies,
-        typ: Type,
-        reload_fn: ReloadFn,
-    ) {
-        let infos = CompoundReloadInfos::from_type(id, deps, typ, reload_fn);
-        let _ = self.sender.send(CacheMessage::AddCompound(infos));
+    pub(crate) fn add_compound(&self, id: SharedString, deps: Dependencies, typ: Type) {
+        let infos = AssetReloadInfos::from_type(id, deps, typ);
+        let _ = self.sender.send(CacheMessage::AddAsset(infos));
     }
 
     pub(crate) fn clear(&self) {
@@ -331,14 +329,14 @@ fn hot_reloading_thread(
                     cache.use_static_ref(asset_cache, reloader)
                 }
                 Ok(CacheMessage::Clear) => cache.clear_local_cache(),
-                Ok(CacheMessage::AddCompound(infos)) => cache.add_compound(infos),
+                Ok(CacheMessage::AddAsset(infos)) => cache.add_asset(infos),
                 Err(_) => break,
             }
         }
 
         if ready == 1 {
             match events.try_recv() {
-                Ok(msg) => cache.load_asset(msg),
+                Ok(msg) => cache.handle_events(msg),
                 Err(crossbeam_channel::TryRecvError::Empty) => (),
                 // We won't receive events anymore, we can stop now
                 Err(crossbeam_channel::TryRecvError::Disconnected) => break,

@@ -79,13 +79,13 @@ impl DepsGraph {
         };
 
         for key in iter {
-            self.visit(&mut sort_data, key, false);
+            self.visit(&mut sort_data, key);
         }
 
         TopologicalSort(sort_data.list)
     }
 
-    fn visit(&self, sort_data: &mut TopologicalSortData, key: &OwnedKey, add_self: bool) {
+    fn visit(&self, sort_data: &mut TopologicalSortData, key: &OwnedKey) {
         if sort_data.visited.contains(key) {
             return;
         }
@@ -96,13 +96,11 @@ impl DepsGraph {
         };
 
         for rdep in node.rdeps.iter() {
-            self.visit(sort_data, rdep, true);
+            self.visit(sort_data, rdep);
         }
 
         sort_data.visited.insert(key.clone());
-        if add_self {
-            sort_data.list.push(key.clone());
-        }
+        sort_data.list.push(key.clone());
     }
 
     pub fn reload(&mut self, cache: crate::AnyCache, key: &OwnedKey) {

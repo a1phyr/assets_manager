@@ -279,15 +279,16 @@ pub(crate) fn load_and_record(
                 crate::key::InnerType::Storable => (),
                 crate::key::InnerType::Asset(inner) => {
                     let asset = (typ.inner.load)(cache, id.clone())?;
-                    reloader.add_asset(id, crate::key::AssetType::new(typ.type_id, inner));
+                    let asset_type = crate::key::AssetType::new(typ.type_id, inner);
+                    reloader.add_asset(id, asset_type, typ);
                     return Ok(asset);
                 }
-                crate::key::InnerType::Compound(inner) => {
+                crate::key::InnerType::Compound => {
                     let (entry, deps) = crate::hot_reloading::records::record(reloader, || {
                         (typ.inner.load)(cache, id.clone())
                     });
                     let entry = entry?;
-                    reloader.add_compound(id, deps, typ, inner.reload);
+                    reloader.add_compound(id, deps, typ);
                     return Ok(entry);
                 }
             }

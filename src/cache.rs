@@ -15,10 +15,7 @@ use crate::AssetGuard;
 use std::{any::TypeId, fmt, io, path::Path};
 
 #[cfg(feature = "hot-reloading")]
-use crate::{
-    hot_reloading::{records, HotReloader},
-    key::AnyAsset,
-};
+use crate::hot_reloading::{records, HotReloader};
 
 // Make shards go to different cache lines to reduce contention
 #[repr(align(64))]
@@ -73,22 +70,6 @@ impl AssetMap {
         key.hash(&mut hasher);
         let id = (hasher.finish() as usize) & (self.shards.len() - 1);
         &mut self.shards[id]
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    pub fn update_or_insert(&self, id: SharedString, type_id: TypeId, value: Box<dyn AnyAsset>) {
-        use std::collections::hash_map::Entry;
-
-        let key = OwnedKey::new_with(id, type_id);
-        let shard = &mut *self.get_shard(key.borrow()).0.write();
-
-        match shard.entry(key) {
-            Entry::Occupied(entry) => value.reload(entry.get().inner()),
-            Entry::Vacant(entry) => {
-                let id = entry.key().clone().into_id();
-                entry.insert(value.create(id));
-            }
-        }
     }
 
     fn take(&mut self, id: &str, type_id: TypeId) -> Option<CacheEntry> {
