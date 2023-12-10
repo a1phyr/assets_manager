@@ -101,12 +101,6 @@ impl OwnedKey {
             type_id: self.type_id,
         }
     }
-
-    #[cfg(feature = "hot-reloading")]
-    #[inline]
-    pub fn into_id(self) -> SharedString {
-        self.id
-    }
 }
 
 impl Key for OwnedKey {
