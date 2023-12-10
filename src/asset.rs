@@ -203,23 +203,6 @@ pub(crate) fn load_from_source<A: Asset>(
     A::default_value(id, Error::from_kind(id.clone(), error))
 }
 
-impl<A> Asset for Box<A>
-where
-    A: Asset,
-{
-    const EXTENSIONS: &'static [&'static str] = A::EXTENSIONS;
-    type Loader = loader::LoadFromAsset<A>;
-
-    #[inline]
-    fn default_value(id: &str, error: Error) -> Result<Box<A>, Error> {
-        A::default_value(id, error).map(Box::new)
-    }
-
-    const HOT_RELOADED: bool = A::HOT_RELOADED;
-}
-
-impl<A> NotHotReloaded for Box<A> where A: Asset + NotHotReloaded {}
-
 /// An asset type that can load other kinds of assets.
 ///
 /// `Compound`s can be loaded and retrieved by an [`AssetCache`].
