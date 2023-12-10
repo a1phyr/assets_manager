@@ -111,38 +111,38 @@
 //!
 //! # Ownership model
 //!
-//! You will notice that an [`Handle`] is not `'static`: its lifetime is
-//! tied to that of the [`AssetCache`] from which it was loaded. This may be
-//! seen as a weakness, as `'static` data is generally easier to work with, but
-//! it is actually a clever use of Rust ownership system.
+//! You will notice that you cannot get owned [`Handle`]s, only references whose
+//! lifetime are tied to that of the [`AssetCache`] from which there was loaded.
+//! This may be seen as a weakness, as `'static` data is generally easier to
+//! work with, but it is actually a clever use of Rust ownership system.
 //!
-//! As when you borrow an `&str` from a `String`, an `Handle` guarantees
+//! As when you borrow an `&str` from a `String`, an `&Handle` guarantees
 //! that the underlying asset is stored in the cache. This is especially useful
-//! with hot-reloading: all `Handle` are guaranteed to be reloaded when
+//! with hot-reloading: all `&Handle` are guaranteed to be reloaded when
 //! possible, so two handles on the same asset always have the same value. This
 //! would not be possible if `Handle`s were always `'static`.
 //!
-//! Note that this also means that you need a mutable reference on a cache to
+//! Note that this also means that you need a mutable reference to a cache to
 //! remove assets from it.
 //!
 //! ## Getting owned data
 //!
 //! Working with owned data is far easier: you don't have to care about
-//! lifetimes, they can easily be sent in other threads, etc. So, how to get
-//! `'static` data from `Handle`s that borrow from an `AssetCache` ?
+//! lifetimes, it can easily be sent to other threads, etc. So, how to get
+//! `'static` data from `Handle` references that borrow from an `AssetCache` ?
 //!
 //! Note that none of these proposals is compulsory to use this crate: you can
 //! work with non-`'static` data, or invent your own techniques.
 //!
 //! ### Getting a `&'static AssetCache`
 //!
-//! The lifetime of an `Handle` being tied to that of the `&AssetCache`, this
-//! makes possible to get `'static` `Handle`s. Moreover, it enables you to call
-//! [`AssetCache::enhance_hot_reloading`], which is easier to work with and has
-//! better performances than the default solution.
+//! Because the lifetime of a `Handle` reference is tied to that of the `&AssetCache`,
+//! this makes possible to get `'static` `Handle`s. Moreover, it enables you to
+//! call [`AssetCache::enhance_hot_reloading`], which is easier to work with and
+//! has better performances than the default solution.
 //!
-//! You get easily get a `&'static AssetCache`, with the `lazy_static` crate,
-//! but you can also do it by [leaking a `Box`](Box::leak).
+//! You get easily get a `&'static AssetCache`, with the `once_cell` crate or
+//! [`std::sync::OnceLock`], but you can also do it by [leaking a `Box`](Box::leak).
 //!
 //! Note that using this technique prevents you from removing assets from the
 //! cache, so you have to keep them in memory for the duration of the program.
