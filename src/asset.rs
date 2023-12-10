@@ -148,7 +148,7 @@ pub trait Asset: Sized + Send + Sync + 'static {
     ///
     /// ```no_run
     /// # cfg_if::cfg_if! { if #[cfg(feature = "json")] {
-    /// use assets_manager::{Asset, Error, loader};
+    /// use assets_manager::{Asset, BoxedError, SharedString, loader};
     /// use serde::Deserialize;
     ///
     /// #[derive(Deserialize, Default)]
@@ -161,7 +161,7 @@ pub trait Asset: Sized + Send + Sync + 'static {
     ///     const EXTENSION: &'static str = "json";
     ///     type Loader = loader::JsonLoader;
     ///
-    ///     fn default_value(id: &str, error: Error) -> Result<Item, Error> {
+    ///     fn default_value(id: &SharedString, error: BoxedError) -> Result<Item, BoxedError> {
     ///         eprintln!("Error loading {}: {}. Using default value", id, error);
     ///         Ok(Item::default())
     ///     }
@@ -170,7 +170,7 @@ pub trait Asset: Sized + Send + Sync + 'static {
     /// ```
     #[inline]
     #[allow(unused_variables)]
-    fn default_value(id: &str, error: Error) -> Result<Self, Error> {
+    fn default_value(id: &SharedString, error: BoxedError) -> Result<Self, BoxedError> {
         Err(error)
     }
 
@@ -183,7 +183,7 @@ pub trait Asset: Sized + Send + Sync + 'static {
 pub(crate) fn load_from_source<A: Asset>(
     source: &dyn Source,
     id: &SharedString,
-) -> Result<A, Error> {
+) -> Result<A, BoxedError> {
     let load_with_ext = |ext| -> Result<A, ErrorKind> {
         let asset = source
             .read(id, ext)?
@@ -200,7 +200,7 @@ pub(crate) fn load_from_source<A: Asset>(
         }
     }
 
-    A::default_value(id, Error::from_kind(id.clone(), error))
+    A::default_value(id, error.into())
 }
 
 /// An asset type that can load other kinds of assets.
@@ -288,12 +288,6 @@ where
     #[inline]
     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
         Ok(load_from_source(&cache.raw_source(), id)?)
-    }
-
-    #[doc(hidden)]
-    fn _load_entry(cache: AnyCache, id: SharedString) -> Result<CacheEntry, Error> {
-        let asset: Self = load_from_source(&cache.raw_source(), &id)?;
-        Ok(CacheEntry::new(asset, id, || cache.is_hot_reloaded()))
     }
 
     const HOT_RELOADED: bool = Self::HOT_RELOADED;

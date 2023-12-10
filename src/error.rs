@@ -15,9 +15,6 @@ pub(crate) enum ErrorKind {
 
     /// The conversion from raw bytes failed.
     Conversion(BoxedError),
-
-    /// Failed to load another asset
-    Other(BoxedError),
 }
 
 impl From<io::Error> for ErrorKind {
@@ -29,6 +26,16 @@ impl From<io::Error> for ErrorKind {
 impl From<BoxedError> for ErrorKind {
     fn from(err: BoxedError) -> Self {
         Self::Conversion(err)
+    }
+}
+
+impl From<ErrorKind> for BoxedError {
+    fn from(err: ErrorKind) -> Self {
+        match err {
+            ErrorKind::NoDefaultValue => Box::new(NoDefaultValueError),
+            ErrorKind::Io(err) => Box::new(err),
+            ErrorKind::Conversion(err) => err,
+        }
     }
 }
 
@@ -58,7 +65,7 @@ impl StdError for NoDefaultValueError {}
 
 struct ErrorRepr {
     id: SharedString,
-    kind: ErrorKind,
+    error: BoxedError,
 }
 
 /// The error type which is used when loading an asset.
@@ -66,17 +73,8 @@ pub struct Error(Box<ErrorRepr>);
 
 impl Error {
     #[cold]
-    pub(crate) fn from_io(id: SharedString, err: io::Error) -> Self {
-        Self::from_kind(id, ErrorKind::Io(err))
-    }
-
-    pub(crate) fn from_kind(id: SharedString, kind: ErrorKind) -> Self {
-        Self(Box::new(ErrorRepr { id, kind }))
-    }
-
-    #[cold]
-    pub(crate) fn new(id: SharedString, err: BoxedError) -> Self {
-        Self::from_kind(id, ErrorKind::Other(err))
+    pub(crate) fn new(id: SharedString, error: BoxedError) -> Self {
+        Self(Box::new(ErrorRepr { id, error }))
     }
 
     /// The id of the asset that was being loaded when the error happened.
@@ -86,12 +84,9 @@ impl Error {
     }
 
     /// Like `source`, but never fails
+    #[inline]
     pub fn reason(&self) -> &(dyn StdError + 'static) {
-        match &self.0.kind {
-            ErrorKind::Io(err) => err,
-            ErrorKind::Conversion(err) | ErrorKind::Other(err) => &**err,
-            ErrorKind::NoDefaultValue => &NoDefaultValueError,
-        }
+        &*self.0.error
     }
 }
 
@@ -99,7 +94,7 @@ impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Error")
             .field("id", &self.0.id)
-            .field("kind", &self.0.kind)
+            .field("error", &self.0.error)
             .finish()
     }
 }

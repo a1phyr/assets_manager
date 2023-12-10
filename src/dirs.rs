@@ -137,9 +137,7 @@ where
     T: DirLoadable,
 {
     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
-        let mut ids = cache
-            .no_record(|| T::select_ids(cache, id))
-            .map_err(|err| Error::from_io(id.clone(), err))?;
+        let mut ids = cache.no_record(|| T::select_ids(cache, id))?;
 
         // Remove duplicated entries
         ids.sort_unstable();
@@ -221,8 +219,7 @@ where
             if let Ok(child) = cache.load::<RecursiveDirectory<T>>(id) {
                 ids.extend_from_slice(&child.read().ids);
             }
-        })
-        .map_err(|err| Error::from_io(id.clone(), err))?;
+        })?;
 
         Ok(RecursiveDirectory {
             ids,
