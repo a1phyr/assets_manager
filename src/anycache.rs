@@ -365,7 +365,7 @@ pub(crate) trait CacheExt: Cache {
 
     #[inline]
     fn _get_cached<A: Storable>(&self, id: &str) -> Option<&Handle<A>> {
-        Some(self._get_cached_entry::<A>(id)?.downcast_ref())
+        Some(self._get_cached_entry::<A>(id)?.downcast_ref_ok())
     }
 
     #[inline]
@@ -387,7 +387,7 @@ pub(crate) trait CacheExt: Cache {
             None => self.add_any(id, default),
         };
 
-        entry.downcast_ref()
+        entry.downcast_ref_ok()
     }
 
     #[inline]
@@ -397,7 +397,7 @@ pub(crate) trait CacheExt: Cache {
 
     fn _load<A: Compound>(&self, id: &str) -> Result<&Handle<A>, Error> {
         let entry = self.load_entry(id, Type::of::<A>())?;
-        Ok(entry.downcast_ref())
+        Ok(entry.downcast_ref_ok())
     }
 
     #[inline]

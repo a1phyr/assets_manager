@@ -89,18 +89,22 @@ struct RawEntry<T: ?Sized> {
 type Entry<T> = RawEntry<EntryKind<T>>;
 type UntypedEntry = RawEntry<dyn Storage>;
 
-impl<T> Entry<T> {
+impl<T: Storable> Entry<T> {
     fn handle(&self) -> &Handle<T> {
         unsafe { &*(self as *const Self as *const Handle<T>) }
+    }
+
+    fn untyped_handle(&self) -> &UntypedHandle {
+        unsafe { &*(self as *const Self as *const UntypedEntry as *const UntypedHandle) }
     }
 }
 
 impl UntypedEntry {
-    fn is<T: Storable>(&self) -> bool {
+    fn is<T: 'static>(&self) -> bool {
         self.type_id == TypeId::of::<T>()
     }
 
-    fn downcast_ref<T: Storable>(&self) -> Option<&Entry<T>> {
+    fn downcast_ref<T: 'static>(&self) -> Option<&Entry<T>> {
         if self.is::<T>() {
             unsafe { Some(&*(self as *const Self as *const Entry<T>)) }
         } else {
@@ -108,7 +112,7 @@ impl UntypedEntry {
         }
     }
 
-    fn downcast<T: Storable>(self: Box<Self>) -> Result<Box<Entry<T>>, Box<Self>> {
+    fn downcast<T: 'static>(self: Box<Self>) -> Result<Box<Entry<T>>, Box<Self>> {
         if self.is::<T>() {
             unsafe { Ok(Box::from_raw(Box::into_raw(self) as *mut Entry<T>)) }
         } else {
@@ -164,38 +168,60 @@ impl fmt::Debug for CacheEntry {
     }
 }
 
+/// A untyped handle on an asset.
+///
+/// This is an type-erased version of [`Handle`].
+/// As with `dyn Any`, the underlying type can be queried at runtime.
 #[repr(transparent)]
-pub(crate) struct UntypedHandle(UntypedEntry);
+pub struct UntypedHandle {
+    inner: UntypedEntry,
+}
 
 impl UntypedHandle {
+    /// Returns the id of the asset.
+    #[inline]
+    pub fn id(&self) -> &SharedString {
+        &self.inner.id
+    }
+
     #[inline]
     pub(crate) unsafe fn extend_lifetime<'a>(&self) -> &'a UntypedHandle {
         &*(self as *const Self)
     }
 
+    /// Returns `true` if the inner type is the same as T.
     #[inline]
-    pub fn try_downcast_ref<T: Storable>(&self) -> Option<&Handle<T>> {
-        let entry = self.0.downcast_ref()?;
+    pub fn is<T: 'static>(&self) -> bool {
+        self.inner.is::<T>()
+    }
+
+    /// Returns a handle to the asset if it is of type `T`.
+    #[inline]
+    pub fn downcast_ref<T: Storable>(&self) -> Option<&Handle<T>> {
+        let entry = self.inner.downcast_ref()?;
         Some(entry.handle())
     }
 
+    /// Like `downcast_ref`, but panics in the wrong type is given.
     #[inline]
-    pub fn downcast_ref<T: Storable>(&self) -> &Handle<T> {
-        match self.try_downcast_ref() {
+    pub(crate) fn downcast_ref_ok<T: Storable>(&self) -> &Handle<T> {
+        match self.downcast_ref() {
             Some(h) => h,
             None => wrong_handle_type(),
         }
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub fn write(&self, asset: CacheEntry) -> SharedString {
-        self.0.kind.write(asset)
+    pub(crate) fn write(&self, asset: CacheEntry) -> SharedString {
+        self.inner.kind.write(asset)
     }
 }
 
 impl fmt::Debug for UntypedHandle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("UntypedHandle").finish()
+        f.debug_struct("UntypedHandle")
+            .field("id", self.id())
+            .finish_non_exhaustive()
     }
 }
 
@@ -255,6 +281,15 @@ impl<T> Handle<T> {
     #[inline]
     pub fn id(&self) -> &SharedString {
         &self.inner.id
+    }
+
+    /// Returns an untyped version of the handle.
+    #[inline]
+    pub fn as_untyped(&self) -> &UntypedHandle
+    where
+        T: Storable,
+    {
+        self.inner.untyped_handle()
     }
 
     /// Returns a `ReloadWatcher` that can be used to check whether this asset
