@@ -7,19 +7,12 @@ use crate::{
 };
 
 #[cfg(feature = "hot-reloading")]
-use crate::{entry::UntypedHandle, hot_reloading::Dependencies};
+use crate::hot_reloading::Dependencies;
 
 #[cfg(feature = "hot-reloading")]
 fn reload<T: Compound>(cache: AnyCache, id: SharedString) -> Option<Dependencies> {
-    // Outline these functions to reduce the amount of monomorphized code
-    fn log_ok(id: SharedString) {
-        log::info!("Reloading \"{id}\"");
-    }
-    fn load_untyped(
-        cache: AnyCache,
-        id: SharedString,
-        typ: Type,
-    ) -> Option<(&UntypedHandle, CacheEntry, Dependencies)> {
+    // Outline this function to reduce the amount of monomorphized code
+    fn load_untyped(cache: AnyCache, id: SharedString, typ: Type) -> Option<Dependencies> {
         let handle = cache.get_cached_untyped(&id, typ)?;
 
         let load_fn = || (typ.inner.load)(cache, id);
@@ -29,7 +22,11 @@ fn reload<T: Compound>(cache: AnyCache, id: SharedString) -> Option<Dependencies
             (load_fn(), Dependencies::empty())
         };
         match entry {
-            Ok(e) => Some((handle, e, deps)),
+            Ok(e) => {
+                let id = handle.write(e);
+                log::info!("Reloading \"{id}\"");
+                Some(deps)
+            }
             Err(err) => {
                 log::warn!("Error reloading \"{}\": {}", err.id(), err.reason());
                 None
@@ -37,12 +34,7 @@ fn reload<T: Compound>(cache: AnyCache, id: SharedString) -> Option<Dependencies
         }
     }
 
-    let (handle, entry, deps) = load_untyped(cache, id, Type::of::<T>())?;
-
-    let (asset, id) = entry.into_inner();
-    handle.downcast_ref::<T>().write(asset);
-    log_ok(id);
-    Some(deps)
+    load_untyped(cache, id, Type::of::<T>())
 }
 
 pub(crate) struct AssetTypeInner {

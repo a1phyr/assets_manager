@@ -1,7 +1,7 @@
 //! Definitions of cache entries
 
 use std::{
-    any::{type_name, Any},
+    any::{type_name, TypeId},
     fmt,
     marker::PhantomData,
     ops::Deref,
@@ -63,19 +63,62 @@ impl<T> EntryKind<T> {
     }
 }
 
-struct EntryStorage<T> {
-    id: SharedString,
-    kind: EntryKind<T>,
+trait Storage: Send + Sync {
+    #[cfg(feature = "hot-reloading")]
+    fn write(&self, asset: CacheEntry) -> SharedString;
 }
 
-impl<T> EntryStorage<T> {
+impl<T: Storable> Storage for EntryKind<T> {
+    #[cfg(feature = "hot-reloading")]
+    fn write(&self, asset: CacheEntry) -> SharedString {
+        let (asset, id) = asset.into_inner();
+        match self {
+            EntryKind::Static(_) => wrong_handle_type(),
+            EntryKind::Dynamic(d) => d.write(asset),
+        }
+        id
+    }
+}
+
+struct RawEntry<T: ?Sized> {
+    id: SharedString,
+    type_id: TypeId,
+    kind: T,
+}
+
+type Entry<T> = RawEntry<EntryKind<T>>;
+type UntypedEntry = RawEntry<dyn Storage>;
+
+impl<T> Entry<T> {
     fn handle(&self) -> &Handle<T> {
         unsafe { &*(self as *const Self as *const Handle<T>) }
     }
 }
 
+impl UntypedEntry {
+    fn is<T: Storable>(&self) -> bool {
+        self.type_id == TypeId::of::<T>()
+    }
+
+    fn downcast_ref<T: Storable>(&self) -> Option<&Entry<T>> {
+        if self.is::<T>() {
+            unsafe { Some(&*(self as *const Self as *const Entry<T>)) }
+        } else {
+            None
+        }
+    }
+
+    fn downcast<T: Storable>(self: Box<Self>) -> Result<Box<Entry<T>>, Box<Self>> {
+        if self.is::<T>() {
+            unsafe { Ok(Box::from_raw(Box::into_raw(self) as *mut Entry<T>)) }
+        } else {
+            Err(self)
+        }
+    }
+}
+
 /// An entry in the cache.
-pub struct CacheEntry(Box<dyn Any + Send + Sync>);
+pub struct CacheEntry(Box<UntypedEntry>);
 
 impl CacheEntry {
     /// Creates a new `CacheEntry` containing an asset of type `T`.
@@ -94,7 +137,8 @@ impl CacheEntry {
             EntryKind::Static(asset)
         };
 
-        CacheEntry(Box::new(EntryStorage { id, kind }))
+        let type_id = TypeId::of::<T>();
+        CacheEntry(Box::new(Entry { id, type_id, kind }))
     }
 
     /// Returns a reference on the inner storage of the entry.
@@ -106,8 +150,8 @@ impl CacheEntry {
     /// Consumes the `CacheEntry` and returns its inner value.
     #[inline]
     pub fn into_inner<T: Storable>(self) -> (T, SharedString) {
-        if let Ok(inner) = self.0.downcast::<EntryStorage<T>>() {
-            return (inner.kind.into_inner(), inner.id);
+        if let Ok(storage) = self.0.downcast() {
+            return (storage.kind.into_inner(), storage.id);
         }
 
         wrong_handle_type()
@@ -121,7 +165,7 @@ impl fmt::Debug for CacheEntry {
 }
 
 #[repr(transparent)]
-pub(crate) struct UntypedHandle(dyn Any + Send + Sync);
+pub(crate) struct UntypedHandle(UntypedEntry);
 
 impl UntypedHandle {
     #[inline]
@@ -131,8 +175,8 @@ impl UntypedHandle {
 
     #[inline]
     pub fn try_downcast_ref<T: Storable>(&self) -> Option<&Handle<T>> {
-        let storage = self.0.downcast_ref::<EntryStorage<T>>()?;
-        Some(storage.handle())
+        let entry = self.0.downcast_ref()?;
+        Some(entry.handle())
     }
 
     #[inline]
@@ -141,6 +185,11 @@ impl UntypedHandle {
             Some(h) => h,
             None => wrong_handle_type(),
         }
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    pub fn write(&self, asset: CacheEntry) -> SharedString {
+        self.0.kind.write(asset)
     }
 }
 
@@ -165,7 +214,7 @@ impl fmt::Debug for UntypedHandle {
 /// information, see [top-level documentation](crate#getting-owned-data).
 #[repr(transparent)]
 pub struct Handle<T> {
-    inner: EntryStorage<T>,
+    inner: Entry<T>,
 }
 
 impl<T> Handle<T> {
@@ -180,11 +229,6 @@ impl<T> Handle<T> {
             #[cfg(feature = "hot-reloading")]
             EntryKind::Dynamic(s) => _on_dynamic(s),
         }
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    pub(crate) fn write(&self, value: T) {
-        self.either(|_| wrong_handle_type(), |this| this.write(value))
     }
 
     /// Locks the pointed asset for reading.
