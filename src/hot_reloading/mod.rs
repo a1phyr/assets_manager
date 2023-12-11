@@ -40,8 +40,6 @@ pub use watcher::FsWatcherBuilder;
 
 pub(crate) use records::Dependencies;
 
-pub(crate) type ReloadFn = fn(cache: crate::AnyCache, id: SharedString) -> Option<Dependencies>;
-
 /// A message with an update of the state of the [`AssetCache`].
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -5,7 +5,7 @@ use crate::{
     AnyCache, SharedString,
 };
 
-use super::{dependencies::DepsGraph, records::Dependencies, ReloadFn};
+use super::{dependencies::DepsGraph, records::Dependencies};
 
 #[derive(Clone, Copy)]
 struct BorrowedCache<'a> {
@@ -49,13 +49,13 @@ impl<'a> BorrowedCache<'a> {
     }
 }
 
-pub(crate) struct AssetReloadInfos(OwnedKey, Dependencies, ReloadFn);
+pub(crate) struct AssetReloadInfos(OwnedKey, Dependencies, crate::key::Type);
 
 impl AssetReloadInfos {
     #[inline]
     pub(crate) fn from_type(id: SharedString, deps: Dependencies, typ: crate::key::Type) -> Self {
         let key = OwnedKey::new_with(id, typ.type_id);
-        Self(key, deps, typ.inner.reload)
+        Self(key, deps, typ)
     }
 }
 
@@ -121,7 +121,7 @@ impl HotReloadingData {
 
     pub fn add_asset(&mut self, infos: AssetReloadInfos) {
         let AssetReloadInfos(key, new_deps, reload) = infos;
-        self.deps.insert(key, new_deps, Some(reload));
+        self.deps.insert(key, new_deps, reload);
     }
 
     pub fn clear_local_cache(&mut self) {

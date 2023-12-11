@@ -22,7 +22,7 @@ use crate::{
 };
 
 #[cfg(feature = "hot-reloading")]
-use crate::hot_reloading::{records, HotReloader};
+use crate::hot_reloading::{records, Dependencies, HotReloader};
 
 #[cfg(doc)]
 use crate::AssetCache;
@@ -216,6 +216,30 @@ impl<'a> AnyCache<'a> {
     #[inline]
     pub fn is_hot_reloaded(self) -> bool {
         self.cache._has_reloader()
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    pub(crate) fn reload_untyped(self, id: SharedString, typ: Type) -> Option<Dependencies> {
+        let handle = self.get_cached_untyped(&id, typ)?;
+
+        let load_asset = || (typ.inner.load)(self, id);
+        let (entry, deps) = if let Some(reloader) = self.reloader() {
+            records::record(reloader, load_asset)
+        } else {
+            log::warn!("No reloader in hot-reloading context");
+            (load_asset(), Dependencies::empty())
+        };
+        match entry {
+            Ok(e) => {
+                let id = handle.write(e);
+                log::info!("Reloading \"{id}\"");
+                Some(deps)
+            }
+            Err(err) => {
+                log::warn!("Error reloading \"{}\": {}", err.id(), err.reason());
+                None
+            }
+        }
     }
 }
 

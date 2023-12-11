@@ -9,34 +9,6 @@ use crate::{
 #[cfg(feature = "hot-reloading")]
 use crate::hot_reloading::Dependencies;
 
-#[cfg(feature = "hot-reloading")]
-fn reload<T: Compound>(cache: AnyCache, id: SharedString) -> Option<Dependencies> {
-    // Outline this function to reduce the amount of monomorphized code
-    fn load_untyped(cache: AnyCache, id: SharedString, typ: Type) -> Option<Dependencies> {
-        let handle = cache.get_cached_untyped(&id, typ)?;
-
-        let load_fn = || (typ.inner.load)(cache, id);
-        let (entry, deps) = if let Some(reloader) = cache.reloader() {
-            crate::hot_reloading::records::record(reloader, load_fn)
-        } else {
-            (load_fn(), Dependencies::empty())
-        };
-        match entry {
-            Ok(e) => {
-                let id = handle.write(e);
-                log::info!("Reloading \"{id}\"");
-                Some(deps)
-            }
-            Err(err) => {
-                log::warn!("Error reloading \"{}\": {}", err.id(), err.reason());
-                None
-            }
-        }
-    }
-
-    load_untyped(cache, id, Type::of::<T>())
-}
-
 pub(crate) struct AssetTypeInner {
     extensions: &'static [&'static str],
 }
@@ -55,8 +27,6 @@ impl Inner {
             typ: InnerType::Asset(AssetTypeInner {
                 extensions: T::EXTENSIONS,
             }),
-            #[cfg(feature = "hot-reloading")]
-            reload: reload::<T>,
         }
     }
 
@@ -65,8 +35,6 @@ impl Inner {
             hot_reloaded: T::HOT_RELOADED,
             load: T::_load_entry,
             typ: InnerType::Compound,
-            #[cfg(feature = "hot-reloading")]
-            reload: reload::<T>,
         }
     }
 
@@ -83,8 +51,6 @@ impl Inner {
             hot_reloaded: T::HOT_RELOADED,
             load,
             typ: InnerType::Storable,
-            #[cfg(feature = "hot-reloading")]
-            reload,
         }
     }
 }
@@ -93,8 +59,6 @@ pub(crate) struct Inner {
     hot_reloaded: bool,
     pub load: fn(AnyCache, id: SharedString) -> Result<CacheEntry, Error>,
     pub typ: InnerType,
-    #[cfg(feature = "hot-reloading")]
-    pub reload: crate::hot_reloading::ReloadFn,
 }
 
 /// A structure to represent the type on an [`Asset`]

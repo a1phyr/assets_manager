@@ -1,11 +1,14 @@
-use super::{Dependencies, ReloadFn};
-use crate::utils::{HashMap, HashSet, OwnedKey};
+use super::Dependencies;
+use crate::{
+    key::Type,
+    utils::{HashMap, HashSet, OwnedKey},
+};
 use std::collections::hash_map::Entry;
 
 struct GraphNode {
     /// `None` if the asset is part of the graph but we should not actually
     /// reload it when changed (eg when `load_owned` was used)
-    reload: Option<ReloadFn>,
+    typ: Option<Type>,
 
     /// Reverse dependencies (backward edges)
     rdeps: HashSet<OwnedKey>,
@@ -17,7 +20,7 @@ struct GraphNode {
 impl Default for GraphNode {
     fn default() -> Self {
         GraphNode {
-            reload: None,
+            typ: None,
             deps: Dependencies::empty(),
             rdeps: HashSet::new(),
         }
@@ -25,9 +28,9 @@ impl Default for GraphNode {
 }
 
 impl GraphNode {
-    fn new(reload: Option<ReloadFn>, deps: Dependencies) -> Self {
+    fn new(typ: Type, deps: Dependencies) -> Self {
         GraphNode {
-            reload,
+            typ: Some(typ),
             deps,
             rdeps: HashSet::new(),
         }
@@ -41,7 +44,7 @@ impl DepsGraph {
         DepsGraph(HashMap::new())
     }
 
-    pub fn insert(&mut self, asset_key: OwnedKey, deps: Dependencies, reload: Option<ReloadFn>) {
+    pub fn insert(&mut self, asset_key: OwnedKey, deps: Dependencies, typ: Type) {
         for key in deps.iter() {
             let entry = self.0.entry(key.clone()).or_default();
             entry.rdeps.insert(asset_key.clone());
@@ -49,13 +52,13 @@ impl DepsGraph {
 
         match self.0.entry(asset_key.clone()) {
             Entry::Vacant(entry) => {
-                entry.insert(GraphNode::new(reload, deps));
+                entry.insert(GraphNode::new(typ, deps));
             }
             Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
                 let removed: Vec<_> = entry.deps.difference(&deps).cloned().collect();
                 entry.deps = deps;
-                entry.reload = reload;
+                entry.typ = Some(typ);
 
                 for key in removed {
                     // The None case is not supposed to happen, but we can safely
@@ -105,11 +108,11 @@ impl DepsGraph {
 
     pub fn reload(&mut self, cache: crate::AnyCache, key: &OwnedKey) {
         if let Some(entry) = self.0.get_mut(key) {
-            if let Some(reload) = entry.reload {
-                let new_deps = reload(cache, key.id.clone());
+            if let Some(typ) = entry.typ {
+                let new_deps = cache.reload_untyped(key.id.clone(), typ);
 
                 if let Some(new_deps) = new_deps {
-                    self.insert(key.clone(), new_deps, Some(reload));
+                    self.insert(key.clone(), new_deps, typ);
                 }
             }
         }
