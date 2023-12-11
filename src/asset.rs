@@ -181,7 +181,7 @@ pub trait Asset: Sized + Send + Sync + 'static {
 }
 
 pub(crate) fn load_from_source<A: Asset>(
-    source: &dyn Source,
+    source: impl Source,
     id: &SharedString,
 ) -> Result<A, BoxedError> {
     let load_with_ext = |ext| -> Result<A, ErrorKind> {
