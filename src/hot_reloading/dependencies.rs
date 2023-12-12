@@ -61,11 +61,14 @@ impl DepsGraph {
                 entry.typ = Some(typ);
 
                 for key in removed {
-                    // The None case is not supposed to happen, but we can safely
-                    // ignore it
-                    if let Some(entry) = self.0.get_mut(&key) {
+                    let removed = match self.0.get_mut(&key) {
+                        Some(entry) => entry.rdeps.remove(&asset_key),
+                        None => false,
+                    };
+                    // This is not supposed to happen, so we log a warning,
+                    // but we can safely ignore it
+                    if !removed {
                         log::warn!("Inexistant reverse dependency");
-                        entry.rdeps.remove(&asset_key);
                     }
                 }
             }
