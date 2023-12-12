@@ -215,4 +215,15 @@ mod handle {
         let handle = cache.load::<XS>("test.cache").unwrap();
         assert_eq!(*handle.get(), XS(42));
     }
+
+    #[test]
+    fn untyped() {
+        let cache = AssetCache::new("assets").unwrap();
+        let handle = cache.load_expect::<X>("test.cache").as_untyped();
+
+        assert!(handle.is::<X>());
+        assert_eq!(handle.id(), "test.cache");
+        assert_eq!(*handle.downcast_ref::<X>().unwrap().read(), X(42));
+        assert_eq!(*handle.read().downcast_ref::<X>().unwrap(), X(42));
+    }
 }

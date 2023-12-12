@@ -1,7 +1,7 @@
 //! Definitions of cache entries
 
 use std::{
-    any::{type_name, TypeId},
+    any::{type_name, Any, TypeId},
     fmt,
     marker::PhantomData,
     ops::Deref,
@@ -64,11 +64,25 @@ impl<T> EntryKind<T> {
 }
 
 trait Storage: Send + Sync {
+    fn read(&self) -> AssetGuard<'_, dyn Any + Send + Sync>;
+
     #[cfg(feature = "hot-reloading")]
     fn write(&self, asset: CacheEntry) -> SharedString;
 }
 
 impl<T: Storable> Storage for EntryKind<T> {
+    fn read(&self) -> AssetGuard<'_, dyn Any + Send + Sync> {
+        let inner = match self {
+            EntryKind::Static(value) => GuardInner::Ref(value as &(dyn Any + Send + Sync)),
+            #[cfg(feature = "hot-reloading")]
+            EntryKind::Dynamic(inner) => {
+                let rw: &RwLock<dyn Any + Send + Sync> = &inner.value;
+                GuardInner::Guard(rw.read())
+            }
+        };
+        AssetGuard { inner }
+    }
+
     #[cfg(feature = "hot-reloading")]
     fn write(&self, asset: CacheEntry) -> SharedString {
         let (asset, id) = asset.into_inner();
@@ -178,6 +192,18 @@ pub struct UntypedHandle {
 }
 
 impl UntypedHandle {
+    /// Locks the pointed asset for reading.
+    ///
+    /// If `T` implements `NotHotReloaded` or if hot-reloading is disabled, no
+    /// reloading can occur so there is no actual lock. In these cases, calling
+    /// this function does not involve synchronisation.
+    ///
+    /// Returns a RAII guard which will release the lock once dropped.
+    #[inline]
+    pub fn read(&self) -> AssetGuard<'_, dyn Any + Send + Sync> {
+        self.inner.kind.read()
+    }
+
     /// Returns the id of the asset.
     #[inline]
     pub fn id(&self) -> &SharedString {
@@ -261,7 +287,7 @@ impl<T> Handle<T> {
     ///
     /// If `T` implements `NotHotReloaded` or if hot-reloading is disabled, no
     /// reloading can occur so there is no actual lock. In these cases, calling
-    /// this function is cheap and do not involve synchronisation.
+    /// this function is cheap and does not involve synchronisation.
     ///
     /// Returns a RAII guard which will release the lock once dropped.
     #[inline]
@@ -424,7 +450,7 @@ where
     }
 }
 
-pub enum GuardInner<'a, T> {
+pub enum GuardInner<'a, T: ?Sized> {
     Ref(&'a T),
     #[cfg(feature = "hot-reloading")]
     Guard(RwLockReadGuard<'a, T>),
@@ -435,11 +461,11 @@ pub enum GuardInner<'a, T> {
 /// This type is a smart pointer to type `A`.
 ///
 /// It can be obtained by calling [`Handle::read`].
-pub struct AssetGuard<'a, A> {
+pub struct AssetGuard<'a, A: ?Sized> {
     inner: GuardInner<'a, A>,
 }
 
-impl<A> Deref for AssetGuard<'_, A> {
+impl<A: ?Sized> Deref for AssetGuard<'_, A> {
     type Target = A;
 
     #[inline]
@@ -454,7 +480,7 @@ impl<A> Deref for AssetGuard<'_, A> {
 
 impl<A, U> AsRef<U> for AssetGuard<'_, A>
 where
-    A: AsRef<U>,
+    A: AsRef<U> + ?Sized,
 {
     #[inline]
     fn as_ref(&self) -> &U {
@@ -464,7 +490,7 @@ where
 
 impl<A> fmt::Display for AssetGuard<'_, A>
 where
-    A: fmt::Display,
+    A: fmt::Display + ?Sized,
 {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -474,7 +500,7 @@ where
 
 impl<A> fmt::Debug for AssetGuard<'_, A>
 where
-    A: fmt::Debug,
+    A: fmt::Debug + ?Sized,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&**self, f)
