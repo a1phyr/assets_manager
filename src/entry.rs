@@ -275,9 +275,6 @@ impl<T> Handle<T> {
     }
 
     /// Returns the id of the asset.
-    ///
-    /// Note that the lifetime of the returned `&str` is tied to that of the
-    /// `AssetCache`, so it can outlive the handle.
     #[inline]
     pub fn id(&self) -> &SharedString {
         &self.inner.id
