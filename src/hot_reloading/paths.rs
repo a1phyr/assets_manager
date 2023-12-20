@@ -133,7 +133,7 @@ fn run_update(changed: &mut HashSet<OwnedKey>, deps: &mut DepsGraph, cache: Borr
     let to_update = deps.topological_sort_from(changed.iter());
     changed.clear();
 
-    for key in to_update.iter() {
+    for key in to_update.into_iter() {
         deps.reload(cache.as_any_cache(), key);
     }
 }

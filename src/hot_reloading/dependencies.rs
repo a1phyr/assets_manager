@@ -109,13 +109,13 @@ impl DepsGraph {
         sort_data.list.push(key.clone());
     }
 
-    pub fn reload(&mut self, cache: crate::AnyCache, key: &OwnedKey) {
-        if let Some(entry) = self.0.get_mut(key) {
+    pub fn reload(&mut self, cache: crate::AnyCache, key: OwnedKey) {
+        if let Some(entry) = self.0.get_mut(&key) {
             if let Some(typ) = entry.typ {
                 let new_deps = cache.reload_untyped(key.id.clone(), typ);
 
                 if let Some(new_deps) = new_deps {
-                    self.insert(key.clone(), new_deps, typ);
+                    self.insert(key, new_deps, typ);
                 }
             }
         }
@@ -130,7 +130,7 @@ struct TopologicalSortData {
 pub(crate) struct TopologicalSort(Vec<OwnedKey>);
 
 impl TopologicalSort {
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = &OwnedKey> {
-        self.0.iter().rev()
+    pub fn into_iter(self) -> impl ExactSizeIterator<Item = OwnedKey> {
+        self.0.into_iter().rev()
     }
 }
