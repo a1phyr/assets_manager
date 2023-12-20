@@ -464,3 +464,18 @@ impl CacheExt for dyn Cache + '_ {
         AnyCache { cache: self }
     }
 }
+
+/// Used to get an `AnyCache` from a type.
+///
+/// This is useful to make generic functions that can work with any cache type.
+pub trait AsAnyCache {
+    /// Converts this type to an `AnyCache`.
+    fn as_any_cache(&self) -> AnyCache<'_>;
+}
+
+impl AsAnyCache for AnyCache<'_> {
+    #[inline]
+    fn as_any_cache(&self) -> AnyCache<'_> {
+        *self
+    }
+}

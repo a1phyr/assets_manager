@@ -230,6 +230,13 @@ impl<S> LocalAssetCache<S> {
     }
 }
 
+impl<S: Source> crate::AsAnyCache for LocalAssetCache<S> {
+    #[inline]
+    fn as_any_cache(&self) -> AnyCache<'_> {
+        self.as_any_cache()
+    }
+}
+
 impl<S> fmt::Debug for LocalAssetCache<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LocalAssetCache")

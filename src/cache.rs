@@ -460,6 +460,13 @@ where
     }
 }
 
+impl<S: Source> crate::AsAnyCache for AssetCache<S> {
+    #[inline]
+    fn as_any_cache(&self) -> AnyCache<'_> {
+        self.as_any_cache()
+    }
+}
+
 impl<S> fmt::Debug for AssetCache<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AssetCache")
