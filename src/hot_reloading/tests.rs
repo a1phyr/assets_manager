@@ -1,7 +1,7 @@
 use crate::{
     source::DirEntry,
-    tests::{X, XS, Y, Z},
-    AssetCache,
+    tests::{X, Y, Z},
+    AssetCache, BoxedError,
 };
 use std::{fs::File, io, io::Write, path::Path, sync::Arc};
 
@@ -12,6 +12,7 @@ fn sleep() {
 type Res = Result<(), Box<dyn std::error::Error>>;
 
 fn write_i32(path: &Path, n: i32) -> io::Result<()> {
+    log::debug!("Write {n} at {path:?}");
     let mut file = File::create(path)?;
     write!(file, "{n}")
 }
@@ -136,83 +137,47 @@ test_scenario! {
 }
 
 #[test]
-fn messages() {
-    use super::*;
-    use crate::utils::Mutex;
+fn directory() -> Result<(), BoxedError> {
+    let _ = env_logger::try_init();
 
-    struct MessageChecker(Mutex<Vec<UpdateMessage>>);
+    let _ = std::fs::remove_dir_all("assets/test/hot_dir/");
+    std::fs::create_dir_all("assets/test/hot_dir/")?;
+    write_i32("assets/test/hot_dir/a.x".as_ref(), 1)?;
 
-    impl UpdateSender for MessageChecker {
-        fn send_update(&self, message: UpdateMessage) {
-            match self.0.lock().pop() {
-                Some(expected) => assert_eq!(message, expected),
-                None => panic!("Unexpected message {message:?}"),
-            }
-        }
-    }
+    let cache = AssetCache::new("assets")?;
 
-    impl Drop for MessageChecker {
-        fn drop(&mut self) {
-            if !std::thread::panicking() {
-                assert!(self.0.lock().is_empty());
-            }
-        }
-    }
+    let dir = cache.load_dir::<X>("test.hot_dir")?;
+    let mut watcher = dir.reload_watcher();
+    assert!(!watcher.reloaded());
 
-    #[derive(Clone, Copy)]
-    struct TestSource;
+    assert_eq!(dir.read().ids().collect::<Vec<_>>(), ["test.hot_dir.a"]);
 
-    impl crate::source::Source for TestSource {
-        fn read(&self, _id: &str, _ext: &str) -> io::Result<crate::source::FileContent> {
-            Ok(crate::source::FileContent::Slice(b"10"))
-        }
+    write_i32("assets/test/hot_dir/a.x".as_ref(), 1)?;
+    sleep();
+    cache.hot_reload();
+    assert!(!watcher.reloaded());
 
-        fn read_dir(&self, _id: &str, _f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
-            Err(io::ErrorKind::NotFound.into())
-        }
+    write_i32("assets/test/hot_dir/b.x".as_ref(), 1)?;
+    sleep();
+    cache.hot_reload();
+    assert_eq!(
+        dir.read().ids().collect::<Vec<_>>(),
+        ["test.hot_dir.a", "test.hot_dir.b"]
+    );
 
-        fn exists(&self, entry: DirEntry) -> bool {
-            entry.is_file()
-        }
+    assert!(watcher.reloaded());
 
-        fn make_source(&self) -> Option<Box<dyn crate::source::Source + Send>> {
-            Some(Box::new(*self))
-        }
+    std::fs::remove_file("assets/test/hot_dir/b.x")?;
+    sleep();
+    cache.hot_reload();
+    assert_eq!(dir.read().ids().collect::<Vec<_>>(), ["test.hot_dir.a"]);
+    assert!(watcher.reloaded());
 
-        fn configure_hot_reloading(
-            &self,
-            _events: EventSender,
-        ) -> Result<DynUpdateSender, crate::BoxedError> {
-            let a_key = AssetKey::new::<X>("a".into());
-            let b_key = AssetKey::new::<X>("b".into());
+    std::fs::remove_file("assets/test/hot_dir/a.x")?;
+    sleep();
+    cache.hot_reload();
+    assert_eq!(dir.read().ids().collect::<Vec<_>>().len(), 0);
+    assert!(watcher.reloaded());
 
-            // Expected events, in reverse order
-            let events = vec![
-                UpdateMessage::RemoveAsset(a_key.clone()),
-                UpdateMessage::AddAsset(a_key.clone()),
-                UpdateMessage::Clear,
-                UpdateMessage::AddAsset(a_key.clone()),
-                UpdateMessage::RemoveAsset(a_key.clone()),
-                UpdateMessage::AddAsset(b_key),
-                UpdateMessage::AddAsset(a_key),
-            ];
-
-            Ok(Box::new(MessageChecker(Mutex::new(events))))
-        }
-    }
-
-    let mut cache = crate::AssetCache::with_source(TestSource);
-    cache.load_expect::<X>("a");
-    assert!(!cache.remove::<X>("b"));
-    assert!(cache.take::<X>("b").is_none());
-    cache.load_expect::<X>("b");
-    assert!(cache.remove::<X>("a"));
-    cache.load_expect::<X>("a");
-    cache.clear();
-    cache.load_expect::<X>("a");
-    assert!(cache.take::<X>("a").is_some());
-
-    // Make sure we don't send message for these ones
-    cache.load_expect::<XS>("c");
-    assert!(cache.remove::<XS>("c"));
+    Ok(())
 }

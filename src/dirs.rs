@@ -142,7 +142,7 @@ where
     T: DirLoadable,
 {
     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
-        let mut ids = cache.no_record(|| T::select_ids(cache, id))?;
+        let mut ids = T::select_ids(cache, id)?;
 
         // Remove duplicated entries
         ids.sort_unstable();
@@ -154,7 +154,7 @@ where
         })
     }
 
-    const HOT_RELOADED: bool = false;
+    const HOT_RELOADED: bool = true;
 }
 
 impl<T> Directory<T> {
@@ -232,7 +232,7 @@ where
         })
     }
 
-    const HOT_RELOADED: bool = false;
+    const HOT_RELOADED: bool = true;
 }
 
 impl<T> RecursiveDirectory<T> {

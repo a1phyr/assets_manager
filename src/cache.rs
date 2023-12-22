@@ -364,16 +364,7 @@ impl<S: Source> AssetCache<S> {
     /// any [`Handle`], [`AssetGuard`], etc when you call this function.
     #[inline]
     pub fn remove<A: Storable>(&mut self, id: &str) -> bool {
-        let removed = self.assets.remove(id, TypeId::of::<A>());
-
-        #[cfg(feature = "hot-reloading")]
-        if let Some(reloader) = &self.reloader {
-            if A::HOT_RELOADED && removed {
-                reloader.remove_asset::<A>(SharedString::from(id));
-            }
-        }
-
-        removed
+        self.assets.remove(id, TypeId::of::<A>())
     }
 
     /// Takes ownership on a cached asset.
@@ -381,18 +372,8 @@ impl<S: Source> AssetCache<S> {
     /// The corresponding asset is removed from the cache.
     #[inline]
     pub fn take<A: Storable>(&mut self, id: &str) -> Option<A> {
-        self.assets.take(id, TypeId::of::<A>()).map(|e| {
-            let (asset, _id) = e.into_inner();
-
-            #[cfg(feature = "hot-reloading")]
-            if let Some(reloader) = &self.reloader {
-                if A::HOT_RELOADED {
-                    reloader.remove_asset::<A>(_id);
-                }
-            }
-
-            asset
-        })
+        let (asset, _) = self.assets.take(id, TypeId::of::<A>())?.into_inner();
+        Some(asset)
     }
 
     /// Clears the cache.

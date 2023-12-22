@@ -3,7 +3,15 @@ use std::{any::TypeId, cell::Cell, ptr::NonNull};
 
 use super::HotReloader;
 
-pub(crate) struct Dependencies(HashSet<OwnedKey>);
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) enum Dependency {
+    File(SharedString, SharedString),
+    Directory(SharedString),
+    Asset(OwnedKey),
+}
+
+#[derive(Debug)]
+pub(crate) struct Dependencies(HashSet<Dependency>);
 
 impl Dependencies {
     #[inline]
@@ -12,13 +20,30 @@ impl Dependencies {
     }
 
     #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = &OwnedKey> {
+    pub fn iter(&self) -> impl Iterator<Item = &Dependency> {
         self.0.iter()
     }
 
     #[inline]
-    pub fn difference<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = &OwnedKey> + 'a {
+    pub fn difference<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = &Dependency> + 'a {
         self.0.difference(&other.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum BorrowedDependency<'a> {
+    File(&'a SharedString, &'a SharedString),
+    Directory(&'a SharedString),
+    Asset(&'a OwnedKey),
+}
+
+impl<'a> BorrowedDependency<'a> {
+    pub fn into_owned(self) -> Dependency {
+        match self {
+            BorrowedDependency::File(id, ext) => Dependency::File(id.clone(), ext.clone()),
+            BorrowedDependency::Directory(id) => Dependency::Directory(id.clone()),
+            BorrowedDependency::Asset(key) => Dependency::Asset(key.clone()),
+        }
     }
 }
 
@@ -35,9 +60,21 @@ impl Record {
         }
     }
 
-    fn insert(&mut self, reloader: &HotReloader, key: OwnedKey) {
+    fn insert_asset(&mut self, reloader: &HotReloader, key: OwnedKey) {
         if self.reloader == reloader {
-            self.records.0.insert(key);
+            self.records.0.insert(Dependency::Asset(key));
+        }
+    }
+
+    fn insert_file(&mut self, reloader: &HotReloader, id: SharedString, ext: SharedString) {
+        if self.reloader == reloader {
+            self.records.0.insert(Dependency::File(id, ext));
+        }
+    }
+
+    fn insert_dir(&mut self, reloader: &HotReloader, id: SharedString) {
+        if self.reloader == reloader {
+            self.records.0.insert(Dependency::Directory(id));
         }
     }
 }
@@ -85,7 +122,25 @@ pub(crate) fn add_record(reloader: &HotReloader, id: SharedString, type_id: Type
     RECORDING.with(|rec| {
         if let Some(mut recorder) = rec.get() {
             let recorder = unsafe { recorder.as_mut() };
-            recorder.insert(reloader, OwnedKey::new_with(id, type_id));
+            recorder.insert_asset(reloader, OwnedKey::new_with(id, type_id));
+        }
+    });
+}
+
+pub(crate) fn add_file_record(reloader: &HotReloader, id: &str, ext: &str) {
+    RECORDING.with(|rec| {
+        if let Some(mut recorder) = rec.get() {
+            let recorder = unsafe { recorder.as_mut() };
+            recorder.insert_file(reloader, id.into(), ext.into());
+        }
+    });
+}
+
+pub(crate) fn add_dir_record(reloader: &HotReloader, id: &str) {
+    RECORDING.with(|rec| {
+        if let Some(mut recorder) = rec.get() {
+            let recorder = unsafe { recorder.as_mut() };
+            recorder.insert_dir(reloader, id.into());
         }
     });
 }

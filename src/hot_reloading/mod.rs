@@ -25,9 +25,8 @@ use std::{
 };
 
 use crate::{
-    asset::Storable,
     key::Type,
-    source::Source,
+    source::{OwnedDirEntry, Source},
     utils::{Condvar, Mutex},
     SharedString,
 };
@@ -35,24 +34,9 @@ use crate::{
 #[cfg(doc)]
 use crate::AssetCache;
 
-pub use crate::key::{AssetKey, AssetType};
 pub use watcher::FsWatcherBuilder;
 
-pub(crate) use records::Dependencies;
-
-/// A message with an update of the state of the [`AssetCache`].
-#[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum UpdateMessage {
-    /// An asset was added to the cache.
-    AddAsset(AssetKey),
-
-    /// An asset was removed from the cache
-    RemoveAsset(AssetKey),
-
-    /// The cache was cleared.
-    Clear,
-}
+pub(crate) use records::{BorrowedDependency, Dependencies, Dependency};
 
 enum CacheMessage {
     Ptr(NonNull<crate::cache::AssetMap>, NonNull<HotReloader>, usize),
@@ -68,12 +52,12 @@ unsafe impl Send for CacheMessage where crate::cache::AssetMap: Sync {}
 pub struct Disconnected;
 
 enum Events {
-    Single(AssetKey),
-    Multiple(Vec<AssetKey>),
+    Single(OwnedDirEntry),
+    Multiple(Vec<OwnedDirEntry>),
 }
 
 impl Events {
-    fn for_each(self, mut f: impl FnMut(AssetKey)) {
+    fn for_each(self, mut f: impl FnMut(OwnedDirEntry)) {
         match self {
             Self::Single(e) => f(e),
             Self::Multiple(e) => e.into_iter().for_each(f),
@@ -91,7 +75,7 @@ impl EventSender {
     /// A matching asset in the cache will be reloaded, and with it compounds
     /// that depends on it.
     #[inline]
-    pub fn send(&self, event: AssetKey) -> Result<(), Disconnected> {
+    pub fn send(&self, event: OwnedDirEntry) -> Result<(), Disconnected> {
         self.0.send(Events::Single(event)).or(Err(Disconnected))
     }
 
@@ -100,7 +84,7 @@ impl EventSender {
     /// If successful, this function returns the number of events sent.
     pub fn send_multiple<I>(&self, events: I) -> Result<usize, Disconnected>
     where
-        I: IntoIterator<Item = AssetKey>,
+        I: IntoIterator<Item = OwnedDirEntry>,
     {
         let mut events = events.into_iter();
         let event = match events.size_hint().1 {
@@ -121,44 +105,6 @@ impl EventSender {
             Ok(()) => Ok(len),
             Err(_) => Err(Disconnected),
         }
-    }
-}
-
-/// Defines how to handle updates.
-///
-/// Cache updates are sent to the hot-reloading subsystem through this trait.
-pub trait UpdateSender {
-    /// Sends an update to the hot-reloading subsystem. This function should be
-    /// quick and should not block.
-    fn send_update(&self, message: UpdateMessage);
-}
-
-/// A type-erased `UpdateSender`.
-pub type DynUpdateSender = Box<dyn UpdateSender + Send + Sync>;
-
-/// An `UpdateSender` that drops all incoming messages.
-#[derive(Debug)]
-pub struct UpdateSink;
-
-impl UpdateSender for UpdateSink {
-    fn send_update(&self, _message: UpdateMessage) {}
-}
-
-impl<T> UpdateSender for Box<T>
-where
-    T: UpdateSender + ?Sized,
-{
-    fn send_update(&self, message: UpdateMessage) {
-        (**self).send_update(message)
-    }
-}
-
-impl<T> UpdateSender for std::sync::Arc<T>
-where
-    T: UpdateSender + ?Sized,
-{
-    fn send_update(&self, message: UpdateMessage) {
-        (**self).send_update(message)
     }
 }
 
@@ -197,16 +143,11 @@ impl Answers {
 pub(crate) struct HotReloader {
     sender: Sender<CacheMessage>,
     answers: Arc<Answers>,
-    updates: DynUpdateSender,
 }
 
 impl HotReloader {
     /// Starts hot-reloading.
-    fn start(
-        events: Receiver<Events>,
-        updates: DynUpdateSender,
-        source: Box<dyn Source + Send>,
-    ) -> Self {
+    fn start(events: Receiver<Events>, source: Box<dyn Source + Send>) -> Self {
         let (cache_msg_tx, cache_msg_rx) = channel::unbounded();
         let answers = Arc::new(Answers::default());
         let answers_clone = answers.clone();
@@ -217,7 +158,6 @@ impl HotReloader {
             .unwrap();
 
         Self {
-            updates,
             sender: cache_msg_tx,
             answers,
         }
@@ -227,44 +167,27 @@ impl HotReloader {
         let sent_source = source.make_source()?;
         let (events_tx, events_rx) = channel::unbounded();
 
-        let updates = source
+        source
             .configure_hot_reloading(EventSender(events_tx))
             .map_err(|err| {
                 log::error!("Unable to start hot-reloading: {err}");
             })
             .ok()?;
 
-        Some(Self::start(events_rx, updates, sent_source))
+        Some(Self::start(events_rx, sent_source))
     }
 
     // All theses methods ignore send/recv errors: the program can continue
     // without hot-reloading if it stopped, and an error should have already
     // been logged.
 
-    pub(crate) fn add_asset(&self, id: SharedString, asset_type: AssetType, typ: Type) {
-        let infos = AssetReloadInfos::from_type(id.clone(), Dependencies::empty(), typ);
-        let _ = self.sender.send(CacheMessage::AddAsset(infos));
-
-        let typ = asset_type;
-        let key = AssetKey { id, typ };
-        self.updates.send_update(UpdateMessage::AddAsset(key));
-    }
-
-    pub(crate) fn remove_asset<A: Storable>(&self, id: SharedString) {
-        if let Some(typ) = A::get_type::<crate::utils::Private>().to_asset_type() {
-            let key = AssetKey { id, typ };
-            self.updates.send_update(UpdateMessage::RemoveAsset(key));
-        }
-    }
-
-    pub(crate) fn add_compound(&self, id: SharedString, deps: Dependencies, typ: Type) {
+    pub(crate) fn add_asset(&self, id: SharedString, deps: Dependencies, typ: Type) {
         let infos = AssetReloadInfos::from_type(id, deps, typ);
         let _ = self.sender.send(CacheMessage::AddAsset(infos));
     }
 
     pub(crate) fn clear(&self) {
         let _ = self.sender.send(CacheMessage::Clear);
-        self.updates.send_update(UpdateMessage::Clear);
     }
 
     pub(crate) fn reload(&self, map: &crate::cache::AssetMap) {

@@ -1,52 +1,11 @@
+use crate::{source::OwnedDirEntry, utils::IdBuilder, BoxedError};
 use std::{
     fmt,
-    path::{Path, PathBuf},
-};
-
-use crate::{
-    source::DirEntry,
-    utils::{path_of_entry, HashMap},
-    BoxedError,
+    path::{self, Path, PathBuf},
 };
 
 #[cfg(doc)]
 use crate::source::Source;
-
-pub struct SmallSet<T>(Vec<T>);
-
-impl<T> SmallSet<T> {
-    #[inline]
-    pub const fn new() -> Self {
-        Self(Vec::new())
-    }
-}
-
-impl<T: Eq> SmallSet<T> {
-    #[inline]
-    pub fn contains(&mut self, elem: &T) -> bool {
-        self.0.iter().any(|x| x == elem)
-    }
-
-    #[inline]
-    pub fn insert(&mut self, elem: T) {
-        if !self.contains(&elem) {
-            self.0.push(elem)
-        }
-    }
-}
-
-struct UpdateSender {
-    sender: crossbeam_channel::Sender<super::UpdateMessage>,
-
-    // Make sure to keep this alive
-    _watcher: notify::RecommendedWatcher,
-}
-
-impl super::UpdateSender for UpdateSender {
-    fn send_update(&self, message: super::UpdateMessage) {
-        let _ = self.sender.send(message);
-    }
-}
 
 /// Built-in reloader based on filesystem events.
 ///
@@ -78,26 +37,16 @@ impl FsWatcherBuilder {
     }
 
     /// Starts the watcher.
-    ///
-    /// The return value is meant to be used in [`Source::configure_hot_reloading`]
-    pub fn build(self, events: super::EventSender) -> super::DynUpdateSender {
-        let (sender, updates) = crossbeam_channel::unbounded();
-
-        let watched_paths = WatchedPaths::new(self.roots);
+    pub fn build(self, events: super::EventSender) {
         let event_handler = NotifyEventHandler {
-            watched_paths,
-            updates,
+            roots: self.roots,
             events,
+            id_builder: IdBuilder::default(),
+
+            watcher: Some(self.watcher),
         };
 
-        if self.payload_sender.send(event_handler).is_ok() {
-            Box::new(UpdateSender {
-                sender,
-                _watcher: self.watcher,
-            })
-        } else {
-            Box::new(super::UpdateSink)
-        }
+        let _ = self.payload_sender.send(event_handler);
     }
 }
 
@@ -109,51 +58,41 @@ impl fmt::Debug for FsWatcherBuilder {
     }
 }
 
-struct WatchedPaths {
-    roots: Vec<PathBuf>,
-    paths: HashMap<PathBuf, SmallSet<super::AssetKey>>,
-}
+fn id_of_path(id_builder: &mut IdBuilder, root: &Path, path: &Path) -> Option<OwnedDirEntry> {
+    id_builder.reset();
 
-impl WatchedPaths {
-    fn new(roots: Vec<PathBuf>) -> WatchedPaths {
-        WatchedPaths {
-            roots,
-            paths: HashMap::new(),
-        }
-    }
-
-    fn add_asset(&mut self, asset: super::AssetKey) {
-        for root in &self.roots {
-            for ext in asset.typ.extensions() {
-                let path = path_of_entry(root, DirEntry::File(&asset.id, ext));
-                self.paths
-                    .entry(path)
-                    .or_insert_with(SmallSet::new)
-                    .insert(asset.clone());
+    for comp in path.parent()?.strip_prefix(root).ok()?.components() {
+        match comp {
+            path::Component::Normal(s) => {
+                let segment = s.to_str()?;
+                if segment.contains('.') {
+                    return None;
+                }
+                id_builder.push(segment);
             }
+            path::Component::ParentDir => id_builder.pop()?,
+            path::Component::CurDir => continue,
+            _ => return None,
         }
     }
 
-    fn remove_asset(&mut self, asset: super::AssetKey) {
-        for root in &self.roots {
-            for ext in asset.typ.extensions() {
-                let path = path_of_entry(root, DirEntry::File(&asset.id, ext));
-                self.paths.remove(&path);
-            }
-        }
+    let last_component = path.file_stem()?.to_str()?;
+    if last_component.contains('.') {
+        return None;
     }
 
-    fn clear(&mut self) {
-        self.paths.clear();
-    }
+    // Build the id of the file.
+    id_builder.push(last_component);
+    let id = id_builder.join().into();
 
-    fn assets<'a>(&'a self, path: &Path) -> impl Iterator<Item = super::AssetKey> + 'a {
-        self.paths
-            .get(path)
-            .map_or(&[][..], |set| &set.0)
-            .iter()
-            .cloned()
-    }
+    let entry = if path.is_dir() {
+        OwnedDirEntry::Directory(id)
+    } else {
+        let ext = crate::utils::extension_of(path)?.into();
+        OwnedDirEntry::File(id, ext)
+    };
+
+    Some(entry)
 }
 
 enum EventHandlerPayload<H> {
@@ -182,39 +121,39 @@ impl<H: notify::EventHandler> notify::EventHandler for EventHandlerPayload<H> {
 }
 
 struct NotifyEventHandler {
-    watched_paths: WatchedPaths,
-    updates: crossbeam_channel::Receiver<super::UpdateMessage>,
+    roots: Vec<PathBuf>,
     events: super::EventSender,
+    id_builder: IdBuilder,
+
+    watcher: Option<notify::RecommendedWatcher>,
 }
 
 impl notify::EventHandler for NotifyEventHandler {
     fn handle_event(&mut self, event: notify::Result<notify::Event>) {
-        loop {
-            match self.updates.try_recv() {
-                Ok(super::UpdateMessage::AddAsset(key)) => self.watched_paths.add_asset(key),
-                Ok(super::UpdateMessage::RemoveAsset(key)) => self.watched_paths.remove_asset(key),
-                Ok(super::UpdateMessage::Clear) => self.watched_paths.clear(),
-                Err(crossbeam_channel::TryRecvError::Empty) => break,
-                Err(crossbeam_channel::TryRecvError::Disconnected) => return,
-            }
-        }
-
         match event {
             Ok(event) => {
                 log::trace!("Received filesystem event: {event:?}");
 
-                if matches!(
-                    event.kind,
-                    notify::EventKind::Any
-                        | notify::EventKind::Create(_)
-                        | notify::EventKind::Modify(_)
-                ) {
-                    for path in event.paths {
-                        for asset in self.watched_paths.assets(&path) {
-                            if self.events.send(asset).is_err() {
-                                return;
-                            }
-                        }
+                for path in event.paths {
+                    let paths = match event.kind {
+                        notify::EventKind::Any | notify::EventKind::Modify(_) => vec![&*path],
+                        notify::EventKind::Create(_) => match path.parent() {
+                            Some(parent) => vec![&path, parent],
+                            None => vec![&*path],
+                        },
+                        notify::EventKind::Remove(_) => match path.parent() {
+                            Some(parent) => vec![parent],
+                            None => vec![],
+                        },
+                        notify::EventKind::Access(_) | notify::EventKind::Other => return,
+                    };
+                    let ids = paths
+                        .into_iter()
+                        .flat_map(|p| self.roots.iter().map(move |r| (p, r)))
+                        .filter_map(|(path, root)| id_of_path(&mut self.id_builder, root, path));
+
+                    if self.events.send_multiple(ids).is_err() {
+                        drop(self.watcher.take());
                     }
                 }
             }

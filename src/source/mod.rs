@@ -35,10 +35,7 @@ use std::{borrow::Cow, fmt, io};
 
 #[cfg(doc)]
 use crate::{asset::DirLoadable, AssetCache};
-use crate::{
-    hot_reloading::{DynUpdateSender, EventSender},
-    BoxedError,
-};
+use crate::{hot_reloading::EventSender, BoxedError, SharedString};
 
 mod filesystem;
 pub use filesystem::FileSystem;
@@ -131,6 +128,34 @@ impl<'a> DirEntry<'a> {
                 Some(n) => Some(&id[..n]),
                 None => Some(""),
             }
+        }
+    }
+}
+
+/// An owned version of a `DirEntry`
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum OwnedDirEntry {
+    /// A file with an id and an extension.
+    File(SharedString, SharedString),
+
+    /// A directory with an id.
+    Directory(SharedString),
+}
+
+impl OwnedDirEntry {
+    /// Converts to a borrowed `DirEntry`.
+    pub fn as_dir_entry(&self) -> DirEntry<'_> {
+        match self {
+            OwnedDirEntry::File(id, ext) => DirEntry::File(id, ext),
+            OwnedDirEntry::Directory(id) => DirEntry::Directory(id),
+        }
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    pub(crate) fn as_dependency(&self) -> crate::hot_reloading::BorrowedDependency<'_> {
+        match self {
+            OwnedDirEntry::File(id, ext) => crate::hot_reloading::BorrowedDependency::File(id, ext),
+            OwnedDirEntry::Directory(id) => crate::hot_reloading::BorrowedDependency::Directory(id),
         }
     }
 }
@@ -282,7 +307,7 @@ pub trait Source {
     /// subsystem when assets should be reloaded. It returns a `DynUpdateSender`
     /// to be notified of cache state changes.
     #[inline]
-    fn configure_hot_reloading(&self, _events: EventSender) -> Result<DynUpdateSender, BoxedError> {
+    fn configure_hot_reloading(&self, _events: EventSender) -> Result<(), BoxedError> {
         Err("this source does not support hot-reloading".into())
     }
 }
@@ -312,7 +337,7 @@ where
     }
 
     #[inline]
-    fn configure_hot_reloading(&self, events: EventSender) -> Result<DynUpdateSender, BoxedError> {
+    fn configure_hot_reloading(&self, events: EventSender) -> Result<(), BoxedError> {
         self.as_ref().configure_hot_reloading(events)
     }
 }
@@ -342,7 +367,7 @@ where
     }
 
     #[inline]
-    fn configure_hot_reloading(&self, events: EventSender) -> Result<DynUpdateSender, BoxedError> {
+    fn configure_hot_reloading(&self, events: EventSender) -> Result<(), BoxedError> {
         (**self).configure_hot_reloading(events)
     }
 }
@@ -372,7 +397,7 @@ where
     }
 
     #[inline]
-    fn configure_hot_reloading(&self, events: EventSender) -> Result<DynUpdateSender, BoxedError> {
+    fn configure_hot_reloading(&self, events: EventSender) -> Result<(), BoxedError> {
         self.as_ref().configure_hot_reloading(events)
     }
 }

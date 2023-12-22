@@ -311,10 +311,18 @@ impl<T: RawCache> Cache for T {
     }
 
     fn read(&self, id: &str, ext: &str) -> io::Result<crate::source::FileContent> {
+        #[cfg(feature = "hot-reloading")]
+        if let Some(reloader) = self.reloader() {
+            records::add_file_record(reloader, id, ext);
+        }
         self.get_source().read(id, ext)
     }
 
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+        #[cfg(feature = "hot-reloading")]
+        if let Some(reloader) = self.reloader() {
+            records::add_dir_record(reloader, id);
+        }
         self.get_source().read_dir(id, f)
     }
 

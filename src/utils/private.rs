@@ -44,6 +44,53 @@ pub(crate) fn extension_of(path: &Path) -> Option<&str> {
     }
 }
 
+/// Build ids from components.
+///
+/// Using this allows to easily reuse buffers when building several ids in a
+/// row, and thus to avoid repeated allocations.
+#[cfg(any(feature = "zip", feature = "hot-reloading"))]
+#[derive(Default)]
+pub struct IdBuilder {
+    segments: Vec<String>,
+    len: usize,
+}
+
+#[cfg(any(feature = "zip", feature = "hot-reloading"))]
+impl IdBuilder {
+    /// Pushs a segment in the builder.
+    pub fn push(&mut self, s: &str) {
+        match self.segments.get_mut(self.len) {
+            Some(seg) => {
+                seg.clear();
+                seg.push_str(s);
+            }
+            None => self.segments.push(s.to_owned()),
+        }
+        self.len += 1;
+    }
+
+    /// Pops a segment from the builder.
+    ///
+    /// Returns `None` if the builder was empty.
+    #[inline]
+    pub fn pop(&mut self) -> Option<()> {
+        self.len = self.len.checked_sub(1)?;
+        Some(())
+    }
+
+    /// Joins segments to build a id.
+    #[inline]
+    pub fn join(&self) -> String {
+        self.segments[..self.len].join(".")
+    }
+
+    /// Resets the builder without freeing buffers.
+    #[inline]
+    pub fn reset(&mut self) {
+        self.len = 0;
+    }
+}
+
 /// Trick to be able to use a `BorrowedKey` to index a `HashMap<OwnedKey, _>`.
 ///
 /// See https://stackoverflow.com/questions/45786717/how-to-implement-hashmap-with-two-keys/45795699#45795699.

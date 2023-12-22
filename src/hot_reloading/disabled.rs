@@ -2,51 +2,27 @@
 
 #![allow(missing_docs)]
 
-pub use crate::key::{AssetKey, AssetType};
-use crate::BoxedError;
+use crate::{source::OwnedDirEntry, BoxedError};
 
 #[derive(Debug, Clone)]
 enum Void {}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum UpdateMessage {
-    AddAsset(AssetKey),
-    RemoveAsset(AssetKey),
-    Clear,
-}
 
 #[derive(Debug)]
 pub struct Disconnected;
 
 #[derive(Debug, Clone)]
 pub struct EventSender(Void);
+
 impl EventSender {
-    pub fn send(&self, _: AssetKey) -> Result<(), Disconnected> {
+    pub fn send(&self, _: OwnedDirEntry) -> Result<(), Disconnected> {
         match self.0 {}
     }
-}
 
-pub trait UpdateSender {
-    fn send_update(&self, update: UpdateMessage);
-}
-
-pub type DynUpdateSender = Box<dyn UpdateSender + Send + Sync>;
-
-impl<T> UpdateSender for Box<T>
-where
-    T: UpdateSender + ?Sized,
-{
-    fn send_update(&self, message: UpdateMessage) {
-        (**self).send_update(message)
-    }
-}
-
-impl<T> UpdateSender for std::sync::Arc<T>
-where
-    T: UpdateSender + ?Sized,
-{
-    fn send_update(&self, message: UpdateMessage) {
-        (**self).send_update(message)
+    pub fn send_multiple<I>(&self, _: I) -> Result<usize, Disconnected>
+    where
+        I: IntoIterator<Item = OwnedDirEntry>,
+    {
+        match self.0 {}
     }
 }
 
@@ -63,7 +39,7 @@ impl FsWatcherBuilder {
         match self.0 {}
     }
 
-    pub fn build(self, _: EventSender) -> DynUpdateSender {
+    pub fn build(self, _: EventSender) {
         match self.0 {}
     }
 }

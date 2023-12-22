@@ -1,6 +1,6 @@
 use super::{DirEntry, Source};
 use crate::{
-    utils::{extension_of, HashMap},
+    utils::{extension_of, HashMap, IdBuilder},
     SharedBytes,
 };
 
@@ -86,52 +86,6 @@ impl OwnedEntry {
             OwnedEntry::File(FileDesc(desc)) => DirEntry::File(&desc.0, &desc.1),
             OwnedEntry::Dir(id) => DirEntry::Directory(id),
         }
-    }
-}
-
-/// Build ids from components.
-///
-/// Using this allows to easily reuse buffers when building several ids in a
-/// row, and thus to avoid repeated allocations.
-#[derive(Default)]
-struct IdBuilder {
-    segments: Vec<String>,
-    len: usize,
-}
-
-impl IdBuilder {
-    /// Pushs a segment in the builder.
-    #[inline]
-    fn push(&mut self, s: &str) {
-        match self.segments.get_mut(self.len) {
-            Some(seg) => {
-                seg.clear();
-                seg.push_str(s);
-            }
-            None => self.segments.push(s.to_owned()),
-        }
-        self.len += 1;
-    }
-
-    /// Pops a segment from the builder.
-    ///
-    /// Returns `None` if the builder was empty.
-    #[inline]
-    fn pop(&mut self) -> Option<()> {
-        self.len = self.len.checked_sub(1)?;
-        Some(())
-    }
-
-    /// Joins segments to build a id.
-    #[inline]
-    fn join(&self) -> String {
-        self.segments[..self.len].join(".")
-    }
-
-    /// Resets the builder without freeing buffers.
-    #[inline]
-    fn reset(&mut self) {
-        self.len = 0;
     }
 }
 

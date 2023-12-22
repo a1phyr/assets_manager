@@ -1,5 +1,5 @@
 use crate::{
-    hot_reloading::{DynUpdateSender, EventSender, FsWatcherBuilder},
+    hot_reloading::{EventSender, FsWatcherBuilder},
     utils::extension_of,
     BoxedError,
 };
@@ -116,11 +116,11 @@ impl Source for FileSystem {
         Some(Box::new(self.clone()))
     }
 
-    fn configure_hot_reloading(&self, events: EventSender) -> Result<DynUpdateSender, BoxedError> {
+    fn configure_hot_reloading(&self, events: EventSender) -> Result<(), BoxedError> {
         let mut watcher = FsWatcherBuilder::new()?;
         watcher.watch(self.path.clone())?;
-        let reloader = watcher.build(events);
-        Ok(reloader)
+        watcher.build(events);
+        Ok(())
     }
 }
 

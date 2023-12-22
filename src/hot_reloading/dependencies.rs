@@ -1,9 +1,50 @@
-use super::Dependencies;
+use super::{BorrowedDependency, Dependencies, Dependency};
 use crate::{
     key::Type,
+    source::OwnedDirEntry,
     utils::{HashMap, HashSet, OwnedKey},
 };
-use std::collections::hash_map::Entry;
+use std::{collections::hash_map::Entry, hash};
+
+trait Key {
+    fn as_borrowed(&self) -> BorrowedDependency<'_>;
+}
+
+impl Key for Dependency {
+    fn as_borrowed(&self) -> BorrowedDependency<'_> {
+        match self {
+            Dependency::File(id, ext) => BorrowedDependency::File(id, ext),
+            Dependency::Directory(id) => BorrowedDependency::Directory(id),
+            Dependency::Asset(key) => BorrowedDependency::Asset(key),
+        }
+    }
+}
+
+impl Key for BorrowedDependency<'_> {
+    fn as_borrowed(&self) -> BorrowedDependency<'_> {
+        *self
+    }
+}
+
+impl PartialEq for dyn Key + '_ {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_borrowed().eq(&other.as_borrowed())
+    }
+}
+
+impl Eq for dyn Key + '_ {}
+
+impl hash::Hash for dyn Key + '_ {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.as_borrowed().hash(state)
+    }
+}
+
+impl<'a> std::borrow::Borrow<dyn Key + 'a> for Dependency {
+    fn borrow(&self) -> &(dyn Key + 'a) {
+        self
+    }
+}
 
 struct GraphNode {
     /// `None` if the asset is part of the graph but we should not actually
@@ -11,7 +52,7 @@ struct GraphNode {
     typ: Option<Type>,
 
     /// Reverse dependencies (backward edges)
-    rdeps: HashSet<OwnedKey>,
+    rdeps: HashSet<Dependency>,
 
     /// Dependencies (forward edges)
     deps: Dependencies,
@@ -37,14 +78,18 @@ impl GraphNode {
     }
 }
 
-pub(crate) struct DepsGraph(HashMap<OwnedKey, GraphNode>);
+pub(crate) struct DepsGraph(HashMap<Dependency, GraphNode>);
 
 impl DepsGraph {
     pub fn new() -> Self {
         DepsGraph(HashMap::new())
     }
 
-    pub fn insert(&mut self, asset_key: OwnedKey, deps: Dependencies, typ: Type) {
+    pub fn insert_asset(&mut self, asset_key: OwnedKey, deps: Dependencies, typ: Type) {
+        self.insert(Dependency::Asset(asset_key), deps, typ)
+    }
+
+    pub fn insert(&mut self, asset_key: Dependency, deps: Dependencies, typ: Type) {
         for key in deps.iter() {
             let entry = self.0.entry(key.clone()).or_default();
             entry.rdeps.insert(asset_key.clone());
@@ -77,7 +122,7 @@ impl DepsGraph {
 
     pub fn topological_sort_from<'a>(
         &self,
-        iter: impl IntoIterator<Item = &'a OwnedKey>,
+        iter: impl IntoIterator<Item = &'a OwnedDirEntry>,
     ) -> TopologicalSort {
         let mut sort_data = TopologicalSortData {
             visited: HashSet::new(),
@@ -85,45 +130,53 @@ impl DepsGraph {
         };
 
         for key in iter {
-            self.visit(&mut sort_data, key);
+            self.visit(&mut sort_data, key.as_dependency());
         }
 
         TopologicalSort(sort_data.list)
     }
 
-    fn visit(&self, sort_data: &mut TopologicalSortData, key: &OwnedKey) {
-        if sort_data.visited.contains(key) {
+    fn visit(&self, sort_data: &mut TopologicalSortData, key: BorrowedDependency) {
+        if sort_data.visited.contains(&key as &dyn Key) {
             return;
         }
 
-        let node = match self.0.get(key) {
+        let node = match self.0.get(&key as &dyn Key) {
             Some(deps) => deps,
             None => return,
         };
 
         for rdep in node.rdeps.iter() {
-            self.visit(sort_data, rdep);
+            self.visit(sort_data, rdep.as_borrowed());
         }
 
-        sort_data.visited.insert(key.clone());
-        sort_data.list.push(key.clone());
+        sort_data.visited.insert(key.into_owned());
+        if let BorrowedDependency::Asset(key) = key {
+            sort_data.list.push(key.clone());
+        }
     }
 
     pub fn reload(&mut self, cache: crate::AnyCache, key: OwnedKey) {
-        if let Some(entry) = self.0.get_mut(&key) {
+        let id = &key.id;
+        let b_key = BorrowedDependency::Asset(&key);
+        if let Some(entry) = self.0.get_mut(&b_key as &dyn Key) {
             if let Some(typ) = entry.typ {
-                let new_deps = cache.reload_untyped(key.id.clone(), typ);
+                let new_deps = cache.reload_untyped(id.clone(), typ);
 
                 if let Some(new_deps) = new_deps {
-                    self.insert(key, new_deps, typ);
+                    self.insert(Dependency::Asset(key), new_deps, typ);
                 }
             }
         }
     }
+
+    pub fn contains(&self, key: &OwnedDirEntry) -> bool {
+        self.0.contains_key(&key.as_dependency() as &dyn Key)
+    }
 }
 
 struct TopologicalSortData {
-    visited: HashSet<OwnedKey>,
+    visited: HashSet<Dependency>,
     list: Vec<OwnedKey>,
 }
 

@@ -1,6 +1,6 @@
 use crate::{
     cache::AssetMap,
-    source::Source,
+    source::{OwnedDirEntry, Source},
     utils::{HashSet, OwnedKey},
     AnyCache, SharedString,
 };
@@ -66,7 +66,7 @@ enum CacheKind {
 
 pub(super) struct HotReloadingData {
     source: Box<dyn Source>,
-    to_reload: HashSet<OwnedKey>,
+    to_reload: HashSet<OwnedDirEntry>,
     cache: CacheKind,
     deps: DepsGraph,
 }
@@ -82,9 +82,11 @@ impl HotReloadingData {
     }
 
     pub fn handle_events(&mut self, events: super::Events) {
-        events.for_each(|asset_key| {
-            let key = OwnedKey::new_with(asset_key.id, asset_key.typ.type_id);
-            self.to_reload.insert(key);
+        events.for_each(|entry| {
+            if self.deps.contains(&entry) {
+                log::trace!("New event: {entry:?}");
+                self.to_reload.insert(entry);
+            }
         });
         self.update_if_static();
     }
@@ -120,8 +122,8 @@ impl HotReloadingData {
     }
 
     pub fn add_asset(&mut self, infos: AssetReloadInfos) {
-        let AssetReloadInfos(key, new_deps, reload) = infos;
-        self.deps.insert(key, new_deps, reload);
+        let AssetReloadInfos(key, new_deps, typ) = infos;
+        self.deps.insert_asset(key, new_deps, typ);
     }
 
     pub fn clear_local_cache(&mut self) {
@@ -129,7 +131,7 @@ impl HotReloadingData {
     }
 }
 
-fn run_update(changed: &mut HashSet<OwnedKey>, deps: &mut DepsGraph, cache: BorrowedCache) {
+fn run_update(changed: &mut HashSet<OwnedDirEntry>, deps: &mut DepsGraph, cache: BorrowedCache) {
     let to_update = deps.topological_sort_from(changed.iter());
     changed.clear();
 
