@@ -124,6 +124,11 @@ where
     fn select_ids(cache: AnyCache, id: &SharedString) -> io::Result<Vec<SharedString>> {
         A::select_ids(cache, id)
     }
+
+    #[inline]
+    fn sub_directories(cache: AnyCache, id: &SharedString, f: impl FnMut(&str)) -> io::Result<()> {
+        A::sub_directories(cache, id, f)
+    }
 }
 
 /// Stores ids in a directory containing assets of type `T`
