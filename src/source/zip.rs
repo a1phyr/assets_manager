@@ -214,14 +214,20 @@ pub struct Zip<R = SyncFile> {
     files: HashMap<FileDesc, usize>,
     dirs: HashMap<String, Vec<OwnedEntry>>,
     archive: ZipArchive<R>,
+    label: Option<String>,
 }
 
 impl Zip<SyncFile> {
     /// Creates a `Zip` archive backed by the file at the given path.
     #[inline]
     pub fn open<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        Self::_open(path.as_ref())
+    }
+
+    #[inline]
+    fn _open(path: &Path) -> io::Result<Self> {
         let file = SyncFile::open(path)?;
-        Zip::from_reader(file)
+        Zip::from_reader_with_label(file, path.display().to_string())
     }
 }
 
@@ -234,6 +240,14 @@ impl Zip<io::Cursor<SharedBytes>> {
     pub fn from_bytes(bytes: SharedBytes) -> io::Result<Self> {
         Zip::from_reader(io::Cursor::new(bytes))
     }
+
+    /// Creates a `Zip` archive backed by a byte buffer in memory.
+    ///
+    /// An additionnal label that will be used in errors can be added.
+    #[inline]
+    pub fn from_bytes_with_label(bytes: SharedBytes, label: String) -> io::Result<Self> {
+        Zip::from_reader_with_label(io::Cursor::new(bytes), label)
+    }
 }
 
 impl<'a> Zip<io::Cursor<&'a [u8]>> {
@@ -245,6 +259,14 @@ impl<'a> Zip<io::Cursor<&'a [u8]>> {
     pub fn from_slice(bytes: &'a [u8]) -> io::Result<Self> {
         Zip::from_reader(io::Cursor::new(bytes))
     }
+
+    /// Creates a `Zip` archive backed by a byte buffer in memory.
+    ///
+    /// An additionnal label that will be used in errors can be added.
+    #[inline]
+    pub fn from_slice_with_label(bytes: &'a [u8], label: String) -> io::Result<Self> {
+        Zip::from_reader_with_label(io::Cursor::new(bytes), label)
+    }
 }
 
 impl<R> Zip<R>
@@ -253,6 +275,17 @@ where
 {
     /// Creates a `Zip` archive backed by a reader that supports seeking.
     pub fn from_reader(reader: R) -> io::Result<Zip<R>> {
+        Self::create(reader, None)
+    }
+
+    /// Creates a `Zip` archive backed by a reader that supports seeking.
+    ///
+    /// An additionnal label that will be used in errors can be added.
+    pub fn from_reader_with_label(reader: R, label: String) -> io::Result<Zip<R>> {
+        Self::create(reader, Some(label))
+    }
+
+    fn create(reader: R, label: Option<String>) -> io::Result<Zip<R>> {
         let mut archive = ZipArchive::new(reader)?;
 
         let len = archive.len();
@@ -269,6 +302,7 @@ where
             files,
             dirs,
             archive,
+            label,
         })
     }
 }
@@ -283,19 +317,28 @@ where
 
         // Get the file within the archive
         let key: &dyn FileKey = &(id, ext);
-        let id = *self.files.get(key).ok_or(io::ErrorKind::NotFound)?;
+        let index = *self
+            .files
+            .get(key)
+            .ok_or_else(|| error::find_file(id, &self.label))?;
         let mut archive = self.archive.clone();
-        let mut file = archive.by_index(id)?;
+        let mut file = archive
+            .by_index(index)
+            .map_err(|err| error::open_file(err, id, &self.label))?;
 
         // Read it in a buffer
         let mut content = Vec::with_capacity(file.size() as usize + 1);
-        file.read_to_end(&mut content)?;
+        file.read_to_end(&mut content)
+            .map_err(|err| error::read_file(err, id, &self.label))?;
 
         Ok(super::FileContent::Buffer(content))
     }
 
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
-        let dir = self.dirs.get(id).ok_or(io::ErrorKind::NotFound)?;
+        let dir = self
+            .dirs
+            .get(id)
+            .ok_or_else(|| error::find_dir(id, &self.label))?;
         dir.iter().map(OwnedEntry::as_dir_entry).for_each(f);
         Ok(())
     }
@@ -311,5 +354,89 @@ where
 impl<R> fmt::Debug for Zip<R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Zip").field("dirs", &self.dirs).finish()
+    }
+}
+
+mod error {
+    use std::{fmt, io};
+    use zip::result::ZipError;
+
+    #[cold]
+    pub fn find_file(id: &str, label: &Option<String>) -> io::Error {
+        let msg = match label {
+            Some(lbl) => format!("Could not find asset \"{id}\" in {lbl}"),
+            None => format!("Could not find asset \"{id}\" in ZIP"),
+        };
+
+        io::Error::new(io::ErrorKind::NotFound, msg)
+    }
+
+    #[cold]
+    pub fn read_file(err: io::Error, id: &str, label: &Option<String>) -> io::Error {
+        #[derive(Debug)]
+        struct Error {
+            err: io::Error,
+            msg: String,
+        }
+        impl fmt::Display for Error {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(&self.msg)
+            }
+        }
+        impl std::error::Error for Error {
+            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                Some(&self.err)
+            }
+        }
+
+        let msg = match label {
+            Some(lbl) => format!("Could not read \"{id}\" in {lbl}"),
+            None => format!("Could not read \"{id}\" in ZIP"),
+        };
+
+        io::Error::new(err.kind(), Error { err, msg })
+    }
+
+    #[cold]
+    pub fn open_file(err: ZipError, id: &str, label: &Option<String>) -> io::Error {
+        #[derive(Debug)]
+        struct Error {
+            err: ZipError,
+            msg: String,
+        }
+        impl fmt::Display for Error {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(&self.msg)
+            }
+        }
+        impl std::error::Error for Error {
+            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                Some(&self.err)
+            }
+        }
+
+        let msg = match label {
+            Some(lbl) => format!("Could not open \"{id}\" in {lbl}"),
+            None => format!("Could not open \"{id}\" in ZIP"),
+        };
+
+        let kind = match &err {
+            ZipError::Io(err) => err.kind(),
+            ZipError::InvalidArchive(_) => io::ErrorKind::InvalidData,
+            ZipError::UnsupportedArchive(_) => io::ErrorKind::Unsupported,
+            ZipError::FileNotFound => io::ErrorKind::NotFound,
+        };
+
+        io::Error::new(kind, Error { err, msg })
+    }
+
+    #[cold]
+    pub fn find_dir(id: &str, label: &Option<String>) -> io::Error {
+        let msg = match label {
+            Some(lbl) => format!("Could not find directory \"{id}\" in {lbl}"),
+            None => format!("Could not find directory \"{id}\" in ZIP"),
+        };
+
+        io::Error::new(io::ErrorKind::NotFound, msg)
     }
 }

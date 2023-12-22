@@ -108,4 +108,14 @@ mod zip {
     use super::*;
 
     test_source!(Zip::open("assets/test/test.zip").unwrap());
+
+    #[test]
+    fn errors() {
+        let zip = Zip::open("assets/test/test.zip").unwrap();
+
+        let err = zip.read("file_name", "ext").unwrap_err();
+        assert!(err.to_string().contains("file_name"));
+        assert!(err.to_string().contains("assets/test/test.zip"));
+        assert!(err.kind() == io::ErrorKind::NotFound);
+    }
 }
