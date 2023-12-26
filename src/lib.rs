@@ -29,7 +29,7 @@
 //!
 //! - Serialisation formats (with [`serde`] crate): `bincode`, `json`,
 //! `msgpack`, `ron`, `toml`, `yaml`.
-//! - Audio formats (with [`rodio`] crate): `mp3`, `flac`, `vorbis`, `wav`.
+//! - Audio formats (with [`rodio`] crate up to (`0.17`)): `mp3`, `flac`, `vorbis`, `wav`.
 //! - Image formats (with [`image`] crate): `bmp`, `jpeg`, `png` `webp`.
 //! - 3D formats (with [`gltf`] crate): `gltf`.
 //!
@@ -38,6 +38,7 @@
 //! Support of some other crates is done in external crates:
 //! - [`ggez`](https://github.com/ggez/ggez): [`ggez-assets_manager`](https://crates.io/crates/ggez-assets_manager)
 //! - [`kira`](https://github.com/tesselode/kira): [`assets_manager-kira`](https://crates.io/crates/assets_manager-kira)
+//! - [`rodio`](https://github.com/RustAudio/rodio) (starting from `0.18`): [`assets_manager-rodio`](https://crates.io/crates/assets_manager-rodio)
 //!
 //! ### Internal features
 //!

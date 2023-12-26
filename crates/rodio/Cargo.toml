@@ -1,0 +1,29 @@
+[package]
+name = "assets_manager-rodio"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+description = "`rodio` support for `assets_manager`"
+
+repository = "https://github.com/a1phyr/assets_manager/tree/master/crates/rodio"
+documentation = "https://docs.rs/assets_manager-rodio"
+
+categories = ["caching", "game-development", "multimedia::audio"]
+keywords = ["assets", "audio", "cache", "hot-reloading", "rodio"]
+
+
+[features]
+flac = ["rodio/flac"]
+minimp3 = ["rodio/minimp3"]
+vorbis = ["rodio/vorbis"]
+wav = ["rodio/wav"]
+
+symphonia-flac = ["rodio/symphonia-flac"]
+symphonia-mp3 = ["rodio/symphonia-mp3"]
+symphonia-vorbis = ["rodio/symphonia-vorbis"]
+symphonia-wav = ["rodio/symphonia-wav"]
+
+[dependencies]
+assets_manager = { version = "0.11", default-features = false }
+rodio = { version = "0.18", default-features = false }
