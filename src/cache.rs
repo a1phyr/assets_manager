@@ -361,7 +361,7 @@ impl<S: Source> AssetCache<S> {
     /// the cache.
     ///
     /// Note that you need a mutable reference to the cache, so you cannot have
-    /// any [`Handle`], [`AssetGuard`], etc when you call this function.
+    /// any [`Handle`], [`AssetReadGuard`], etc when you call this function.
     #[inline]
     pub fn remove<A: Storable>(&mut self, id: &str) -> bool {
         self.assets.remove(id, TypeId::of::<A>())
@@ -403,7 +403,7 @@ where
     ///
     /// This function blocks the current thread until all changed assets are
     /// reloaded, but it does not perform any I/O. However, it needs to lock
-    /// some assets for writing, so you **must not** have any [`AssetGuard`]
+    /// some assets for writing, so you **must not** have any [`AssetReadGuard`]
     /// from the given `AssetCache`, or you might experience deadlocks. You are
     /// free to keep [`Handle`]s, though.
     ///

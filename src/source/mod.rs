@@ -43,11 +43,13 @@ pub use filesystem::FileSystem;
 #[cfg(feature = "embedded")]
 mod embedded;
 #[cfg(feature = "embedded")]
+#[cfg_attr(docsrs, doc(cfg(feature = "embedded")))]
 pub use embedded::{Embedded, RawEmbedded};
 
 #[cfg(feature = "zip")]
 mod zip;
 #[cfg(feature = "zip")]
+#[cfg_attr(docsrs, doc(cfg(feature = "zip")))]
 pub use self::zip::Zip;
 
 /// Embed a directory in the binary

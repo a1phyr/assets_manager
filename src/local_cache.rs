@@ -206,7 +206,7 @@ impl<S> LocalAssetCache<S> {
     /// the cache.
     ///
     /// Note that you need a mutable reference to the cache, so you cannot have
-    /// any [`Handle`], [`AssetGuard`], etc when you call this function.
+    /// any [`Handle`], [`AssetReadGuard`], etc when you call this function.
     #[inline]
     pub fn remove<A: Storable>(&mut self, id: &str) -> bool {
         self.assets.remove(id, TypeId::of::<A>())
