@@ -63,27 +63,16 @@ fn id_of_path(id_builder: &mut IdBuilder, root: &Path, path: &Path) -> Option<Ow
 
     for comp in path.parent()?.strip_prefix(root).ok()?.components() {
         match comp {
-            path::Component::Normal(s) => {
-                let segment = s.to_str()?;
-                if segment.contains('.') {
-                    return None;
-                }
-                id_builder.push(segment);
-            }
+            path::Component::Normal(s) => id_builder.push(s.to_str()?)?,
             path::Component::ParentDir => id_builder.pop()?,
             path::Component::CurDir => continue,
             _ => return None,
         }
     }
 
-    let last_component = path.file_stem()?.to_str()?;
-    if last_component.contains('.') {
-        return None;
-    }
-
     // Build the id of the file.
-    id_builder.push(last_component);
-    let id = id_builder.join().into();
+    id_builder.push(path.file_stem()?.to_str()?)?;
+    let id = id_builder.join();
 
     let entry = if path.is_dir() {
         OwnedDirEntry::Directory(id)

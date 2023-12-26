@@ -51,43 +51,46 @@ pub(crate) fn extension_of(path: &Path) -> Option<&str> {
 #[cfg(any(feature = "zip", feature = "hot-reloading"))]
 #[derive(Default)]
 pub struct IdBuilder {
-    segments: Vec<String>,
-    len: usize,
+    buf: String,
 }
 
 #[cfg(any(feature = "zip", feature = "hot-reloading"))]
 impl IdBuilder {
     /// Pushs a segment in the builder.
-    pub fn push(&mut self, s: &str) {
-        match self.segments.get_mut(self.len) {
-            Some(seg) => {
-                seg.clear();
-                seg.push_str(s);
-            }
-            None => self.segments.push(s.to_owned()),
+    pub fn push(&mut self, s: &str) -> Option<()> {
+        if s.contains('.') {
+            return None;
         }
-        self.len += 1;
+
+        if !self.buf.is_empty() {
+            self.buf.push('.');
+        }
+        self.buf.push_str(s);
+        Some(())
     }
 
     /// Pops a segment from the builder.
     ///
     /// Returns `None` if the builder was empty.
-    #[inline]
     pub fn pop(&mut self) -> Option<()> {
-        self.len = self.len.checked_sub(1)?;
+        if self.buf.is_empty() {
+            return None;
+        }
+        let pos = self.buf.rfind('.').unwrap_or(0);
+        self.buf.truncate(pos);
         Some(())
     }
 
     /// Joins segments to build a id.
     #[inline]
-    pub fn join(&self) -> String {
-        self.segments[..self.len].join(".")
+    pub fn join(&self) -> SharedString {
+        self.buf.as_str().into()
     }
 
     /// Resets the builder without freeing buffers.
     #[inline]
     pub fn reset(&mut self) {
-        self.len = 0;
+        self.buf.clear()
     }
 }
 

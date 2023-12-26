@@ -1,26 +1,25 @@
 use super::{DirEntry, Source};
 use crate::{
     utils::{extension_of, HashMap, IdBuilder},
-    SharedBytes,
+    SharedBytes, SharedString,
 };
 
 use std::{
     fmt, hash, io,
     path::{self, Path},
-    sync::Arc,
 };
 
 use sync_file::SyncFile;
 use zip::{read::ZipFile, ZipArchive};
 
 #[derive(Clone, Hash, PartialEq, Eq)]
-struct FileDesc(Arc<(String, String)>);
+struct FileDesc(SharedString, SharedString);
 
 impl fmt::Debug for FileDesc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("FileDesc")
-            .field("id", &self.0 .0)
-            .field("ext", &self.0 .1)
+            .field("id", &self.0)
+            .field("ext", &self.1)
             .finish()
     }
 }
@@ -34,11 +33,11 @@ trait FileKey {
 
 impl FileKey for FileDesc {
     fn id(&self) -> &str {
-        &self.0 .0
+        &self.0
     }
 
     fn ext(&self) -> &str {
-        &self.0 .1
+        &self.1
     }
 }
 
@@ -77,13 +76,13 @@ impl hash::Hash for dyn FileKey + '_ {
 #[derive(Debug)]
 enum OwnedEntry {
     File(FileDesc),
-    Dir(String),
+    Dir(SharedString),
 }
 
 impl OwnedEntry {
     fn as_dir_entry(&self) -> DirEntry {
         match self {
-            OwnedEntry::File(FileDesc(desc)) => DirEntry::File(&desc.0, &desc.1),
+            OwnedEntry::File(FileDesc(id, ext)) => DirEntry::File(id, ext),
             OwnedEntry::Dir(id) => DirEntry::Directory(id),
         }
     }
@@ -94,7 +93,7 @@ fn register_file(
     file: ZipFile,
     index: usize,
     files: &mut HashMap<FileDesc, usize>,
-    dirs: &mut HashMap<String, Vec<OwnedEntry>>,
+    dirs: &mut HashMap<SharedString, Vec<OwnedEntry>>,
     id_builder: &mut IdBuilder,
 ) {
     id_builder.reset();
@@ -112,16 +111,9 @@ fn register_file(
     // The closure is used as a cheap `try` block.
     let ok = (|| {
         // Fill `id_builder` from the parent's components
-        let parent = path.parent()?;
-        for comp in parent.components() {
+        for comp in path.parent()?.components() {
             match comp {
-                path::Component::Normal(s) => {
-                    let segment = s.to_str()?;
-                    if segment.contains('.') {
-                        return None;
-                    }
-                    id_builder.push(segment);
-                }
+                path::Component::Normal(s) => id_builder.push(s.to_str()?)?,
                 path::Component::ParentDir => id_builder.pop()?,
                 path::Component::CurDir => continue,
                 _ => return None,
@@ -130,13 +122,13 @@ fn register_file(
 
         // Build the ids of the file and its parent.
         let parent_id = id_builder.join();
-        id_builder.push(path.file_stem()?.to_str()?);
+        id_builder.push(path.file_stem()?.to_str()?)?;
         let id = id_builder.join();
 
         // Register the file in the maps.
         let entry = if file.is_file() {
-            let ext = extension_of(path)?.to_owned();
-            let desc = FileDesc(Arc::new((id, ext)));
+            let ext = extension_of(path)?.into();
+            let desc = FileDesc(id, ext);
             files.insert(desc.clone(), index);
             OwnedEntry::File(desc)
         } else {
@@ -166,7 +158,7 @@ fn register_file(
 #[cfg_attr(docsrs, doc(cfg(feature = "zip")))]
 pub struct Zip<R = SyncFile> {
     files: HashMap<FileDesc, usize>,
-    dirs: HashMap<String, Vec<OwnedEntry>>,
+    dirs: HashMap<SharedString, Vec<OwnedEntry>>,
     archive: ZipArchive<R>,
     label: Option<String>,
 }
