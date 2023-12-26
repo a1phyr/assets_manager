@@ -15,15 +15,6 @@ use zip::{read::ZipFile, ZipArchive};
 #[derive(Clone, Hash, PartialEq, Eq)]
 struct FileDesc(SharedString, SharedString);
 
-impl fmt::Debug for FileDesc {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("FileDesc")
-            .field("id", &self.0)
-            .field("ext", &self.1)
-            .finish()
-    }
-}
-
 /// This hack enables us to use a `(&str, &str)` as a key for an HashMap without
 /// allocating a `FileDesc`
 trait FileKey {
@@ -73,10 +64,18 @@ impl hash::Hash for dyn FileKey + '_ {
 }
 
 /// An entry in a archive directory.
-#[derive(Debug)]
 enum OwnedEntry {
     File(FileDesc),
     Dir(SharedString),
+}
+
+impl fmt::Debug for OwnedEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::File(FileDesc(id, ext)) => f.debug_tuple("File").field(id).field(ext).finish(),
+            Self::Dir(id) => f.debug_tuple("Directory").field(id).finish(),
+        }
+    }
 }
 
 impl OwnedEntry {
@@ -299,7 +298,10 @@ where
 
 impl<R> fmt::Debug for Zip<R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Zip").field("dirs", &self.dirs).finish()
+        f.debug_struct("Zip")
+            .field("dirs", &self.dirs)
+            .field("label", &self.label)
+            .finish()
     }
 }
 
