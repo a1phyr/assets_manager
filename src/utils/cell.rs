@@ -247,7 +247,7 @@ impl<U, T: fmt::Debug> fmt::Debug for OnceInitCell<U, T> {
 
 impl<U: Compound, T: Send + Sync + 'static> Compound for OnceInitCell<U, T> {
     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
-        Ok(OnceInitCell::new(cache.load_owned(id)?))
+        Ok(OnceInitCell::new(U::load(cache, id)?))
     }
 
     const HOT_RELOADED: bool = U::HOT_RELOADED;
@@ -255,7 +255,7 @@ impl<U: Compound, T: Send + Sync + 'static> Compound for OnceInitCell<U, T> {
 
 impl<U: Compound, T: Send + Sync + 'static> Compound for OnceInitCell<Option<U>, T> {
     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
-        Ok(OnceInitCell::new(Some(cache.load_owned(id)?)))
+        Ok(OnceInitCell::new(Some(U::load(cache, id)?)))
     }
 
     const HOT_RELOADED: bool = U::HOT_RELOADED;

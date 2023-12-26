@@ -286,7 +286,7 @@ where
     A: Compound,
 {
     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
-        let asset = cache.load_owned::<A>(id)?;
+        let asset = A::load(cache, id)?;
         Ok(Arc::new(asset))
     }
 
