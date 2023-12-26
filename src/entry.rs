@@ -64,14 +64,14 @@ impl<T> EntryKind<T> {
 }
 
 trait Storage: Send + Sync {
-    fn read(&self) -> AssetGuard<'_, dyn Any + Send + Sync>;
+    fn read(&self) -> AssetReadGuard<'_, dyn Any + Send + Sync>;
 
     #[cfg(feature = "hot-reloading")]
     fn write(&self, asset: CacheEntry) -> SharedString;
 }
 
 impl<T: Storable> Storage for EntryKind<T> {
-    fn read(&self) -> AssetGuard<'_, dyn Any + Send + Sync> {
+    fn read(&self) -> AssetReadGuard<'_, dyn Any + Send + Sync> {
         let inner = match self {
             EntryKind::Static(value) => GuardInner::Ref(value as &(dyn Any + Send + Sync)),
             #[cfg(feature = "hot-reloading")]
@@ -80,7 +80,7 @@ impl<T: Storable> Storage for EntryKind<T> {
                 GuardInner::Guard(rw.read())
             }
         };
-        AssetGuard { inner }
+        AssetReadGuard { inner }
     }
 
     #[cfg(feature = "hot-reloading")]
@@ -200,7 +200,7 @@ impl UntypedHandle {
     ///
     /// Returns a RAII guard which will release the lock once dropped.
     #[inline]
-    pub fn read(&self) -> AssetGuard<'_, dyn Any + Send + Sync> {
+    pub fn read(&self) -> AssetReadGuard<'_, dyn Any + Send + Sync> {
         self.inner.kind.read()
     }
 
@@ -291,13 +291,13 @@ impl<T> Handle<T> {
     ///
     /// Returns a RAII guard which will release the lock once dropped.
     #[inline]
-    pub fn read(&self) -> AssetGuard<'_, T> {
+    pub fn read(&self) -> AssetReadGuard<'_, T> {
         let inner = match &self.inner.kind {
             EntryKind::Static(value) => GuardInner::Ref(value),
             #[cfg(feature = "hot-reloading")]
             EntryKind::Dynamic(inner) => GuardInner::Guard(inner.value.read()),
         };
-        AssetGuard { inner }
+        AssetReadGuard { inner }
     }
 
     /// Returns the id of the asset.
@@ -461,11 +461,11 @@ pub enum GuardInner<'a, T: ?Sized> {
 /// This type is a smart pointer to type `A`.
 ///
 /// It can be obtained by calling [`Handle::read`].
-pub struct AssetGuard<'a, A: ?Sized> {
+pub struct AssetReadGuard<'a, A: ?Sized> {
     inner: GuardInner<'a, A>,
 }
 
-impl<A: ?Sized> Deref for AssetGuard<'_, A> {
+impl<A: ?Sized> Deref for AssetReadGuard<'_, A> {
     type Target = A;
 
     #[inline]
@@ -478,7 +478,7 @@ impl<A: ?Sized> Deref for AssetGuard<'_, A> {
     }
 }
 
-impl<A, U> AsRef<U> for AssetGuard<'_, A>
+impl<A, U> AsRef<U> for AssetReadGuard<'_, A>
 where
     A: AsRef<U> + ?Sized,
 {
@@ -488,7 +488,7 @@ where
     }
 }
 
-impl<A> fmt::Display for AssetGuard<'_, A>
+impl<A> fmt::Display for AssetReadGuard<'_, A>
 where
     A: fmt::Display + ?Sized,
 {
@@ -498,7 +498,7 @@ where
     }
 }
 
-impl<A> fmt::Debug for AssetGuard<'_, A>
+impl<A> fmt::Debug for AssetReadGuard<'_, A>
 where
     A: fmt::Debug + ?Sized,
 {

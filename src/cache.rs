@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[cfg(doc)]
-use crate::AssetGuard;
+use crate::AssetReadGuard;
 
 use std::{any::TypeId, fmt, io, path::Path};
 

@@ -9,7 +9,7 @@ use crate::{
 use std::{any::TypeId, cell::RefCell, fmt};
 
 #[cfg(doc)]
-use crate::AssetGuard;
+use crate::AssetReadGuard;
 
 pub(crate) struct AssetMap {
     map: RefCell<HashMap<OwnedKey, CacheEntry>>,
