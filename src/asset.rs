@@ -229,14 +229,6 @@ pub trait Compound: Sized + Send + Sync + 'static {
     /// delegated to [`Asset`]s.
     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError>;
 
-    #[doc(hidden)]
-    fn _load_entry(cache: AnyCache, id: SharedString) -> Result<CacheEntry, Error> {
-        match Self::load(cache, &id) {
-            Ok(asset) => Ok(CacheEntry::new(asset, id, || cache.is_hot_reloaded())),
-            Err(err) => Err(Error::new(id, err)),
-        }
-    }
-
     /// If `false`, disable hot-reloading for assets of this type (`true` by
     /// default). If so, you may want to implement [`NotHotReloaded`] for this
     /// type to enable additional functions.
@@ -245,7 +237,7 @@ pub trait Compound: Sized + Send + Sync + 'static {
     #[doc(hidden)]
     #[inline]
     fn get_type<P: PrivateMarker>() -> crate::key::Type {
-        crate::key::Type::of_compound::<Self>()
+        crate::key::Type::of_asset::<Self>()
     }
 }
 
