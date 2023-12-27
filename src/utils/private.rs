@@ -48,13 +48,13 @@ pub(crate) fn extension_of(path: &Path) -> Option<&str> {
 ///
 /// Using this allows to easily reuse buffers when building several ids in a
 /// row, and thus to avoid repeated allocations.
-#[cfg(any(feature = "zip", feature = "hot-reloading"))]
+#[cfg(any(feature = "tar", feature = "zip", feature = "hot-reloading"))]
 #[derive(Default)]
 pub struct IdBuilder {
     buf: String,
 }
 
-#[cfg(any(feature = "zip", feature = "hot-reloading"))]
+#[cfg(any(feature = "tar", feature = "zip", feature = "hot-reloading"))]
 impl IdBuilder {
     /// Pushs a segment in the builder.
     pub fn push(&mut self, s: &str) -> Option<()> {

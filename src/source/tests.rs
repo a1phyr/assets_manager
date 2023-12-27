@@ -103,6 +103,23 @@ mod embedded {
     test_source!(Embedded::from(RAW));
 }
 
+#[cfg(feature = "tar")]
+mod tar {
+    use super::*;
+
+    test_source!(Tar::open("assets/test/test.tar").unwrap());
+
+    #[test]
+    fn errors() {
+        let tar = Tar::open("assets/test/test.tar").unwrap();
+
+        let err = tar.read("file_name", "ext").unwrap_err();
+        assert!(err.to_string().contains("file_name"));
+        assert!(err.to_string().contains("assets/test/test.tar"));
+        assert!(err.kind() == io::ErrorKind::NotFound);
+    }
+}
+
 #[cfg(feature = "zip-deflate")]
 mod zip {
     use super::*;

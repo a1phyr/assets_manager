@@ -46,6 +46,12 @@ mod embedded;
 #[cfg_attr(docsrs, doc(cfg(feature = "embedded")))]
 pub use embedded::{Embedded, RawEmbedded};
 
+#[cfg(feature = "tar")]
+mod tar;
+#[cfg(feature = "tar")]
+#[cfg_attr(docsrs, doc(cfg(feature = "tar")))]
+pub use self::tar::Tar;
+
 #[cfg(feature = "zip")]
 mod zip;
 #[cfg(feature = "zip")]
