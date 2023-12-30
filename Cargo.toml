@@ -18,7 +18,7 @@ exclude = ["/assets/"]
 
 
 [features]
-default = ["ahash", "parking_lot"]
+default = ["ahash"]
 
 hot-reloading = ["dep:notify", "dep:crossbeam-channel"]
 embedded = ["dep:assets_manager_macros"]
