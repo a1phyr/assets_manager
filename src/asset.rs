@@ -8,26 +8,29 @@
 //!
 //! This crate defines several kinds of assets, that have different use cases:
 //! - The most common, [`Asset`]s, that are loaded from a single file. An
-//!   `Asset` gives a way to get a Rust value from raw bytes.
-//! - [`Compound`] are created by loading other assets and composing them.
+//!   `Asset` gives a way to get a Rust value from raw bytes. This is nothing
+//!   more than sugar on top of `Compound`.
+//! - [`Compound`] are created by loading other assets and composing them. They
+//!   can also read sources directly.
 //! - [`Storable`] is the widest category: everything `'static` type can fit in
 //!   it. Values of types that implement `Storable` can be inserted in a cache,
 //!   but provide no way to construct them.
 //!
 //! Additionnally, [`DirLoadable`] assets can be loaded by directory, eventually
 //! recursively. All `Asset` types implement this trait out of the box, but it
-//! can be extended to work with `Compound`s.
+//! can be extended to work with any `Compound`, though it requires a custom
+//! definition.
 //!
 //! # Hot-reloading
 //!
-//! Different asset kinds have different interactions with hot-reloading:
-//! - `Asset`s are reloaded when the file they were loaded from is edited.
-//! - `Compound`s are reloaded when any asset they depend on to build themselves
-//!   is reloaded.
-//! - Directories are never reloaded (note that individual assets in a directory
-//!   are still reloaded).
+//! Each asset is reloading when any file or directory it reads is modified, or
+//! when a asset it depends on is reloaded itself.
 //!
 //! Additionally, one can explicitly disable hot-reloading for a type.
+//!
+//! Note that hot-reloading is not atomic: if asset `A` depends on `B`, you can
+//! observe a state where `B` is reloaded but `A` is not reloaded yet.
+//! Additionally, if `A` fails to reload, the inconsistent state is kept as is.
 
 #[cfg(feature = "ab_glyph")]
 mod fonts;

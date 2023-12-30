@@ -20,6 +20,7 @@
 //!   enabled by default, but you can do so with the following features:
 //!   - `zip-bzip2`: Enable `bzip2` decompression.
 //!   - `zip-deflate`: Enable `flate2` decompression.
+//! - `tar`: Read assets from TAR archives.
 //!
 //! ### Additional formats
 //!
@@ -32,13 +33,18 @@
 //! - Image formats (with [`image`] crate): `bmp`, `jpeg`, `png` `webp`.
 //! - 3D formats (with [`gltf`] crate): `gltf`.
 //!
+//! ## External crates support
+//!
+//! Support of some other crates is done in external crates:
+//! - [`ggez`](https://github.com/ggez/ggez): [`ggez-assets_manager`](https://crates.io/crates/ggez-assets_manager)
+//! - [`kira`](https://github.com/tesselode/kira): [`assets_manager-kira`](https://crates.io/crates/assets_manager-kira)
+//!
 //! ### Internal features
 //!
-//! These features change inner data structures implementations. They usually
-//! increase performances, and are therefore enabled by default.
+//! These features change inner data structures implementations.
 //!
-//! - [`parking_lot`]: Use improved synchronization primitives.
-//! - [`ahash`]: Use a faster hashing algorithm.
+//! - [`parking_lot`]: Use `parking_lot`'s synchronization primitives.
+//! - [`ahash`]: Use a faster hashing algorithm (enabled by default).
 //!
 //! # Basic example
 //!
@@ -100,14 +106,14 @@
 //!
 //! # Hot-reloading
 //!
-//! Hot-reloading is a major feature of `assets_manager`: when a file is edited,
-//! the values of all loaded assets that depend on this file are automatically
-//! and transparently updated.
+//! Hot-reloading is a major feature of `assets_manager`: when a file is added,
+//! modified or deleted, the values of all loaded assets that depend on this
+//! file are automatically and transparently updated.
 //!
 //! To use hot-reloading, see [`AssetCache::hot_reload`].
 //!
-//! See the [`asset`] module for a precise description of how different assets
-//! interact with hot-reloading.
+//! See the [`asset`] module for a precise description of how assets interact
+//! with hot-reloading.
 //!
 //! # Ownership model
 //!
@@ -128,8 +134,9 @@
 //! ## Getting owned data
 //!
 //! Working with owned data is far easier: you don't have to care about
-//! lifetimes, it can easily be sent to other threads, etc. So, how to get
-//! `'static` data from `Handle` references that borrow from an `AssetCache` ?
+//! lifetimes, it can easily be sent to other threads, etc. This section gives
+//! a few techniques to work with the fact that caches give references to their
+//! assets.
 //!
 //! Note that none of these proposals is compulsory to use this crate: you can
 //! work with non-`'static` data, or invent your own techniques.
@@ -137,9 +144,9 @@
 //! ### Getting a `&'static AssetCache`
 //!
 //! Because the lifetime of a `Handle` reference is tied to that of the `&AssetCache`,
-//! this makes possible to get `'static` `Handle`s. Moreover, it enables you to
-//! call [`AssetCache::enhance_hot_reloading`], which is easier to work with and
-//! has better performances than the default solution.
+//! this makes possible to get `&'static Handle`s. Moreover, it enables you to
+//! call [`AssetCache::enhance_hot_reloading`], which is easier to work with
+//! than the default solution.
 //!
 //! You get easily get a `&'static AssetCache`, with the `once_cell` crate or
 //! [`std::sync::OnceLock`], but you can also do it by [leaking a `Box`](Box::leak).
@@ -155,6 +162,8 @@
 //! can take advantage of the fact that `Arc<A>` is an asset if `A` is too and
 //! that cloning an `Arc` is a rather cheap operation.
 //!
+//! Not that this usually does not work wery well with hot-reloading.
+//!
 //! ### Storing `String`s
 //!
 //! Strings are `'static` and easy to work with, and you can use them to load
@@ -165,7 +174,7 @@
 //! If you have to clone them a lot, you may consider changing your `String`
 //! into an `Arc<str>` or a `SharedString` which is cheaper to clone.
 //!
-//! This is the technique internally used by `assets_manager` to store cached
+//! This is the technique internally used by `assets_manager` to store
 //! directories.
 
 #![warn(missing_docs, missing_debug_implementations)]
@@ -205,6 +214,7 @@ pub mod hot_reloading;
 
 mod utils;
 #[cfg(feature = "utils")]
+#[cfg_attr(docsrs, doc(cfg(feature = "utils")))]
 pub use utils::cell::OnceInitCell;
 pub use utils::{SharedBytes, SharedString};
 

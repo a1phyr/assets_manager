@@ -6,6 +6,9 @@ use std::{
     path::{self, Path},
 };
 
+#[cfg(doc)]
+use super::Source;
+
 #[derive(Clone, Hash, PartialEq, Eq)]
 struct FileDesc(SharedString, SharedString);
 
