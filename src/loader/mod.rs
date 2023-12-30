@@ -11,6 +11,9 @@
 //!
 //! [assets]: `crate::Asset`
 
+// These values cannot be constructed.
+#![allow(missing_debug_implementations)]
+
 use crate::{BoxedError, SharedBytes, SharedString};
 
 use std::{
@@ -128,7 +131,6 @@ pub trait Loader<T> {
 ///     type Loader = LoadFrom<IpAddr, ParseLoader>;
 /// }
 /// ```
-#[derive(Debug)]
 pub struct LoadFrom<U, L>(PhantomData<(U, L)>);
 impl<T, U, L> Loader<T> for LoadFrom<U, L>
 where
@@ -148,7 +150,6 @@ pub type LoadFromAsset<A> = LoadFrom<A, <A as crate::Asset>::Loader>;
 ///
 /// This Loader cannot be used to implement the Asset trait, but can be used by
 /// [`LoadFrom`].
-#[derive(Debug)]
 pub struct BytesLoader(());
 impl Loader<Vec<u8>> for BytesLoader {
     #[inline]
@@ -175,7 +176,6 @@ impl Loader<SharedBytes> for BytesLoader {
 ///
 /// This Loader cannot be used to implement the Asset trait, but can be used by
 /// [`LoadFrom`].
-#[derive(Debug)]
 pub struct StringLoader(());
 impl Loader<String> for StringLoader {
     #[inline]
@@ -211,7 +211,6 @@ impl Loader<SharedString> for StringLoader {
 /// `FromStr::Err` meets the requirement.
 ///
 /// See trait [`Loader`] for more informations.
-#[derive(Debug)]
 pub struct ParseLoader(());
 impl<T> Loader<T> for ParseLoader
 where
@@ -225,11 +224,9 @@ where
 }
 
 /// Loads assets used as sounds.
-#[derive(Debug)]
 pub struct SoundLoader(());
 
 /// Loads assets as images.
-#[derive(Debug)]
 pub struct ImageLoader(());
 
 #[cfg(feature = "image")]
@@ -244,7 +241,6 @@ impl Loader<image::DynamicImage> for ImageLoader {
 }
 
 /// Loads glTF assets.
-#[derive(Debug)]
 pub struct GltfLoader(());
 
 #[cfg(feature = "gltf")]
@@ -256,7 +252,6 @@ impl Loader<gltf::Gltf> for GltfLoader {
 }
 
 /// Loads fonts.
-#[derive(Debug)]
 pub struct FontLoader(());
 
 macro_rules! serde_loaders {
@@ -273,7 +268,6 @@ macro_rules! serde_loaders {
             /// See trait [`Loader`] for more informations.
             #[cfg(feature = $feature)]
             #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
-            #[derive(Debug)]
             pub struct $name(());
 
             #[cfg(feature = $feature)]
