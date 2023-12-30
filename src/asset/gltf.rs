@@ -149,15 +149,17 @@ fn load_image_from_buffer(
     mime_type: Option<&str>,
 ) -> Result<image::DynamicImage, BoxedError> {
     let format = match mime_type {
-        Some("image/png") => Some(image::ImageFormat::Png),
-        Some("image/jpeg") => Some(image::ImageFormat::Jpeg),
-        _ => None,
+        Some("image/png") => image::ImageFormat::Png,
+        Some("image/jpeg") => image::ImageFormat::Jpeg,
+        _ => {
+            if let Some(mime) = mime_type {
+                log::warn!("Unknown image MIME type: {mime}");
+            }
+            image::guess_format(buffer)?
+        }
     };
 
-    Ok(match format {
-        Some(format) => image::load_from_memory_with_format(buffer, format),
-        None => image::load_from_memory(buffer),
-    }?)
+    Ok(image::load_from_memory_with_format(buffer, format)?)
 }
 
 fn load_image(
