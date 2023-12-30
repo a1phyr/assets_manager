@@ -175,8 +175,9 @@ where
     #[inline]
     pub fn iter_cached<'h, 'a: 'h>(
         &'h self,
-        cache: AnyCache<'a>,
+        cache: impl crate::AsAnyCache<'a>,
     ) -> impl Iterator<Item = &'a Handle<T>> + 'h {
+        let cache = cache.as_any_cache();
         self.ids().filter_map(move |id| cache.get_cached(id))
     }
 }
@@ -192,8 +193,9 @@ where
     #[inline]
     pub fn iter<'h, 'a: 'h>(
         &'h self,
-        cache: AnyCache<'a>,
+        cache: impl crate::AsAnyCache<'a>,
     ) -> impl ExactSizeIterator<Item = Result<&'a Handle<T>, Error>> + 'h {
+        let cache = cache.as_any_cache();
         self.ids().map(move |id| cache.load(id))
     }
 }
@@ -253,8 +255,9 @@ where
     #[inline]
     pub fn iter_cached<'h, 'a: 'h>(
         &'h self,
-        cache: AnyCache<'a>,
+        cache: impl crate::AsAnyCache<'a>,
     ) -> impl Iterator<Item = &'a Handle<T>> + 'h {
+        let cache = cache.as_any_cache();
         self.ids().filter_map(move |id| cache.get_cached(id))
     }
 }
@@ -270,8 +273,9 @@ where
     #[inline]
     pub fn iter<'h, 'a: 'h>(
         &'h self,
-        cache: AnyCache<'a>,
+        cache: impl crate::AsAnyCache<'a>,
     ) -> impl ExactSizeIterator<Item = Result<&'a Handle<T>, Error>> + 'h {
+        let cache = cache.as_any_cache();
         self.ids().map(move |id| cache.load(id))
     }
 }

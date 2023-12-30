@@ -476,14 +476,20 @@ impl CacheExt for dyn Cache + '_ {
 /// Used to get an `AnyCache` from a type.
 ///
 /// This is useful to make generic functions that can work with any cache type.
-pub trait AsAnyCache {
+pub trait AsAnyCache<'a> {
     /// Converts this type to an `AnyCache`.
-    fn as_any_cache(&self) -> AnyCache<'_>;
+    fn as_any_cache(&self) -> AnyCache<'a>;
 }
 
-impl AsAnyCache for AnyCache<'_> {
+impl<'a> AsAnyCache<'a> for AnyCache<'a> {
     #[inline]
-    fn as_any_cache(&self) -> AnyCache<'_> {
+    fn as_any_cache(&self) -> AnyCache<'a> {
         *self
+    }
+}
+
+impl<'a, T: AsAnyCache<'a>> AsAnyCache<'a> for &'_ T {
+    fn as_any_cache(&self) -> AnyCache<'a> {
+        T::as_any_cache(self)
     }
 }

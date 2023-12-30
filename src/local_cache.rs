@@ -230,10 +230,10 @@ impl<S> LocalAssetCache<S> {
     }
 }
 
-impl<S: Source> crate::AsAnyCache for LocalAssetCache<S> {
+impl<'a, S: Source> crate::AsAnyCache<'a> for &'a LocalAssetCache<S> {
     #[inline]
-    fn as_any_cache(&self) -> AnyCache<'_> {
-        self.as_any_cache()
+    fn as_any_cache(&self) -> AnyCache<'a> {
+        (*self).as_any_cache()
     }
 }
 
