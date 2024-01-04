@@ -5,6 +5,7 @@ use std::{
     fmt, hash, io,
     path::{self, Path},
 };
+use sync_file::SyncFile;
 
 #[cfg(doc)]
 use super::Source;
@@ -166,14 +167,14 @@ fn register_file(
 ///
 /// **Warning**: This will clone the reader each time it is read, so you should
 /// ensure that is cheap to clone (eg *not* `Vec<u8>`).
-pub struct Tar<R> {
+pub struct Tar<R = SyncFile> {
     reader: R,
     files: HashMap<FileDesc, (u64, u64)>,
     dirs: HashMap<SharedString, Vec<OwnedEntry>>,
     label: Option<String>,
 }
 
-impl Tar<sync_file::SyncFile> {
+impl Tar<SyncFile> {
     /// Creates a `Zip` archive backed by the file at the given path.
     #[inline]
     pub fn open<P: AsRef<std::path::Path>>(path: P) -> io::Result<Self> {
@@ -181,7 +182,7 @@ impl Tar<sync_file::SyncFile> {
     }
 
     fn _open(path: &Path) -> io::Result<Self> {
-        let file = sync_file::SyncFile::open(path)?;
+        let file = SyncFile::open(path)?;
         let label = path.display().to_string();
         Self::from_reader_with_label(file, label)
     }
