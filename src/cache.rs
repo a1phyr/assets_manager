@@ -97,13 +97,6 @@ impl crate::anycache::AssetMap for AssetMap {
         unsafe { Some(entry.inner().extend_lifetime()) }
     }
 
-    fn get_entry(&self, id: &str, type_id: TypeId) -> Option<(SharedString, &UntypedHandle)> {
-        let key = BorrowedKey::new_with(id, type_id);
-        let shard = self.get_shard(key).0.read();
-        let (key, entry) = shard.get_key_value(&key as &dyn Key)?;
-        unsafe { Some((key.id.clone(), entry.inner().extend_lifetime())) }
-    }
-
     fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> &UntypedHandle {
         let key = OwnedKey::new_with(id, type_id);
         let shard = &mut *self.get_shard(key.borrow()).0.write();

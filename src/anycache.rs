@@ -252,8 +252,6 @@ impl fmt::Debug for AnyCache<'_> {
 pub(crate) trait AssetMap {
     fn get(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle>;
 
-    fn get_entry(&self, id: &str, type_id: TypeId) -> Option<(SharedString, &UntypedHandle)>;
-
     fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> &UntypedHandle;
 
     fn contains_key(&self, id: &str, type_id: TypeId) -> bool;
@@ -334,8 +332,8 @@ impl<T: RawCache> Cache for T {
         #[cfg(feature = "hot-reloading")]
         if typ.is_hot_reloaded() {
             if let Some(reloader) = self.reloader() {
-                let (id, entry) = match self.assets().get_entry(id, typ.type_id) {
-                    Some((id, entry)) => (id, Some(entry)),
+                let (id, entry) = match self.assets().get(id, typ.type_id) {
+                    Some(entry) => (entry.id().clone(), Some(entry)),
                     None => (id.into(), None),
                 };
                 records::add_record(reloader, id, typ.type_id);
