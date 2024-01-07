@@ -159,7 +159,7 @@
 //!
 //! Assets being `'static` themselves, cloning them is a good way to opt out of
 //! the lifetime of the cache. If cloning the asset itself is too expensive, you
-//! can take advantage of the fact that `Arc<A>` is an asset if `A` is too and
+//! can take advantage of the fact that `Arc<T>` is an asset if `T` is too and
 //! that cloning an `Arc` is a rather cheap operation.
 //!
 //! Not that this usually does not work wery well with hot-reloading.

@@ -377,60 +377,60 @@ impl<T> Handle<T> {
     }
 }
 
-impl<A> Handle<A>
+impl<T> Handle<T>
 where
-    A: NotHotReloaded,
+    T: NotHotReloaded,
 {
     /// Returns a reference to the underlying asset.
     ///
     /// This method only works if hot-reloading is disabled for the given type.
     #[inline]
     #[allow(clippy::let_unit_value)]
-    pub fn get(&self) -> &A {
-        let _ = A::_CHECK_NOT_HOT_RELOADED;
+    pub fn get(&self) -> &T {
+        let _ = T::_CHECK_NOT_HOT_RELOADED;
 
         self.either(
             |value| value,
             |_| {
                 panic!(
                     "`{}` implements `NotHotReloaded` but do not disable hot-reloading",
-                    type_name::<A>()
+                    type_name::<T>()
                 )
             },
         )
     }
 }
 
-impl<A> Handle<A>
+impl<T> Handle<T>
 where
-    A: Copy,
+    T: Copy,
 {
     /// Returns a copy of the inner asset.
     ///
     /// This is functionnally equivalent to `cloned`, but it ensures that no
     /// expensive operation is used (eg if a type is refactored).
     #[inline]
-    pub fn copied(&self) -> A {
+    pub fn copied(&self) -> T {
         *self.read()
     }
 }
 
-impl<A> Handle<A>
+impl<T> Handle<T>
 where
-    A: Clone,
+    T: Clone,
 {
     /// Returns a clone of the inner asset.
     #[inline]
-    pub fn cloned(&self) -> A {
+    pub fn cloned(&self) -> T {
         self.read().clone()
     }
 }
 
 #[cfg(feature = "serde")]
 #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
-impl<A> serde::Serialize for Handle<A>
+impl<T> serde::Serialize for Handle<T>
 where
-    A: serde::Serialize,
+    T: serde::Serialize,
 {
     #[inline]
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
@@ -438,9 +438,9 @@ where
     }
 }
 
-impl<A> fmt::Debug for Handle<A>
+impl<T> fmt::Debug for Handle<T>
 where
-    A: fmt::Debug,
+    T: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Handle")
@@ -458,18 +458,18 @@ pub enum GuardInner<'a, T: ?Sized> {
 
 /// RAII guard used to keep a read lock on an asset and release it when dropped.
 ///
-/// This type is a smart pointer to type `A`.
+/// This type is a smart pointer to type `T`.
 ///
 /// It can be obtained by calling [`Handle::read`].
-pub struct AssetReadGuard<'a, A: ?Sized> {
-    inner: GuardInner<'a, A>,
+pub struct AssetReadGuard<'a, T: ?Sized> {
+    inner: GuardInner<'a, T>,
 }
 
-impl<A: ?Sized> Deref for AssetReadGuard<'_, A> {
-    type Target = A;
+impl<T: ?Sized> Deref for AssetReadGuard<'_, T> {
+    type Target = T;
 
     #[inline]
-    fn deref(&self) -> &A {
+    fn deref(&self) -> &T {
         match &self.inner {
             GuardInner::Ref(r) => r,
             #[cfg(feature = "hot-reloading")]
@@ -478,9 +478,9 @@ impl<A: ?Sized> Deref for AssetReadGuard<'_, A> {
     }
 }
 
-impl<A, U> AsRef<U> for AssetReadGuard<'_, A>
+impl<T, U> AsRef<U> for AssetReadGuard<'_, T>
 where
-    A: AsRef<U> + ?Sized,
+    T: AsRef<U> + ?Sized,
 {
     #[inline]
     fn as_ref(&self) -> &U {
@@ -488,9 +488,9 @@ where
     }
 }
 
-impl<A> fmt::Display for AssetReadGuard<'_, A>
+impl<T> fmt::Display for AssetReadGuard<'_, T>
 where
-    A: fmt::Display + ?Sized,
+    T: fmt::Display + ?Sized,
 {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -498,9 +498,9 @@ where
     }
 }
 
-impl<A> fmt::Debug for AssetReadGuard<'_, A>
+impl<T> fmt::Debug for AssetReadGuard<'_, T>
 where
-    A: fmt::Debug + ?Sized,
+    T: fmt::Debug + ?Sized,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&**self, f)

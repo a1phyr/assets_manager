@@ -85,7 +85,7 @@ impl<'a> AnyCache<'a> {
     /// - Loaded data could not be converted properly
     /// - The asset has no extension
     #[inline]
-    pub fn load<A: Compound>(self, id: &str) -> Result<&'a Handle<A>, Error> {
+    pub fn load<T: Compound>(self, id: &str) -> Result<&'a Handle<T>, Error> {
         self.cache._load(id)
     }
 
@@ -97,7 +97,7 @@ impl<'a> AnyCache<'a> {
     ///
     /// [`load`]: `Self::load`
     #[inline]
-    pub fn load_expect<A: Compound>(self, id: &str) -> &'a Handle<A> {
+    pub fn load_expect<T: Compound>(self, id: &str) -> &'a Handle<T> {
         self.cache._load_expect(id)
     }
 
@@ -109,7 +109,7 @@ impl<'a> AnyCache<'a> {
     /// This function does not attempt to load the value from the source if it
     /// is not found in the cache.
     #[inline]
-    pub fn get_cached<A: Storable>(self, id: &str) -> Option<&'a Handle<A>> {
+    pub fn get_cached<T: Storable>(self, id: &str) -> Option<&'a Handle<T>> {
         self.cache._get_cached(id)
     }
 
@@ -123,14 +123,14 @@ impl<'a> AnyCache<'a> {
     ///
     /// As for `get_cached`, non-assets types must be marked with [`Storable`].
     #[inline]
-    pub fn get_or_insert<A: Storable>(self, id: &str, default: A) -> &'a Handle<A> {
+    pub fn get_or_insert<T: Storable>(self, id: &str, default: T) -> &'a Handle<T> {
         self.cache._get_or_insert(id, default)
     }
 
     /// Returns `true` if the cache contains the specified asset.
     #[inline]
-    pub fn contains<A: Storable>(self, id: &str) -> bool {
-        self.cache._contains::<A>(id)
+    pub fn contains<T: Storable>(self, id: &str) -> bool {
+        self.cache._contains::<T>(id)
     }
 
     /// Loads a directory.
@@ -146,11 +146,11 @@ impl<'a> AnyCache<'a> {
     /// An error is returned if the given id does not match a valid readable
     /// directory.
     #[inline]
-    pub fn load_dir<A: DirLoadable>(
+    pub fn load_dir<T: DirLoadable>(
         self,
         id: &str,
-    ) -> Result<&'a Handle<crate::Directory<A>>, Error> {
-        self.load::<crate::Directory<A>>(id)
+    ) -> Result<&'a Handle<crate::Directory<T>>, Error> {
+        self.load::<crate::Directory<T>>(id)
     }
 
     /// Loads a directory and its subdirectories.
@@ -169,11 +169,11 @@ impl<'a> AnyCache<'a> {
     /// When loading a directory recursively, directories that can't be read are
     /// ignored.
     #[inline]
-    pub fn load_rec_dir<A: DirLoadable>(
+    pub fn load_rec_dir<T: DirLoadable>(
         self,
         id: &str,
-    ) -> Result<&'a Handle<crate::RecursiveDirectory<A>>, Error> {
-        self.load::<crate::RecursiveDirectory<A>>(id)
+    ) -> Result<&'a Handle<crate::RecursiveDirectory<T>>, Error> {
+        self.load::<crate::RecursiveDirectory<T>>(id)
     }
 
     /// Loads an owned version of an asset.
@@ -185,7 +185,7 @@ impl<'a> AnyCache<'a> {
     ///
     /// This can be useful if you need ownership on a non-clonable value.
     #[inline]
-    pub fn load_owned<A: Compound>(self, id: &str) -> Result<A, Error> {
+    pub fn load_owned<T: Compound>(self, id: &str) -> Result<T, Error> {
         self.cache._load_owned(id)
     }
 
@@ -396,25 +396,25 @@ pub(crate) trait CacheExt: Cache {
     }
 
     #[inline]
-    fn _get_cached<A: Storable>(&self, id: &str) -> Option<&Handle<A>> {
-        Some(self._get_cached_entry::<A>(id)?.downcast_ref_ok())
+    fn _get_cached<T: Storable>(&self, id: &str) -> Option<&Handle<T>> {
+        Some(self._get_cached_entry::<T>(id)?.downcast_ref_ok())
     }
 
     #[inline]
-    fn _get_cached_entry<A: Storable>(&self, id: &str) -> Option<&UntypedHandle> {
-        self.get_cached_entry_inner(id, Type::of::<A>())
+    fn _get_cached_entry<T: Storable>(&self, id: &str) -> Option<&UntypedHandle> {
+        self.get_cached_entry_inner(id, Type::of::<T>())
     }
 
     #[cold]
-    fn add_any<A: Storable>(&self, id: &str, asset: A) -> &UntypedHandle {
+    fn add_any<T: Storable>(&self, id: &str, asset: T) -> &UntypedHandle {
         let [id, id_clone] = SharedString::n_from_str(id);
         let entry = CacheEntry::new(asset, id_clone, || self._has_reloader());
 
-        self.insert(id, TypeId::of::<A>(), entry)
+        self.insert(id, TypeId::of::<T>(), entry)
     }
 
-    fn _get_or_insert<A: Storable>(&self, id: &str, default: A) -> &Handle<A> {
-        let entry = match self._get_cached_entry::<A>(id) {
+    fn _get_or_insert<T: Storable>(&self, id: &str, default: T) -> &Handle<T> {
+        let entry = match self._get_cached_entry::<T>(id) {
             Some(entry) => entry,
             None => self.add_any(id, default),
         };
@@ -423,18 +423,18 @@ pub(crate) trait CacheExt: Cache {
     }
 
     #[inline]
-    fn _contains<A: Storable>(&self, id: &str) -> bool {
-        self.contains(id, TypeId::of::<A>())
+    fn _contains<T: Storable>(&self, id: &str) -> bool {
+        self.contains(id, TypeId::of::<T>())
     }
 
-    fn _load<A: Compound>(&self, id: &str) -> Result<&Handle<A>, Error> {
-        let entry = self.load_entry(id, Type::of::<A>())?;
+    fn _load<T: Compound>(&self, id: &str) -> Result<&Handle<T>, Error> {
+        let entry = self.load_entry(id, Type::of::<T>())?;
         Ok(entry.downcast_ref_ok())
     }
 
     #[inline]
     #[track_caller]
-    fn _load_expect<A: Compound>(&self, id: &str) -> &Handle<A> {
+    fn _load_expect<T: Compound>(&self, id: &str) -> &Handle<T> {
         #[cold]
         #[track_caller]
         fn expect_failed(err: Error) -> ! {
@@ -453,8 +453,8 @@ pub(crate) trait CacheExt: Cache {
     }
 
     #[inline]
-    fn _load_owned<A: Compound>(&self, id: &str) -> Result<A, Error> {
-        let entry = self.load_owned_entry(id, Type::of::<A>())?;
+    fn _load_owned<T: Compound>(&self, id: &str) -> Result<T, Error> {
+        let entry = self.load_owned_entry(id, Type::of::<T>())?;
         Ok(entry.into_inner().0)
     }
 }

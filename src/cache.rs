@@ -282,7 +282,7 @@ impl<S: Source> AssetCache<S> {
     ///
     /// See [`AnyCache::load`] for more details.
     #[inline]
-    pub fn load<A: Compound>(&self, id: &str) -> Result<&Handle<A>, Error> {
+    pub fn load<T: Compound>(&self, id: &str) -> Result<&Handle<T>, Error> {
         self._load(id)
     }
 
@@ -291,7 +291,7 @@ impl<S: Source> AssetCache<S> {
     /// See [`AnyCache::load_expect`] for more details.
     #[inline]
     #[track_caller]
-    pub fn load_expect<A: Compound>(&self, id: &str) -> &Handle<A> {
+    pub fn load_expect<T: Compound>(&self, id: &str) -> &Handle<T> {
         self._load_expect(id)
     }
 
@@ -299,7 +299,7 @@ impl<S: Source> AssetCache<S> {
     ///
     /// See [`AnyCache::get_cached`] for more details.
     #[inline]
-    pub fn get_cached<A: Storable>(&self, id: &str) -> Option<&Handle<A>> {
+    pub fn get_cached<T: Storable>(&self, id: &str) -> Option<&Handle<T>> {
         self._get_cached(id)
     }
 
@@ -307,7 +307,7 @@ impl<S: Source> AssetCache<S> {
     ///
     /// See [`AnyCache::get_or_insert`] for more details.
     #[inline]
-    pub fn get_or_insert<A: Storable>(&self, id: &str, default: A) -> &Handle<A> {
+    pub fn get_or_insert<T: Storable>(&self, id: &str, default: T) -> &Handle<T> {
         self._get_or_insert(id, default)
     }
 
@@ -315,37 +315,37 @@ impl<S: Source> AssetCache<S> {
     ///
     /// See [`AnyCache::contains`] for more details.
     #[inline]
-    pub fn contains<A: Storable>(&self, id: &str) -> bool {
-        self.assets.contains_key(id, TypeId::of::<A>())
+    pub fn contains<T: Storable>(&self, id: &str) -> bool {
+        self.assets.contains_key(id, TypeId::of::<T>())
     }
 
     /// Loads a directory.
     ///
     /// See [`AnyCache::load_dir`] for more details.
     #[inline]
-    pub fn load_dir<A: DirLoadable>(
+    pub fn load_dir<T: DirLoadable>(
         &self,
         id: &str,
-    ) -> Result<&Handle<crate::Directory<A>>, Error> {
-        self.load::<crate::Directory<A>>(id)
+    ) -> Result<&Handle<crate::Directory<T>>, Error> {
+        self.load::<crate::Directory<T>>(id)
     }
 
     /// Loads a directory.
     ///
     /// See [`AnyCache::load_dir`] for more details.
     #[inline]
-    pub fn load_rec_dir<A: DirLoadable>(
+    pub fn load_rec_dir<T: DirLoadable>(
         &self,
         id: &str,
-    ) -> Result<&Handle<crate::RecursiveDirectory<A>>, Error> {
-        self.load::<crate::RecursiveDirectory<A>>(id)
+    ) -> Result<&Handle<crate::RecursiveDirectory<T>>, Error> {
+        self.load::<crate::RecursiveDirectory<T>>(id)
     }
 
     /// Loads an owned version of an asset.
     ///
     /// See [`AnyCache::load_owned`] for more details.
     #[inline]
-    pub fn load_owned<A: Compound>(&self, id: &str) -> Result<A, Error> {
+    pub fn load_owned<T: Compound>(&self, id: &str) -> Result<T, Error> {
         self._load_owned(id)
     }
 
@@ -363,16 +363,16 @@ impl<S: Source> AssetCache<S> {
     /// Note that you need a mutable reference to the cache, so you cannot have
     /// any [`Handle`], [`AssetReadGuard`], etc when you call this function.
     #[inline]
-    pub fn remove<A: Storable>(&mut self, id: &str) -> bool {
-        self.assets.remove(id, TypeId::of::<A>())
+    pub fn remove<T: Storable>(&mut self, id: &str) -> bool {
+        self.assets.remove(id, TypeId::of::<T>())
     }
 
     /// Takes ownership on a cached asset.
     ///
     /// The corresponding asset is removed from the cache.
     #[inline]
-    pub fn take<A: Storable>(&mut self, id: &str) -> Option<A> {
-        let (asset, _) = self.assets.take(id, TypeId::of::<A>())?.into_inner();
+    pub fn take<T: Storable>(&mut self, id: &str) -> Option<T> {
+        let (asset, _) = self.assets.take(id, TypeId::of::<T>())?.into_inner();
         Some(asset)
     }
 

@@ -144,7 +144,7 @@ where
 }
 
 /// Loads assets from another asset.
-pub type LoadFromAsset<A> = LoadFrom<A, <A as crate::Asset>::Loader>;
+pub type LoadFromAsset<T> = LoadFrom<T, <T as crate::Asset>::Loader>;
 
 /// Loads assets as raw bytes.
 ///

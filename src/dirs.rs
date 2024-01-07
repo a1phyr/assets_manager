@@ -91,16 +91,16 @@ pub trait DirLoadable: Send + Sync + 'static {
     }
 }
 
-impl<A> DirLoadable for A
+impl<T> DirLoadable for T
 where
-    A: Asset,
+    T: Asset,
 {
     #[inline]
     fn select_ids(cache: AnyCache, id: &SharedString) -> io::Result<Vec<SharedString>> {
         fn inner(cache: AnyCache, id: &str, extensions: &[&str]) -> io::Result<Vec<SharedString>> {
             let mut ids = Vec::new();
 
-            // Select all files with an extension valid for type `A`
+            // Select all files with an extension valid for type `T`
             cache.raw_source().read_dir(id, &mut |entry| {
                 if let DirEntry::File(id, ext) = entry {
                     if extensions.contains(&ext) {
@@ -112,22 +112,22 @@ where
             Ok(ids)
         }
 
-        inner(cache, id, A::EXTENSIONS)
+        inner(cache, id, T::EXTENSIONS)
     }
 }
 
-impl<A> DirLoadable for std::sync::Arc<A>
+impl<T> DirLoadable for std::sync::Arc<T>
 where
-    A: DirLoadable,
+    T: DirLoadable,
 {
     #[inline]
     fn select_ids(cache: AnyCache, id: &SharedString) -> io::Result<Vec<SharedString>> {
-        A::select_ids(cache, id)
+        T::select_ids(cache, id)
     }
 
     #[inline]
     fn sub_directories(cache: AnyCache, id: &SharedString, f: impl FnMut(&str)) -> io::Result<()> {
-        A::sub_directories(cache, id, f)
+        T::sub_directories(cache, id, f)
     }
 }
 

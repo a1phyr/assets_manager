@@ -45,26 +45,26 @@ pub struct Type {
 }
 
 impl Type {
-    /// Creates an `AssetType` for type `A`.
+    /// Creates an `AssetType` for type `T`.
     #[inline]
-    pub(crate) fn of_asset<A: Compound>() -> Self {
+    pub(crate) fn of_asset<T: Compound>() -> Self {
         Self {
-            type_id: TypeId::of::<A>(),
-            inner: Inner::of_asset::<A>(),
+            type_id: TypeId::of::<T>(),
+            inner: Inner::of_asset::<T>(),
         }
     }
 
     #[inline]
-    pub(crate) fn of_storable<A: Storable>() -> Self {
+    pub(crate) fn of_storable<T: Storable>() -> Self {
         Self {
-            type_id: TypeId::of::<A>(),
-            inner: Inner::of_storable::<A>(),
+            type_id: TypeId::of::<T>(),
+            inner: Inner::of_storable::<T>(),
         }
     }
 
     #[inline]
-    pub fn of<A: Storable>() -> Self {
-        A::get_type::<utils::Private>()
+    pub fn of<T: Storable>() -> Self {
+        T::get_type::<utils::Private>()
     }
 
     #[inline]

@@ -183,27 +183,27 @@ pub trait Asset: Sized + Send + Sync + 'static {
     const HOT_RELOADED: bool = true;
 }
 
-pub(crate) fn load_from_source<A: Asset>(
+pub(crate) fn load_from_source<T: Asset>(
     source: impl Source,
     id: &SharedString,
-) -> Result<A, BoxedError> {
-    let load_with_ext = |ext| -> Result<A, ErrorKind> {
+) -> Result<T, BoxedError> {
+    let load_with_ext = |ext| -> Result<T, ErrorKind> {
         let asset = source
             .read(id, ext)?
-            .with_cow(|content| A::Loader::load(content, ext))?;
+            .with_cow(|content| T::Loader::load(content, ext))?;
         Ok(asset)
     };
 
     let mut error = ErrorKind::NoDefaultValue;
 
-    for ext in A::EXTENSIONS {
+    for ext in T::EXTENSIONS {
         match load_with_ext(ext) {
             Err(err) => error = err.or(error),
             Ok(asset) => return Ok(asset),
         }
     }
 
-    A::default_value(id, error.into())
+    T::default_value(id, error.into())
 }
 
 /// An asset type that can load other kinds of assets.
@@ -266,9 +266,9 @@ pub(crate) fn load_and_record(
     (typ.inner.load)(cache, id)
 }
 
-impl<A> Compound for A
+impl<T> Compound for T
 where
-    A: Asset,
+    T: Asset,
 {
     #[inline]
     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
@@ -284,19 +284,19 @@ where
     }
 }
 
-impl<A> Compound for Arc<A>
+impl<T> Compound for Arc<T>
 where
-    A: Compound,
+    T: Compound,
 {
     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
-        let asset = A::load(cache, id)?;
+        let asset = T::load(cache, id)?;
         Ok(Arc::new(asset))
     }
 
-    const HOT_RELOADED: bool = A::HOT_RELOADED;
+    const HOT_RELOADED: bool = T::HOT_RELOADED;
 }
 
-impl<A> NotHotReloaded for Arc<A> where A: Compound + NotHotReloaded {}
+impl<T> NotHotReloaded for Arc<T> where T: Compound + NotHotReloaded {}
 
 /// Mark a type as not being hot-reloaded.
 ///
@@ -341,7 +341,7 @@ pub trait Storable: Sized + Send + Sync + 'static {
     /// impl NotHotReloaded for A {}
     ///
     /// let cache = AssetCache::new("assets")?;
-    /// let handle = cache.load::<A>("tests")?;
+    /// let handle = cache.load::<T>("tests")?;
     /// let _ = handle.get();
     /// # Ok::<(), assets_manager::BoxedError>(())
     /// ```
@@ -354,12 +354,12 @@ pub trait Storable: Sized + Send + Sync + 'static {
     }
 }
 
-impl<A> Storable for A
+impl<T> Storable for T
 where
-    A: Compound,
+    T: Compound,
 {
     #[doc(hidden)]
-    const HOT_RELOADED: bool = A::HOT_RELOADED;
+    const HOT_RELOADED: bool = T::HOT_RELOADED;
 
     #[inline]
     fn get_type<P: PrivateMarker>() -> crate::key::Type {
@@ -398,10 +398,10 @@ impl_storable! {
     SharedBytes,
 }
 
-impl<A: Send + Sync + 'static> Storable for Vec<A> {}
-impl<A: Send + Sync + 'static> NotHotReloaded for Vec<A> {}
-impl<A: Send + Sync + 'static> Storable for &'static [A] {}
-impl<A: Send + Sync + 'static> NotHotReloaded for &'static [A] {}
+impl<T: Send + Sync + 'static> Storable for Vec<T> {}
+impl<T: Send + Sync + 'static> NotHotReloaded for Vec<T> {}
+impl<T: Send + Sync + 'static> Storable for &'static [T] {}
+impl<T: Send + Sync + 'static> NotHotReloaded for &'static [T] {}
 
 macro_rules! serde_assets {
     (
