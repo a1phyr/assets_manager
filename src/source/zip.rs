@@ -192,24 +192,6 @@ impl<T: AsRef<[u8]>> Zip<io::Cursor<T>> {
     }
 }
 
-impl<'a> Zip<io::Cursor<&'a [u8]>> {
-    /// Creates a `Zip` archive backed by a byte buffer in memory.
-    #[deprecated = "use `from_bytes` instead"]
-    #[inline]
-    pub fn from_slice(bytes: &'a [u8]) -> io::Result<Self> {
-        Self::from_bytes(bytes)
-    }
-
-    /// Creates a `Zip` archive backed by a byte buffer in memory.
-    ///
-    /// An additionnal label that will be used in errors can be added.
-    #[deprecated = "use `from_bytes_with_label` instead"]
-    #[inline]
-    pub fn from_slice_with_label(bytes: &'a [u8], label: String) -> io::Result<Self> {
-        Self::from_bytes_with_label(bytes, label)
-    }
-}
-
 impl<R> Zip<R>
 where
     R: io::Read + io::Seek,
