@@ -35,6 +35,7 @@
 #[cfg(feature = "ab_glyph")]
 mod fonts;
 #[cfg(feature = "gltf")]
+#[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
 mod gltf;
 
 #[cfg(test)]
