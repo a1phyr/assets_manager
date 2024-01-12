@@ -1,7 +1,7 @@
 use super::{DirEntry, Source};
 use crate::{
     utils::{extension_of, HashMap, IdBuilder},
-    SharedBytes, SharedString,
+    SharedString,
 };
 
 use std::{
@@ -172,45 +172,41 @@ impl Zip<SyncFile> {
     #[inline]
     fn _open(path: &Path) -> io::Result<Self> {
         let file = SyncFile::open(path)?;
-        Zip::from_reader_with_label(file, path.display().to_string())
+        Self::from_reader_with_label(file, path.display().to_string())
     }
 }
 
-impl Zip<io::Cursor<SharedBytes>> {
+impl<T: AsRef<[u8]>> Zip<io::Cursor<T>> {
     /// Creates a `Zip` archive backed by a byte buffer in memory.
-    ///
-    /// If you want to use another kind of byte buffer (such as `&[u8]`), you
-    /// can use `from_reader`.
     #[inline]
-    pub fn from_bytes(bytes: SharedBytes) -> io::Result<Self> {
-        Zip::from_reader(io::Cursor::new(bytes))
+    pub fn from_bytes(bytes: T) -> io::Result<Self> {
+        Self::from_reader(io::Cursor::new(bytes))
     }
 
     /// Creates a `Zip` archive backed by a byte buffer in memory.
     ///
     /// An additionnal label that will be used in errors can be added.
     #[inline]
-    pub fn from_bytes_with_label(bytes: SharedBytes, label: String) -> io::Result<Self> {
-        Zip::from_reader_with_label(io::Cursor::new(bytes), label)
+    pub fn from_bytes_with_label(bytes: T, label: String) -> io::Result<Self> {
+        Self::from_reader_with_label(io::Cursor::new(bytes), label)
     }
 }
 
 impl<'a> Zip<io::Cursor<&'a [u8]>> {
     /// Creates a `Zip` archive backed by a byte buffer in memory.
-    ///
-    /// If you want to use another kind of byte buffer (such as `Arc<[u8]>`),
-    /// you can use `from_reader`.
+    #[deprecated = "use `from_bytes` instead"]
     #[inline]
     pub fn from_slice(bytes: &'a [u8]) -> io::Result<Self> {
-        Zip::from_reader(io::Cursor::new(bytes))
+        Self::from_bytes(bytes)
     }
 
     /// Creates a `Zip` archive backed by a byte buffer in memory.
     ///
     /// An additionnal label that will be used in errors can be added.
+    #[deprecated = "use `from_bytes_with_label` instead"]
     #[inline]
     pub fn from_slice_with_label(bytes: &'a [u8], label: String) -> io::Result<Self> {
-        Zip::from_reader_with_label(io::Cursor::new(bytes), label)
+        Self::from_bytes_with_label(bytes, label)
     }
 }
 
