@@ -21,7 +21,8 @@ exclude = ["/assets/"]
 default = ["ahash"]
 
 hot-reloading = ["dep:notify", "dep:crossbeam-channel"]
-embedded = ["dep:assets_manager_macros"]
+macros = ["dep:assets_manager_macros"]
+embedded = ["macros"]
 utils = ["dep:once_cell"]
 
 zip = ["dep:zip", "dep:sync_file"]

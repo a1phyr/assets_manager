@@ -7,8 +7,8 @@
 //!
 //! # Cargo features
 //!
-//! - `hot-reloading`: Add hot-reloading
-//!
+//! - `hot-reloading`: Add hot-reloading.
+//! - `macros`: Add support for deriving `Asset` trait.
 //!
 //! ### Additional sources
 //!
@@ -217,6 +217,62 @@ mod utils;
 #[cfg_attr(docsrs, doc(cfg(feature = "utils")))]
 pub use utils::cell::OnceInitCell;
 pub use utils::{SharedBytes, SharedString};
+
+/// Implements [`Asset`] for a type.
+///
+/// Note that the type must implement the right traits for it to work (eg
+/// `serde::Deserialize` or `std::str::FromStr`).
+///
+/// # Supported formats
+///
+/// - `"json"`: Use [`loader::JsonLoader`] and extension `.json`
+/// - `"ron"`: Use [`loader::RonLoader`] and extension `.ron`
+/// - `"toml"`: Use [`loader::TomlLoader`] and extension `.toml`
+/// - `"txt"`: Use [`loader::ParseLoader`] and extension `.txt`
+/// - `"yaml"` or `"yml"`: Use [`loader::YamlLoader`] and extensions `.yaml` and `.yml`
+///
+/// # Example
+///
+/// ```rust
+/// # cfg_if::cfg_if! { if #[cfg(feature = "ron")] {
+/// # use assets_manager::{Asset, AssetCache, BoxedError};
+/// // Define a type loaded as ron
+/// #[derive(Asset, serde::Deserialize)]
+/// #[asset_format = "ron"]
+/// struct Point {
+///     x: i32,
+///     y: i32,
+/// }
+///
+/// // Define a type loaded as text
+/// #[derive(Asset)]
+/// #[asset_format = "txt"]
+/// struct Name(String);
+///
+/// impl std::str::FromStr for Name {
+///     type Err = BoxedError;
+///
+///     fn from_str(s: &str) -> Result<Self, BoxedError> {
+///         Ok(Self(String::from(s)))
+///     }
+/// }
+///
+/// let cache = AssetCache::new("assets")?;
+///
+/// // Load "assets/common/position.ron"
+/// let position = cache.load::<Point>("common.position")?;
+/// assert_eq!(position.read().x, 5);
+/// assert_eq!(position.read().y, -6);
+///
+/// // Load "assets/common/name.txt"
+/// let name = cache.load::<Name>("common.name")?;
+/// assert_eq!(name.read().0, "Aragorn");
+/// # }}
+/// # Ok::<(), assets_manager::BoxedError>(())
+/// ```
+#[cfg_attr(docsrs, doc(cfg(feature = "macros")))]
+#[cfg(feature = "macros")]
+pub use assets_manager_macros::Asset;
 
 #[cfg(test)]
 mod tests;
