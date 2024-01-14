@@ -214,6 +214,20 @@ pub struct UntypedHandle {
 }
 
 impl UntypedHandle {
+    #[inline]
+    fn either<'a, U>(
+        &'a self,
+        on_static: impl FnOnce() -> U,
+        _on_dynamic: impl FnOnce(&'a Dynamic) -> U,
+    ) -> U {
+        #[cfg(feature = "hot-reloading")]
+        if let Some(d) = &self.inner.dynamic {
+            return _on_dynamic(d);
+        }
+
+        on_static()
+    }
+
     /// Locks the pointed asset for reading.
     ///
     /// If `T` implements `NotHotReloaded` or if hot-reloading is disabled, no
@@ -257,6 +271,40 @@ impl UntypedHandle {
             Some(h) => h,
             None => wrong_handle_type(),
         }
+    }
+
+    /// Returns a `ReloadWatcher` that can be used to check whether this asset
+    /// was reloaded.
+    ///
+    /// See [`Handle::reload_watcher`] for details.
+    #[inline]
+    pub fn reload_watcher(&self) -> ReloadWatcher<'_> {
+        ReloadWatcher::new(self.either(|| None, |d| Some(&d.reload)))
+    }
+
+    /// Returns the last `ReloadId` associated with this asset.
+    ///
+    /// It is only meaningful when compared to other `ReloadId`s returned by the
+    /// same handle or to [`ReloadId::NEVER`].
+    #[inline]
+    pub fn last_reload_id(&self) -> ReloadId {
+        self.either(|| ReloadId::NEVER, |this| this.reload.load())
+    }
+
+    /// Returns `true` if the asset has been reloaded since last call to this
+    /// method with **any** handle on this asset.
+    ///
+    /// Note that this method and [`reload_watcher`] are totally independant,
+    /// and the result of the two functions do not depend on whether the other
+    /// was called.
+    ///
+    /// [`reload_watcher`]: Self::reload_watcher
+    #[inline]
+    pub fn reloaded_global(&self) -> bool {
+        self.either(
+            || false,
+            |this| this.reload_global.swap(false, Ordering::Acquire),
+        )
     }
 
     #[cfg(feature = "hot-reloading")]
