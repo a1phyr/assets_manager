@@ -1,7 +1,8 @@
 //! Definitions of cache entries
 
 use std::{
-    any::{type_name, Any, TypeId},
+    any::{Any, TypeId},
+    cell::UnsafeCell,
     fmt,
     marker::PhantomData,
     ops::Deref,
@@ -17,93 +18,72 @@ use crate::{
 #[cfg(feature = "hot-reloading")]
 use crate::utils::RwLockReadGuard;
 
-/// The representation of an asset whose value can be updated (eg through
-/// hot-reloading).
-#[allow(dead_code)]
-pub(crate) struct DynamicStorage<T> {
-    value: RwLock<T>,
-    reload_global: AtomicBool,
-    reload: AtomicReloadId,
-}
-
-#[cfg(feature = "hot-reloading")]
-impl<T> DynamicStorage<T> {
-    #[inline]
-    fn new(value: T) -> Self {
-        Self {
-            value: RwLock::new(value),
-            reload_global: AtomicBool::new(false),
-            reload: AtomicReloadId::new(),
-        }
-    }
-
-    #[inline]
-    pub fn write(&self, value: T) {
-        let mut data = self.value.write();
-        *data = value;
-        self.reload.increment();
-        self.reload_global.store(true, Ordering::Release);
-    }
-}
-
-enum EntryKind<T> {
-    Static(T),
-    #[cfg(feature = "hot-reloading")]
-    Dynamic(DynamicStorage<T>),
-}
-
-impl<T> EntryKind<T> {
-    #[inline]
-    fn into_inner(self) -> T {
-        match self {
-            EntryKind::Static(value) => value,
-            #[cfg(feature = "hot-reloading")]
-            EntryKind::Dynamic(inner) => inner.value.into_inner(),
-        }
-    }
-}
-
 trait Storage: Send + Sync {
-    fn read(&self) -> AssetReadGuard<'_, dyn Any + Send + Sync>;
+    // TODO: Remove this when we have MSRV >= 1.76
+    fn as_dyn_any(&self) -> &(dyn Any + Send + Sync);
 
     #[cfg(feature = "hot-reloading")]
-    fn write(&self, asset: CacheEntry) -> SharedString;
+    fn write(&mut self, asset: CacheEntry) -> SharedString;
 }
 
-impl<T: Storable> Storage for EntryKind<T> {
-    fn read(&self) -> AssetReadGuard<'_, dyn Any + Send + Sync> {
-        let inner = match self {
-            EntryKind::Static(value) => GuardInner::Ref(value as &(dyn Any + Send + Sync)),
-            #[cfg(feature = "hot-reloading")]
-            EntryKind::Dynamic(inner) => {
-                let rw: &RwLock<dyn Any + Send + Sync> = &inner.value;
-                GuardInner::Guard(rw.read())
-            }
-        };
-        AssetReadGuard { inner }
+impl<T: Storable> Storage for T {
+    fn as_dyn_any(&self) -> &(dyn Any + Send + Sync) {
+        self
     }
 
     #[cfg(feature = "hot-reloading")]
-    fn write(&self, asset: CacheEntry) -> SharedString {
+    fn write(&mut self, asset: CacheEntry) -> SharedString {
         let (asset, id) = asset.into_inner();
-        match self {
-            EntryKind::Static(_) => wrong_handle_type(),
-            EntryKind::Dynamic(d) => d.write(asset),
-        }
+        *self = asset;
         id
     }
 }
 
-struct RawEntry<T: ?Sized> {
-    id: SharedString,
-    type_id: TypeId,
-    kind: T,
+#[allow(dead_code)]
+pub(crate) struct Dynamic {
+    lock: RwLock<()>,
+    reload_global: AtomicBool,
+    reload: AtomicReloadId,
 }
 
-type Entry<T> = RawEntry<EntryKind<T>>;
-type UntypedEntry = RawEntry<dyn Storage>;
+struct EntryStorage<T: ?Sized> {
+    id: SharedString,
+    type_id: TypeId,
+    #[cfg(feature = "hot-reloading")]
+    dynamic: Option<Dynamic>,
+    value: UnsafeCell<T>,
+}
+
+unsafe impl<T: Sync + ?Sized> Sync for EntryStorage<T> {}
+
+type Entry<T> = EntryStorage<T>;
+type UntypedEntry = EntryStorage<dyn Storage>;
 
 impl<T: Storable> Entry<T> {
+    fn new_static(id: SharedString, value: T) -> Self {
+        Self {
+            id,
+            type_id: TypeId::of::<T>(),
+            #[cfg(feature = "hot-reloading")]
+            dynamic: None,
+            value: UnsafeCell::new(value),
+        }
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    fn new_dynamic(id: SharedString, value: T) -> Self {
+        Self {
+            id,
+            type_id: TypeId::of::<T>(),
+            dynamic: Some(Dynamic {
+                lock: RwLock::new(()),
+                reload_global: AtomicBool::new(false),
+                reload: AtomicReloadId::new(),
+            }),
+            value: UnsafeCell::new(value),
+        }
+    }
+
     fn handle(&self) -> &Handle<T> {
         unsafe { &*(self as *const Self as *const Handle<T>) }
     }
@@ -113,22 +93,65 @@ impl<T: Storable> Entry<T> {
     }
 }
 
+impl<T: ?Sized> EntryStorage<T> {
+    pub fn get(&self) -> &T {
+        #[cfg(feature = "hot-reloading")]
+        if self.dynamic.is_some() {
+            panic!(
+                "`{}` implements `NotHotReloaded` but do not disable hot-reloading",
+                std::any::type_name::<T>()
+            )
+        }
+
+        unsafe { &*self.value.get() }
+    }
+
+    pub fn read(&self) -> AssetReadGuard<'_, T> {
+        #[cfg(feature = "hot-reloading")]
+        let guard = self.dynamic.as_ref().map(|d| d.lock.read());
+
+        AssetReadGuard {
+            value: unsafe { &*self.value.get() },
+            #[cfg(feature = "hot-reloading")]
+            guard,
+        }
+    }
+}
+
 impl UntypedEntry {
+    #[cfg(feature = "hot-reloading")]
+    pub fn write(&self, value: CacheEntry) -> SharedString {
+        if let Some(d) = &self.dynamic {
+            unsafe {
+                let _g = d.lock.write();
+                let id = (*self.value.get()).write(value);
+                d.reload.increment();
+                d.reload_global.store(true, Ordering::Release);
+                return id;
+            }
+        }
+
+        wrong_handle_type();
+    }
+
+    #[inline]
     fn is<T: 'static>(&self) -> bool {
         self.type_id == TypeId::of::<T>()
     }
 
-    fn downcast_ref<T: 'static>(&self) -> Option<&Entry<T>> {
+    #[inline]
+    fn downcast_ref<T: 'static>(&self) -> Option<&EntryStorage<T>> {
         if self.is::<T>() {
-            unsafe { Some(&*(self as *const Self as *const Entry<T>)) }
+            unsafe { Some(&*(self as *const Self as *const EntryStorage<T>)) }
         } else {
             None
         }
     }
 
-    fn downcast<T: 'static>(self: Box<Self>) -> Result<Box<Entry<T>>, Box<Self>> {
+    #[inline]
+    fn downcast<T: 'static>(self: Box<Self>) -> Result<Box<EntryStorage<T>>, Box<Self>> {
         if self.is::<T>() {
-            unsafe { Ok(Box::from_raw(Box::into_raw(self) as *mut Entry<T>)) }
+            unsafe { Ok(Box::from_raw(Box::into_raw(self) as *mut EntryStorage<T>)) }
         } else {
             Err(self)
         }
@@ -143,20 +166,19 @@ impl CacheEntry {
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new<T: Storable>(asset: T, id: SharedString, _mutable: impl FnOnce() -> bool) -> Self {
+    pub fn new<T: Storable>(value: T, id: SharedString, _mutable: impl FnOnce() -> bool) -> Self {
         #[cfg(not(feature = "hot-reloading"))]
-        let kind = EntryKind::Static(asset);
+        let inner = EntryStorage::new_static(id, value);
 
         // Even if hot-reloading is enabled, we can avoid the lock in some cases.
         #[cfg(feature = "hot-reloading")]
-        let kind = if T::HOT_RELOADED && _mutable() {
-            EntryKind::Dynamic(DynamicStorage::new(asset))
+        let inner = if T::HOT_RELOADED && _mutable() {
+            EntryStorage::new_dynamic(id, value)
         } else {
-            EntryKind::Static(asset)
+            EntryStorage::new_static(id, value)
         };
 
-        let type_id = TypeId::of::<T>();
-        CacheEntry(Box::new(Entry { id, type_id, kind }))
+        CacheEntry(Box::new(inner))
     }
 
     /// Returns a reference on the inner storage of the entry.
@@ -169,7 +191,7 @@ impl CacheEntry {
     #[inline]
     pub fn into_inner<T: Storable>(self) -> (T, SharedString) {
         if let Ok(storage) = self.0.downcast() {
-            return (storage.kind.into_inner(), storage.id);
+            return (storage.value.into_inner(), storage.id);
         }
 
         wrong_handle_type()
@@ -201,7 +223,7 @@ impl UntypedHandle {
     /// Returns a RAII guard which will release the lock once dropped.
     #[inline]
     pub fn read(&self) -> AssetReadGuard<'_, dyn Any + Send + Sync> {
-        self.inner.kind.read()
+        AssetReadGuard::map(self.inner.read(), |x| x.as_dyn_any())
     }
 
     /// Returns the id of the asset.
@@ -239,7 +261,7 @@ impl UntypedHandle {
 
     #[cfg(feature = "hot-reloading")]
     pub(crate) fn write(&self, asset: CacheEntry) -> SharedString {
-        self.inner.kind.write(asset)
+        self.inner.write(asset)
     }
 }
 
@@ -273,14 +295,15 @@ impl<T> Handle<T> {
     #[inline]
     fn either<'a, U>(
         &'a self,
-        on_static: impl FnOnce(&'a T) -> U,
-        _on_dynamic: impl FnOnce(&'a DynamicStorage<T>) -> U,
+        on_static: impl FnOnce() -> U,
+        _on_dynamic: impl FnOnce(&'a Dynamic) -> U,
     ) -> U {
-        match &self.inner.kind {
-            EntryKind::Static(s) => on_static(s),
-            #[cfg(feature = "hot-reloading")]
-            EntryKind::Dynamic(s) => _on_dynamic(s),
+        #[cfg(feature = "hot-reloading")]
+        if let Some(d) = &self.inner.dynamic {
+            return _on_dynamic(d);
         }
+
+        on_static()
     }
 
     /// Locks the pointed asset for reading.
@@ -292,12 +315,7 @@ impl<T> Handle<T> {
     /// Returns a RAII guard which will release the lock once dropped.
     #[inline]
     pub fn read(&self) -> AssetReadGuard<'_, T> {
-        let inner = match &self.inner.kind {
-            EntryKind::Static(value) => GuardInner::Ref(value),
-            #[cfg(feature = "hot-reloading")]
-            EntryKind::Dynamic(inner) => GuardInner::Guard(inner.value.read()),
-        };
-        AssetReadGuard { inner }
+        self.inner.read()
     }
 
     /// Returns the id of the asset.
@@ -348,7 +366,7 @@ impl<T> Handle<T> {
     /// ```
     #[inline]
     pub fn reload_watcher(&self) -> ReloadWatcher<'_> {
-        ReloadWatcher::new(self.either(|_| None, |d| Some(&d.reload)))
+        ReloadWatcher::new(self.either(|| None, |d| Some(&d.reload)))
     }
 
     /// Returns the last `ReloadId` associated with this asset.
@@ -357,7 +375,7 @@ impl<T> Handle<T> {
     /// same handle or to [`ReloadId::NEVER`].
     #[inline]
     pub fn last_reload_id(&self) -> ReloadId {
-        self.either(|_| ReloadId::NEVER, |this| this.reload.load())
+        self.either(|| ReloadId::NEVER, |this| this.reload.load())
     }
 
     /// Returns `true` if the asset has been reloaded since last call to this
@@ -371,7 +389,7 @@ impl<T> Handle<T> {
     #[inline]
     pub fn reloaded_global(&self) -> bool {
         self.either(
-            |_| false,
+            || false,
             |this| this.reload_global.swap(false, Ordering::Acquire),
         )
     }
@@ -388,16 +406,7 @@ where
     #[allow(clippy::let_unit_value)]
     pub fn get(&self) -> &T {
         let _ = T::_CHECK_NOT_HOT_RELOADED;
-
-        self.either(
-            |value| value,
-            |_| {
-                panic!(
-                    "`{}` implements `NotHotReloaded` but do not disable hot-reloading",
-                    type_name::<T>()
-                )
-            },
-        )
+        self.inner.get()
     }
 }
 
@@ -450,19 +459,47 @@ where
     }
 }
 
-pub enum GuardInner<'a, T: ?Sized> {
-    Ref(&'a T),
-    #[cfg(feature = "hot-reloading")]
-    Guard(RwLockReadGuard<'a, T>),
-}
-
 /// RAII guard used to keep a read lock on an asset and release it when dropped.
 ///
 /// This type is a smart pointer to type `T`.
 ///
 /// It can be obtained by calling [`Handle::read`].
 pub struct AssetReadGuard<'a, T: ?Sized> {
-    inner: GuardInner<'a, T>,
+    value: &'a T,
+
+    #[cfg(feature = "hot-reloading")]
+    guard: Option<RwLockReadGuard<'a, ()>>,
+}
+
+impl<'a, T: ?Sized> AssetReadGuard<'a, T> {
+    /// Make a new `AssetReadGuard` for a component of the locked data.
+    pub fn map<U: ?Sized, F>(this: Self, f: F) -> AssetReadGuard<'a, U>
+    where
+        F: FnOnce(&T) -> &U,
+    {
+        AssetReadGuard {
+            value: f(this.value),
+            #[cfg(feature = "hot-reloading")]
+            guard: this.guard,
+        }
+    }
+
+    /// Attempts to make a new `AssetReadGuard` for a component of the locked data.
+    ///
+    /// Returns the original guard if the closure returns None.
+    pub fn try_map<U: ?Sized, F>(this: Self, f: F) -> Result<AssetReadGuard<'a, U>, Self>
+    where
+        F: FnOnce(&T) -> Option<&U>,
+    {
+        match f(this.value) {
+            Some(value) => Ok(AssetReadGuard {
+                value,
+                #[cfg(feature = "hot-reloading")]
+                guard: this.guard,
+            }),
+            None => Err(this),
+        }
+    }
 }
 
 impl<T: ?Sized> Deref for AssetReadGuard<'_, T> {
@@ -470,11 +507,7 @@ impl<T: ?Sized> Deref for AssetReadGuard<'_, T> {
 
     #[inline]
     fn deref(&self) -> &T {
-        match &self.inner {
-            GuardInner::Ref(r) => r,
-            #[cfg(feature = "hot-reloading")]
-            GuardInner::Guard(g) => g,
-        }
+        self.value
     }
 }
 
