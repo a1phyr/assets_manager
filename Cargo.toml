@@ -1,6 +1,6 @@
 [package]
 name = "assets_manager"
-version = "0.11.1"
+version = "0.11.2"
 authors = ["Benoît du Garreau"]
 edition = "2021"
 rust-version = "1.70"
@@ -54,7 +54,7 @@ gltf = ["dep:gltf", "dep:base64", "png", "jpeg"]
 log = { version = "0.4" }
 once_cell = { version = "1.16", optional = true }
 
-assets_manager_macros = { path = "macros", version = "0.2", optional = true }
+assets_manager_macros = { path = "macros", version = "0.2.4", optional = true }
 
 ahash = { version = "0.8.0", optional = true, default-features = false, features = ["runtime-rng"] }
 parking_lot = { version = "0.12", optional = true }
