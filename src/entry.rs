@@ -550,6 +550,27 @@ impl<'a, T: ?Sized> AssetReadGuard<'a, T> {
     }
 }
 
+impl<'a> AssetReadGuard<'a, dyn Any> {
+    /// Attempt to downcast the guard to a concrete type.
+    pub fn downcast<T: Any>(self) -> Result<AssetReadGuard<'a, T>, Self> {
+        Self::try_map(self, |x| x.downcast_ref())
+    }
+}
+
+impl<'a> AssetReadGuard<'a, dyn Any + Send> {
+    /// Attempt to downcast the guard to a concrete type.
+    pub fn downcast<T: Any>(self) -> Result<AssetReadGuard<'a, T>, Self> {
+        Self::try_map(self, |x| x.downcast_ref())
+    }
+}
+
+impl<'a> AssetReadGuard<'a, dyn Any + Send + Sync> {
+    /// Attempt to downcast the guard to a concrete type.
+    pub fn downcast<T: Any>(self) -> Result<AssetReadGuard<'a, T>, Self> {
+        Self::try_map(self, |x| x.downcast_ref())
+    }
+}
+
 impl<T: ?Sized> Deref for AssetReadGuard<'_, T> {
     type Target = T;
 
