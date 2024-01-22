@@ -1,4 +1,4 @@
-use std::{error::Error as StdError, fmt, io};
+use std::{fmt, io};
 
 use crate::SharedString;
 
@@ -61,7 +61,7 @@ impl fmt::Display for NoDefaultValueError {
     }
 }
 
-impl StdError for NoDefaultValueError {}
+impl std::error::Error for NoDefaultValueError {}
 
 struct ErrorRepr {
     id: SharedString,
@@ -83,10 +83,28 @@ impl Error {
         &self.0.id
     }
 
-    /// Like `source`, but never fails
+    /// Like `source`, but never fails.
     #[inline]
-    pub fn reason(&self) -> &(dyn StdError + 'static) {
+    pub fn reason(&self) -> &(dyn std::error::Error + 'static) {
         &*self.0.error
+    }
+
+    /// Consumes the `Error`, returning its inner error.
+    #[inline]
+    pub fn into_inner(self) -> BoxedError {
+        self.0.error
+    }
+
+    /// Attempt to downgrade the inner error to `E`.
+    #[inline]
+    pub fn downcast<E: std::error::Error + 'static>(mut self) -> Result<E, Self> {
+        match self.0.error.downcast() {
+            Ok(err) => Ok(*err),
+            Err(err) => {
+                self.0.error = err;
+                Err(self)
+            }
+        }
     }
 }
 
