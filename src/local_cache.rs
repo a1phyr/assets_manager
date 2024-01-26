@@ -223,6 +223,16 @@ impl<S> LocalAssetCache<S> {
     }
 }
 
+impl<S> Default for LocalAssetCache<S>
+where
+    S: Source + Default,
+{
+    #[inline]
+    fn default() -> Self {
+        Self::with_source(S::default())
+    }
+}
+
 impl<'a, S: Source> crate::AsAnyCache<'a> for &'a LocalAssetCache<S> {
     #[inline]
     fn as_any_cache(&self) -> AnyCache<'a> {

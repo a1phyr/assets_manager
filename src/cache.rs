@@ -434,6 +434,16 @@ where
     }
 }
 
+impl<S> Default for AssetCache<S>
+where
+    S: Source + Default,
+{
+    #[inline]
+    fn default() -> Self {
+        Self::with_source(S::default())
+    }
+}
+
 impl<'a, S: Source> crate::AsAnyCache<'a> for &'a AssetCache<S> {
     #[inline]
     fn as_any_cache(&self) -> AnyCache<'a> {

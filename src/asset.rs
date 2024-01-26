@@ -476,6 +476,17 @@ macro_rules! serde_assets {
                     &self.0
                 }
             }
+
+            #[cfg(feature = $feature)]
+            impl<T> Default for $name<T>
+            where
+                T: Default,
+            {
+                #[inline]
+                fn default() -> Self {
+                    Self(T::default())
+                }
+            }
         )*
     }
 }

@@ -432,3 +432,10 @@ impl Source for Empty {
         false
     }
 }
+
+impl Default for Empty {
+    #[inline]
+    fn default() -> Self {
+        Self
+    }
+}

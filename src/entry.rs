@@ -714,6 +714,13 @@ impl ReloadId {
     }
 }
 
+impl Default for ReloadId {
+    #[inline]
+    fn default() -> Self {
+        Self::NEVER
+    }
+}
+
 /// A [`ReloadId`] that can be shared between threads.
 ///
 /// This type is useful when one cannot afford the associated lifetime of
@@ -772,6 +779,13 @@ impl AtomicReloadId {
     #[inline]
     pub fn fetch_max(&self, new: ReloadId) -> ReloadId {
         ReloadId(self.0.fetch_max(new.0, Ordering::AcqRel))
+    }
+}
+
+impl Default for AtomicReloadId {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
     }
 }
 
