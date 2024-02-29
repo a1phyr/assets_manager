@@ -26,6 +26,21 @@ jobs:
       - run: cargo test --workspace
       - run: cargo test --workspace --all-features
 
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install development libraries
+        run: sudo apt update && sudo apt install libasound2-dev -y
+
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: rustup toolchain add stable && rustup default stable
+
+      - run: cargo clippy --workspace -- -D warnings
+      - run: cargo clippy --workspace --all-features -- -D warnings
+
   fmt:
     name: Check formatting
     runs-on: ubuntu-latest
