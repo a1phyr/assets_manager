@@ -122,6 +122,8 @@ impl<'a> AnyCache<'a> {
     /// Gets a value from the cache or inserts one.
     ///
     /// As for `get_cached`, non-assets types must be marked with [`Storable`].
+    ///
+    /// Assets added via this function will *never* be reloaded.
     #[inline]
     pub fn get_or_insert<T: Storable>(self, id: &str, default: T) -> &'a Handle<T> {
         self.cache._get_or_insert(id, default)
