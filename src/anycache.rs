@@ -359,22 +359,16 @@ impl<T: RawCache> Cache for T {
     }
 
     fn load_owned_entry(&self, id: &str, typ: Type) -> Result<CacheEntry, Error> {
-        #[cfg(not(feature = "hot-reloading"))]
         let id = SharedString::from(id);
-
-        #[cfg(feature = "hot-reloading")]
-        let [id, id_clone] = SharedString::n_from_str(id);
-
-        let asset = crate::asset::load_and_record(self._as_any_cache(), id, typ);
 
         #[cfg(feature = "hot-reloading")]
         if typ.is_hot_reloaded() {
             if let Some(reloader) = self.reloader() {
-                records::add_record(reloader, id_clone, typ.type_id);
+                records::add_record(reloader, id.clone(), typ.type_id);
             }
         }
 
-        asset
+        crate::asset::load_and_record(self._as_any_cache(), id, typ)
     }
 
     #[inline]

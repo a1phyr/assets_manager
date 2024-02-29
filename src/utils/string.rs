@@ -33,11 +33,6 @@ impl SharedString {
         SharedString { bytes }
     }
 
-    #[inline]
-    pub(crate) fn n_from_str<const N: usize>(s: &str) -> [Self; N] {
-        SharedBytes::n_from_slice(s.as_bytes()).map(|bytes| Self { bytes })
-    }
-
     /// Converts the `&SharedString` into a `&str`.
     #[inline]
     pub fn as_str(&self) -> &str {

@@ -111,7 +111,8 @@ impl SharedBytes {
         alloc::dealloc(self.ptr.as_ptr().cast(), layout);
     }
 
-    fn inner_from_slice(bytes: &[u8], count: usize) -> NonNull<Inner> {
+    /// Creates a `SharedBytes` from a slice.
+    pub fn from_slice(bytes: &[u8]) -> Self {
         unsafe {
             let len = bytes.len();
             let layout = Self::get_inner_layout(len);
@@ -120,31 +121,19 @@ impl SharedBytes {
             let ptr = NonNull::new(ptr).unwrap_or_else(|| alloc::handle_alloc_error(layout));
 
             ptr.as_ptr().write(Inner {
-                count: AtomicUsize::new(count),
+                count: AtomicUsize::new(1),
                 ptr: bytes_ptr,
                 len,
                 capacity: 0,
             });
             std::ptr::copy_nonoverlapping(bytes.as_ptr(), bytes_ptr, len);
 
-            ptr
+            Self { ptr }
         }
     }
 
-    #[inline]
-    pub(crate) fn n_from_slice<const N: usize>(bytes: &[u8]) -> [Self; N] {
-        let ptr = Self::inner_from_slice(bytes, N);
-        [(); N].map(|_| Self { ptr })
-    }
-
-    /// Create a `SharedBytes` from a slice.
-    #[inline]
-    pub fn from_slice(bytes: &[u8]) -> Self {
-        let ptr = Self::inner_from_slice(bytes, 1);
-        Self { ptr }
-    }
-
-    fn inner_from_vec(bytes: Vec<u8>, count: usize) -> NonNull<Inner> {
+    /// Creates a `SharedBytes` from a `Vec`
+    pub fn from_vec(bytes: Vec<u8>) -> Self {
         unsafe {
             let layout = alloc::Layout::new::<Inner>();
             let ptr = alloc::alloc(layout).cast::<Inner>();
@@ -155,21 +144,14 @@ impl SharedBytes {
             let len = bytes.len();
             let capacity = bytes.capacity();
             ptr.as_ptr().write(Inner {
-                count: AtomicUsize::new(count),
+                count: AtomicUsize::new(1),
                 ptr: bytes_ptr,
                 len,
                 capacity,
             });
 
-            ptr
+            Self { ptr }
         }
-    }
-
-    /// Create a `SharedBytes` from a `Vec`
-    #[inline]
-    pub fn from_vec(bytes: Vec<u8>) -> Self {
-        let ptr = Self::inner_from_vec(bytes, 1);
-        Self { ptr }
     }
 }
 
