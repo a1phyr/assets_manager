@@ -254,7 +254,7 @@ impl fmt::Debug for AnyCache<'_> {
 pub(crate) trait AssetMap {
     fn get(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle>;
 
-    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> &UntypedHandle;
+    fn insert(&self, entry: CacheEntry) -> &UntypedHandle;
 
     fn contains_key(&self, id: &str, type_id: TypeId) -> bool;
 }
@@ -277,7 +277,7 @@ pub(crate) trait Cache {
 
     fn load_owned_entry(&self, id: &str, typ: Type) -> Result<CacheEntry, Error>;
 
-    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> &UntypedHandle;
+    fn insert(&self, entry: CacheEntry) -> &UntypedHandle;
 }
 
 pub(crate) trait RawCache: Sized {
@@ -295,11 +295,11 @@ pub(crate) trait RawCache: Sized {
     fn add_asset(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
         log::trace!("Loading \"{}\"", id);
 
-        let [id, id_clone] = SharedString::n_from_str(id);
+        let id = SharedString::from(id);
         let cache = AnyCache { cache: self };
-        let entry = crate::asset::load_and_record(cache, id_clone, typ)?;
+        let entry = crate::asset::load_and_record(cache, id, typ)?;
 
-        Ok(self.assets().insert(id, typ.type_id, entry))
+        Ok(self.assets().insert(entry))
     }
 }
 
@@ -378,8 +378,8 @@ impl<T: RawCache> Cache for T {
     }
 
     #[inline]
-    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> &UntypedHandle {
-        self.assets().insert(id, type_id, entry)
+    fn insert(&self, entry: CacheEntry) -> &UntypedHandle {
+        self.assets().insert(entry)
     }
 }
 
@@ -407,10 +407,10 @@ pub(crate) trait CacheExt: Cache {
 
     #[cold]
     fn add_any<T: Storable>(&self, id: &str, asset: T) -> &UntypedHandle {
-        let [id, id_clone] = SharedString::n_from_str(id);
-        let entry = CacheEntry::new(asset, id_clone, || self._has_reloader());
+        let id = SharedString::from(id);
+        let entry = CacheEntry::new(asset, id, || self._has_reloader());
 
-        self.insert(id, TypeId::of::<T>(), entry)
+        self.insert(entry)
     }
 
     fn _get_or_insert<T: Storable>(&self, id: &str, default: T) -> &Handle<T> {

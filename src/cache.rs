@@ -6,7 +6,7 @@ use crate::{
     entry::{CacheEntry, UntypedHandle},
     source::{FileSystem, Source},
     utils::{BorrowedKey, HashMap, Key, OwnedKey, RandomState, RwLock},
-    AnyCache, Compound, Error, Handle, SharedString,
+    AnyCache, Compound, Error, Handle,
 };
 
 #[cfg(doc)]
@@ -97,8 +97,8 @@ impl crate::anycache::AssetMap for AssetMap {
         unsafe { Some(entry.inner().extend_lifetime()) }
     }
 
-    fn insert(&self, id: SharedString, type_id: TypeId, entry: CacheEntry) -> &UntypedHandle {
-        let key = OwnedKey::new_with(id, type_id);
+    fn insert(&self, entry: CacheEntry) -> &UntypedHandle {
+        let key = OwnedKey::new_with(entry.id().clone(), entry.type_id());
         let shard = &mut *self.get_shard(key.borrow()).0.write();
         let entry = shard.entry(key).or_insert(entry);
         unsafe { entry.inner().extend_lifetime() }

@@ -181,6 +181,16 @@ impl CacheEntry {
         CacheEntry(Box::new(inner))
     }
 
+    #[inline]
+    pub(crate) fn id(&self) -> &SharedString {
+        &self.0.id
+    }
+
+    #[inline]
+    pub(crate) fn type_id(&self) -> TypeId {
+        self.0.type_id
+    }
+
     /// Returns a reference on the inner storage of the entry.
     #[inline]
     pub(crate) fn inner(&self) -> &UntypedHandle {
