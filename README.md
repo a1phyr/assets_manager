@@ -88,7 +88,7 @@ assert_eq!(point.y, -6);
 
 // Loading the same asset retrieves it from the cache
 let other_handle = cache.load("common.position")?;
-assert!(other_handle.same_handle(&handle));
+assert!(std::ptr::eq(handle, other_handle));
 ```
 
 Hot-reloading is also very easy to use:
