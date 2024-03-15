@@ -350,13 +350,9 @@ impl Condvar {
     }
 }
 
-mod private_marker {
-    pub trait PrivateMarker {}
-    pub(crate) enum Private {}
-    impl PrivateMarker for Private {}
-}
-
-pub(crate) use private_marker::{Private, PrivateMarker};
+/// Fake public structure for internal APIs
+#[derive(Debug)]
+pub struct Private;
 
 #[cfg(feature = "ahash")]
 pub(crate) use ahash::RandomState;

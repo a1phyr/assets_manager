@@ -48,7 +48,7 @@ use crate::{
     entry::CacheEntry,
     loader,
     source::Source,
-    utils::{PrivateMarker, SharedBytes, SharedString},
+    utils::{Private, SharedBytes, SharedString},
     AnyCache, AssetCache, BoxedError, Error,
 };
 use crate::{error::ErrorKind, key::Type, loader::Loader};
@@ -240,7 +240,7 @@ pub trait Compound: Sized + Send + Sync + 'static {
 
     #[doc(hidden)]
     #[inline]
-    fn get_type<P: PrivateMarker>() -> crate::key::Type {
+    fn get_type(_: Private) -> crate::key::Type {
         crate::key::Type::of_asset::<Self>()
     }
 }
@@ -280,7 +280,7 @@ where
 
     #[doc(hidden)]
     #[inline]
-    fn get_type<P: PrivateMarker>() -> crate::key::Type {
+    fn get_type(_: Private) -> crate::key::Type {
         crate::key::Type::of_asset::<Self>()
     }
 }
@@ -350,7 +350,7 @@ pub trait Storable: Sized + Send + Sync + 'static {
 
     #[doc(hidden)]
     #[inline]
-    fn get_type<P: PrivateMarker>() -> crate::key::Type {
+    fn get_type(_: Private) -> crate::key::Type {
         crate::key::Type::of_storable::<Self>()
     }
 }
@@ -363,8 +363,8 @@ where
     const HOT_RELOADED: bool = T::HOT_RELOADED;
 
     #[inline]
-    fn get_type<P: PrivateMarker>() -> crate::key::Type {
-        Self::get_type::<P>()
+    fn get_type(_: Private) -> crate::key::Type {
+        Self::get_type(Private)
     }
 }
 

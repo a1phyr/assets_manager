@@ -64,7 +64,7 @@ impl Type {
 
     #[inline]
     pub fn of<T: Storable>() -> Self {
-        T::get_type::<utils::Private>()
+        T::get_type(utils::Private)
     }
 
     #[inline]
