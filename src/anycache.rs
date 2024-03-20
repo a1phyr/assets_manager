@@ -233,8 +233,8 @@ impl<'a> AnyCache<'a> {
         };
         match entry {
             Ok(e) => {
-                let id = handle.write(e);
-                log::info!("Reloading \"{id}\"");
+                handle.write(e);
+                log::info!("Reloading \"{}\"", handle.id());
                 Some(deps)
             }
             Err(err) => {

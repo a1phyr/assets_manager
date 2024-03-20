@@ -18,24 +18,21 @@ use crate::{
 #[cfg(feature = "hot-reloading")]
 use crate::utils::RwLockReadGuard;
 
-trait Storage: Send + Sync {
-    // TODO: Remove this when we have MSRV >= 1.76
-    fn as_dyn_any(&self) -> &(dyn Any + Send + Sync);
+#[cfg(feature = "hot-reloading")]
+unsafe fn swap_any(a: &mut dyn Any, b: &mut dyn Any) {
+    debug_assert_eq!((a as &dyn Any).type_id(), (b as &dyn Any).type_id());
+    debug_assert_eq!(
+        std::alloc::Layout::for_value(a),
+        std::alloc::Layout::for_value(b)
+    );
 
-    #[cfg(feature = "hot-reloading")]
-    fn write(&mut self, asset: CacheEntry) -> SharedString;
-}
-
-impl<T: Storable> Storage for T {
-    fn as_dyn_any(&self) -> &(dyn Any + Send + Sync) {
-        self
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    fn write(&mut self, asset: CacheEntry) -> SharedString {
-        let (asset, id) = asset.into_inner();
-        *self = asset;
-        id
+    let len = std::mem::size_of_val(a);
+    unsafe {
+        std::ptr::swap_nonoverlapping(
+            a as *mut dyn Any as *mut u8,
+            b as *mut dyn Any as *mut u8,
+            len,
+        );
     }
 }
 
@@ -57,7 +54,7 @@ struct EntryStorage<T: ?Sized> {
 unsafe impl<T: Sync + ?Sized> Sync for EntryStorage<T> {}
 
 type Entry<T> = EntryStorage<T>;
-type UntypedEntry = EntryStorage<dyn Storage>;
+type UntypedEntry = EntryStorage<dyn Any + Send + Sync>;
 
 impl<T: Storable> Entry<T> {
     fn new_static(id: SharedString, value: T) -> Self {
@@ -120,15 +117,17 @@ impl<T: ?Sized> EntryStorage<T> {
 
 impl UntypedEntry {
     #[cfg(feature = "hot-reloading")]
-    pub fn write(&self, value: CacheEntry) -> SharedString {
+    pub fn write(&self, mut value: CacheEntry) {
+        assert!(self.type_id == value.0.type_id);
+
         if let Some(d) = &self.dynamic {
             unsafe {
                 let _g = d.lock.write();
-                let id = (*self.value.get()).write(value);
+                swap_any(&mut *self.value.get(), value.0.value.get_mut());
                 d.reload.increment();
                 d.reload_global.store(true, Ordering::Release);
-                return id;
             }
+            return;
         }
 
         wrong_handle_type();
@@ -247,7 +246,7 @@ impl UntypedHandle {
     /// Returns a RAII guard which will release the lock once dropped.
     #[inline]
     pub fn read(&self) -> AssetReadGuard<'_, dyn Any + Send + Sync> {
-        AssetReadGuard::map(self.inner.read(), |x| x.as_dyn_any())
+        self.inner.read()
     }
 
     /// Returns the id of the asset.
@@ -318,8 +317,8 @@ impl UntypedHandle {
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub(crate) fn write(&self, asset: CacheEntry) -> SharedString {
-        self.inner.write(asset)
+    pub(crate) fn write(&self, asset: CacheEntry) {
+        self.inner.write(asset);
     }
 }
 
