@@ -237,12 +237,6 @@ pub trait Compound: Sized + Send + Sync + 'static {
     /// default). If so, you may want to implement [`NotHotReloaded`] for this
     /// type to enable additional functions.
     const HOT_RELOADED: bool = true;
-
-    #[doc(hidden)]
-    #[inline]
-    fn get_type(_: Private) -> crate::key::Type {
-        crate::key::Type::of_asset::<Self>()
-    }
 }
 
 #[inline]
@@ -277,12 +271,6 @@ where
     }
 
     const HOT_RELOADED: bool = Self::HOT_RELOADED;
-
-    #[doc(hidden)]
-    #[inline]
-    fn get_type(_: Private) -> crate::key::Type {
-        crate::key::Type::of_asset::<Self>()
-    }
 }
 
 impl<T> Compound for Arc<T>
@@ -297,7 +285,7 @@ where
     const HOT_RELOADED: bool = T::HOT_RELOADED;
 }
 
-impl<T> NotHotReloaded for Arc<T> where T: Compound + NotHotReloaded {}
+impl<T> NotHotReloaded for Arc<T> where T: NotHotReloaded {}
 
 /// Mark a type as not being hot-reloaded.
 ///
@@ -313,60 +301,14 @@ impl<T> NotHotReloaded for Arc<T> where T: Compound + NotHotReloaded {}
 /// trait wihout issues.
 ///
 /// This trait is a workaround about Rust's type system current limitations.
-pub trait NotHotReloaded: Storable {}
+pub trait NotHotReloaded {}
 
-/// Trait marker to store values in a cache.
+/// Trait alias to `Sized + Send + Sync + 'static`
 ///
-/// Implementing this trait is necessary to use [`AssetCache::get_cached`]. This
-/// trait is already implemented for all `Compound` types.
-///
-/// This trait is a workaround about Rust's current lack of specialization.
-pub trait Storable: Sized + Send + Sync + 'static {
-    #[doc(hidden)]
-    const HOT_RELOADED: bool = false;
+/// This is the set of types that can be stored in a cache.
+pub trait Storable: Sized + Send + Sync + 'static {}
 
-    #[doc(hidden)]
-    /// Compile-time check that HOT_RELOADED is false when `NotHotReloaded` is
-    /// implemented.
-    /// ```compile_fail
-    /// use assets_manager::{Asset, asset::NotHotReloaded, AssetCache, loader};
-    ///
-    /// struct A(i32);
-    /// impl From<i32> for A {
-    ///     fn from(x: i32) -> A { A(x) }
-    /// }
-    ///
-    /// impl Asset for A {
-    ///     type Loader = loader::LoadFrom<i32, loader::ParseLoader>;
-    /// }
-    /// impl NotHotReloaded for A {}
-    ///
-    /// let cache = AssetCache::new("assets")?;
-    /// let handle = cache.load::<T>("tests")?;
-    /// let _ = handle.get();
-    /// # Ok::<(), assets_manager::BoxedError>(())
-    /// ```
-    const _CHECK_NOT_HOT_RELOADED: () = assert!(!Self::HOT_RELOADED);
-
-    #[doc(hidden)]
-    #[inline]
-    fn get_type(_: Private) -> crate::key::Type {
-        crate::key::Type::of_storable::<Self>()
-    }
-}
-
-impl<T> Storable for T
-where
-    T: Compound,
-{
-    #[doc(hidden)]
-    const HOT_RELOADED: bool = T::HOT_RELOADED;
-
-    #[inline]
-    fn get_type(_: Private) -> crate::key::Type {
-        Self::get_type(Private)
-    }
-}
+impl<T> Storable for T where T: Send + Sync + 'static {}
 
 macro_rules! string_assets {
     ( $( $typ:ty, )* ) => {
@@ -386,7 +328,6 @@ string_assets! {
 macro_rules! impl_storable {
     ( $( $typ:ty, )* ) => {
         $(
-            impl Storable for $typ {}
             impl NotHotReloaded for $typ {}
         )*
     }
@@ -399,9 +340,7 @@ impl_storable! {
     SharedBytes,
 }
 
-impl<T: Send + Sync + 'static> Storable for Vec<T> {}
 impl<T: Send + Sync + 'static> NotHotReloaded for Vec<T> {}
-impl<T: Send + Sync + 'static> Storable for &'static [T] {}
 impl<T: Send + Sync + 'static> NotHotReloaded for &'static [T] {}
 
 macro_rules! serde_assets {

@@ -12,7 +12,7 @@ use std::{
 use crate::{
     asset::{NotHotReloaded, Storable},
     utils::RwLock,
-    SharedString,
+    Compound, SharedString,
 };
 
 #[cfg(feature = "hot-reloading")]
@@ -165,13 +165,21 @@ impl CacheEntry {
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new<T: Storable>(value: T, id: SharedString, _mutable: impl FnOnce() -> bool) -> Self {
+    pub fn new<T: Compound>(asset: T, id: SharedString, mutable: impl FnOnce() -> bool) -> Self {
+        Self::new_any(asset, id, T::HOT_RELOADED && mutable())
+    }
+
+    /// Creates a new `CacheEntry` containing a value of type `T`.
+    ///
+    /// The returned structure can safely use its methods with type parameter `T`.
+    #[inline]
+    pub fn new_any<T: Storable>(value: T, id: SharedString, _mutable: bool) -> Self {
         #[cfg(not(feature = "hot-reloading"))]
         let inner = EntryStorage::new_static(id, value);
 
         // Even if hot-reloading is enabled, we can avoid the lock in some cases.
         #[cfg(feature = "hot-reloading")]
-        let inner = if T::HOT_RELOADED && _mutable() {
+        let inner = if _mutable {
             EntryStorage::new_dynamic(id, value)
         } else {
             EntryStorage::new_static(id, value)
@@ -462,7 +470,6 @@ where
     #[inline]
     #[allow(clippy::let_unit_value)]
     pub fn get(&self) -> &T {
-        let _ = T::_CHECK_NOT_HOT_RELOADED;
         self.inner.get()
     }
 }

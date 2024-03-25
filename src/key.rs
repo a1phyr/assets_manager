@@ -1,8 +1,11 @@
 #![allow(dead_code)]
 
-use std::{any::TypeId, cmp, fmt, hash};
+use std::{
+    any::{Any, TypeId},
+    cmp, fmt, hash,
+};
 
-use crate::{asset::Storable, entry::CacheEntry, utils, AnyCache, Compound, Error, SharedString};
+use crate::{asset::Storable, entry::CacheEntry, AnyCache, Compound, Error, SharedString};
 
 impl Inner {
     fn of_asset<T: Compound>() -> &'static Self {
@@ -19,13 +22,14 @@ impl Inner {
         }
     }
 
-    fn of_storable<T: Storable>() -> &'static Self {
+    #[allow(clippy::extra_unused_type_parameters)]
+    fn of_any<T: Any>() -> &'static Self {
         fn load(_: AnyCache, _: SharedString) -> Result<CacheEntry, Error> {
-            panic!("Attempted to load `Storable` type")
+            panic!("Attempted to load non-`Compound` type")
         }
 
         &Self {
-            hot_reloaded: T::HOT_RELOADED,
+            hot_reloaded: false,
             load,
         }
     }
@@ -55,16 +59,11 @@ impl Type {
     }
 
     #[inline]
-    pub(crate) fn of_storable<T: Storable>() -> Self {
+    pub(crate) fn of_any<T: Storable>() -> Self {
         Self {
             type_id: TypeId::of::<T>(),
-            inner: Inner::of_storable::<T>(),
+            inner: Inner::of_any::<T>(),
         }
-    }
-
-    #[inline]
-    pub fn of<T: Storable>() -> Self {
-        T::get_type(utils::Private)
     }
 
     #[inline]
