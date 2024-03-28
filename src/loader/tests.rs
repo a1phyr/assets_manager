@@ -1,6 +1,5 @@
 use super::*;
 use crate::tests::X;
-use std::borrow::Cow;
 
 fn raw(s: &str) -> Cow<[u8]> {
     s.as_bytes().into()

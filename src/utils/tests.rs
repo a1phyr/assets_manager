@@ -59,6 +59,7 @@ mod cell {
 
     #[test]
     fn drop_bomb() {
+        #[allow(dead_code)]
         struct Bomb(Box<i32>);
         impl Drop for Bomb {
             fn drop(&mut self) {
