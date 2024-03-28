@@ -99,7 +99,7 @@ impl<T: Copy> Drop for CellGuard<'_, T> {
 }
 
 thread_local! {
-    static RECORDING: Cell<Option<NonNull<Record>>> = Cell::new(None);
+    static RECORDING: Cell<Option<NonNull<Record>>> = const { Cell::new(None) };
 }
 
 pub(crate) fn record<F: FnOnce() -> T, T>(reloader: &HotReloader, f: F) -> (T, Dependencies) {
