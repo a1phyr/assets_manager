@@ -268,7 +268,7 @@ where
             .map_err(|err| error::open_file(err, id, &self.label))?;
 
         // Read it in a buffer
-        let mut content = Vec::with_capacity(file.size() as usize + 1);
+        let mut content = Vec::with_capacity(file.size() as usize);
         file.read_to_end(&mut content)
             .map_err(|err| error::read_file(err, id, &self.label))?;
 
