@@ -235,7 +235,7 @@ where
         let mut id_builder = IdBuilder::default();
 
         for index in 0..len {
-            let file = archive.by_index(index)?;
+            let file = archive.by_index_raw(index)?;
             register_file(file, index, &mut files, &mut dirs, &mut id_builder);
         }
 
