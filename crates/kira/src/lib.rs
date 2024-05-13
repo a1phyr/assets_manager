@@ -66,10 +66,7 @@ mod static_sound {
             content: std::borrow::Cow<[u8]>,
             _: &str,
         ) -> Result<StaticSound, assets_manager::BoxedError> {
-            let sound = StaticSoundData::from_cursor(
-                Cursor::new(content.into_owned()),
-                StaticSoundSettings::default(),
-            )?;
+            let sound = StaticSoundData::from_cursor(Cursor::new(content.into_owned()))?;
             Ok(StaticSound(sound))
         }
     }
@@ -149,7 +146,9 @@ mod streaming {
         }
 
         fn try_into_kira(self) -> Result<StreamingSoundData<FromFileError>, FromFileError> {
-            StreamingSoundData::from_cursor(Cursor::new(self.bytes), self.settings)
+            let mut sound = StreamingSoundData::from_cursor(Cursor::new(self.bytes))?;
+            sound.settings = self.settings;
+            Ok(sound)
         }
     }
 
@@ -162,7 +161,7 @@ mod streaming {
             let settings = StreamingSoundSettings::default();
 
             // Check that the audio file is valid.
-            let _ = StreamingSoundData::from_cursor(Cursor::new(bytes.clone()), settings)?;
+            let _ = StreamingSoundData::from_cursor(Cursor::new(bytes.clone()))?;
 
             Ok(StreamingSound { settings, bytes })
         }
