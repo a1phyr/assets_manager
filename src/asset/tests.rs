@@ -26,6 +26,7 @@ sound_test! {
     test_flac => asset::Flac,
 
     #[cfg(feature ="mp3")]
+    #[ignore = "UB in `slice_ring_buffer`"]
     test_mp3 => asset::Mp3,
 
     #[cfg(feature ="vorbis")]
