@@ -30,6 +30,7 @@ zip-bzip2 = ["zip", "zip/bzip2"]
 zip-deflate = ["zip", "zip/deflate"]
 tar = ["dep:tar", "dep:sync_file"]
 
+serde = ["dep:serde"]
 bincode = ["dep:bincode", "serde"]
 json = ["dep:serde_json", "serde"]
 msgpack = ["dep:rmp-serde", "serde"]
