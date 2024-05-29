@@ -57,10 +57,6 @@ use crate::{error::ErrorKind, key::Type, loader::Loader};
 #[allow(unused)]
 use rodio::decoder::{Decoder, DecoderError};
 
-#[cfg(feature = "serde")]
-#[allow(unused)]
-use serde::{Deserialize, Serialize};
-
 #[allow(unused)]
 use std::{borrow::Cow, io, sync::Arc};
 
@@ -423,8 +419,7 @@ macro_rules! serde_assets {
             /// types without a newtype wrapper (eg [`Vec`]).
             #[cfg(feature = $feature)]
             #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
-            #[derive(Debug, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-            #[serde(transparent)]
+            #[derive(Debug, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
             #[repr(transparent)]
             pub struct $name<T>(pub T);
 
@@ -456,6 +451,39 @@ macro_rules! serde_assets {
                 #[inline]
                 pub fn into_inner(self) -> T {
                     self.0
+                }
+            }
+
+            #[cfg(feature = $feature)]
+            impl<T> serde::Serialize for $name<T>
+            where
+                T: serde::Serialize,
+            {
+                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                where
+                    S: serde::Serializer,
+                {
+                    self.0.serialize(serializer)
+                }
+            }
+
+            #[cfg(feature = $feature)]
+            impl<'de, T> serde::Deserialize<'de> for $name<T>
+            where
+                T: serde::Deserialize<'de>,
+            {
+                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+                where
+                    D: serde::Deserializer<'de>,
+                {
+                    T::deserialize(deserializer).map($name)
+                }
+
+                fn deserialize_in_place<D>(deserializer: D, place: &mut Self) -> Result<(), D::Error>
+                where
+                    D: serde::Deserializer<'de>,
+                {
+                    T::deserialize_in_place(deserializer, &mut place.0)
                 }
             }
 
