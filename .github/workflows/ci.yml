@@ -13,7 +13,7 @@ jobs:
       matrix:
         rust:
           - stable
-          - "1.70"
+          - "1.71"
     steps:
       - name: Install development libraries
         run: sudo apt update && sudo apt install libasound2-dev -y

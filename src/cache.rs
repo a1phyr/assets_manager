@@ -55,20 +55,14 @@ impl AssetMap {
     }
 
     fn get_shard(&self, key: BorrowedKey) -> &Shard {
-        use std::hash::*;
-
-        let mut hasher = self.hash_builder.build_hasher();
-        key.hash(&mut hasher);
-        let id = (hasher.finish() as usize) & (self.shards.len() - 1);
+        let hash = self.hash_builder.hash_one(key);
+        let id = (hash as usize) & (self.shards.len() - 1);
         &self.shards[id]
     }
 
     fn get_shard_mut(&mut self, key: BorrowedKey) -> &mut Shard {
-        use std::hash::*;
-
-        let mut hasher = self.hash_builder.build_hasher();
-        key.hash(&mut hasher);
-        let id = (hasher.finish() as usize) & (self.shards.len() - 1);
+        let hash = self.hash_builder.hash_one(key);
+        let id = (hash as usize) & (self.shards.len() - 1);
         &mut self.shards[id]
     }
 

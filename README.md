@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/assets_manager.svg)](https://crates.io/crates/assets_manager)
 [![Docs.rs](https://docs.rs/assets_manager/badge.svg)](https://docs.rs/assets_manager/)
-![Minimum rustc version](https://img.shields.io/badge/rustc-1.70+-lightgray.svg)
+![Minimum rustc version](https://img.shields.io/badge/rustc-1.71+-lightgray.svg)
 
 
 This crate aims at providing a filesystem abstraction to easily load external resources.
@@ -11,7 +11,7 @@ It was originally thought for games, but can of course be used in other contexts
 Original idea was inspired by [Veloren](https://gitlab.com/veloren/veloren)'s assets system.
 
 
-This crate follow semver convention and supports rustc 1.70 and higher.
+This crate follow semver convention and supports rustc 1.71 and higher.
 Changing this is considered a breaking change.
 
 ## Goals
