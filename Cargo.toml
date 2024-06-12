@@ -21,6 +21,7 @@ exclude = ["/assets/"]
 default = ["ahash"]
 
 ahash = ["dep:ahash", "hashbrown/ahash"]
+image = ["dep:image"]
 
 hot-reloading = ["dep:notify", "dep:crossbeam-channel"]
 macros = ["dep:assets_manager_macros"]
