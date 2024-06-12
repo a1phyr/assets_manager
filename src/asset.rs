@@ -53,10 +53,6 @@ use crate::{
 };
 use crate::{error::ErrorKind, key::Type, loader::Loader};
 
-#[cfg(feature = "rodio")]
-#[allow(unused)]
-use rodio::decoder::{Decoder, DecoderError};
-
 #[allow(unused)]
 use std::{borrow::Cow, io, sync::Arc};
 
@@ -615,112 +611,5 @@ image_assets! {
     struct Webp => (
         image::ImageFormat::WebP,
         ["webp"],
-    );
-}
-
-macro_rules! sound_assets {
-    (
-        $(
-            #[doc = $doc:literal]
-            #[cfg(feature = $feature:literal)]
-            struct $name:ident => (
-                $decoder:path,
-                [$($ext:literal),*],
-            );
-        )*
-    ) => {
-        $(
-            #[doc = $doc]
-            #[cfg(feature = $feature)]
-            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
-            #[derive(Clone, Debug)]
-            pub struct $name(SharedBytes);
-
-            #[cfg(feature = $feature)]
-            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
-            impl loader::Loader<$name> for loader::SoundLoader {
-                #[inline]
-                fn load(content: Cow<[u8]>, _: &str) -> Result<$name, BoxedError> {
-                    let bytes = content.into();
-                    Ok($name::new(bytes)?)
-                }
-            }
-
-            #[cfg(feature = $feature)]
-            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
-            impl Asset for $name {
-                const EXTENSIONS: &'static [&'static str] = &[$( $ext ),*];
-                type Loader = loader::SoundLoader;
-            }
-
-            #[cfg(feature = $feature)]
-            impl $name {
-                /// Creates a new sound from raw bytes.
-                #[inline]
-                pub fn new(bytes: SharedBytes) -> Result<$name, DecoderError> {
-                    // We have to clone the bytes here because `Decoder::new`
-                    // requires a 'static lifetime, but it should be cheap
-                    // anyway.
-                    let _ = $decoder(io::Cursor::new(bytes.clone()))?;
-                    Ok($name(bytes))
-                }
-
-                /// Creates a [`Decoder`] that can be send to `rodio` to play
-                /// sounds.
-                #[inline]
-                pub fn decoder(self) -> Decoder<io::Cursor<SharedBytes>> {
-                    $decoder(io::Cursor::new(self.0)).unwrap()
-                }
-
-                #[inline]
-                /// Returns a bytes slice of the sound content.
-                pub fn as_bytes(&self) -> &[u8] {
-                    &self.0
-                }
-
-                /// Convert the sound back to raw bytes.
-                #[inline]
-                pub fn into_bytes(self) -> SharedBytes {
-                    self.0
-                }
-            }
-
-            #[cfg(feature = $feature)]
-            impl AsRef<[u8]> for $name {
-                fn as_ref(&self) -> &[u8] {
-                    &self.0
-                }
-            }
-        )*
-    }
-}
-
-sound_assets! {
-    /// Load FLAC sounds
-    #[cfg(feature = "flac")]
-    struct Flac => (
-        Decoder::new_flac,
-        ["flac"],
-    );
-
-    /// Load MP3 sounds
-    #[cfg(feature = "mp3")]
-    struct Mp3 => (
-        Decoder::new_mp3,
-        ["mp3"],
-    );
-
-    /// Load Vorbis sounds
-    #[cfg(feature = "vorbis")]
-    struct Vorbis => (
-        Decoder::new_vorbis,
-        ["ogg"],
-    );
-
-    /// Load WAV sounds
-    #[cfg(feature = "wav")]
-    struct Wav => (
-        Decoder::new_wav,
-        ["wav"],
     );
 }

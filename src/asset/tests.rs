@@ -1,41 +1,6 @@
 #[allow(unused_imports)]
 use crate::*;
 
-macro_rules! sound_test {
-    (
-        $(
-            $( #[$attr:meta] )*
-            $name:ident => $kind:path,
-        )*
-    ) => {
-        $(
-            #[test]
-            $( #[$attr] )*
-            fn $name() {
-                let cache = AssetCache::new("assets").unwrap();
-                let s = cache.load::<$kind>("test.sounds.silence").unwrap();
-                assert!(s.cloned().decoder().count() >= 10000);
-                assert!(s.cloned().decoder().all(|s| s.abs() < 10));
-            }
-        )*
-    };
-}
-
-sound_test! {
-    #[cfg(feature ="flac")]
-    test_flac => asset::Flac,
-
-    #[cfg(feature ="mp3")]
-    #[ignore = "UB in `slice_ring_buffer`"]
-    test_mp3 => asset::Mp3,
-
-    #[cfg(feature ="vorbis")]
-    test_vorbis => asset::Vorbis,
-
-    #[cfg(feature ="wav")]
-    test_wav => asset::Wav,
-}
-
 #[cfg(feature = "gltf")]
 #[test]
 pub fn gltf() {

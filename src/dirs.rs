@@ -22,16 +22,31 @@ use crate::AssetCache;
 /// of the musics to include.
 ///
 /// ```no_run
-/// # cfg_if::cfg_if! { if #[cfg(all(feature = "json", feature = "flac"))] {
+/// # cfg_if::cfg_if! { if #[cfg(feature = "json")] {
 /// use assets_manager::{
-///     Compound, BoxedError, AnyCache, SharedString,
-///     asset::{DirLoadable, Json, Flac},
+///     Asset, Compound, BoxedError, AnyCache, SharedString,
+///     asset::{DirLoadable, Json},
 ///     source::{DirEntry, Source},
 /// };
 ///
-/// /// A simple playlist, a mere ordered list of musics
+/// /// A music for our game.
+/// #[derive(Clone)]
+/// struct Music {
+///     /* ... */
+/// }
+///
+/// impl Asset for Music {
+///     /* ... */
+/// #   const EXTENSION: &'static str = "ogg";
+/// #   type Loader = assets_manager::loader::SoundLoader;
+/// }
+/// # impl assets_manager::loader::Loader<Music> for assets_manager::loader::SoundLoader {
+/// #   fn load(_: std::borrow::Cow<'_, [u8]>, _: &str) -> Result<Music, assets_manager::BoxedError> { todo!() }
+/// # }
+///
+/// /// A simple playlist, an ordered list of musics.
 /// struct Playlist {
-///     sounds: Vec<Flac>
+///     sounds: Vec<Music>,
 /// }
 ///
 /// // Specify how to load a playlist
@@ -42,7 +57,7 @@ use crate::AssetCache;
 ///
 ///         // Load each sound
 ///         let sounds = manifest.0.iter()
-///             .map(|id| Ok(cache.load::<Flac>(id)?.cloned()))
+///             .map(|id| Ok(cache.load::<Music>(id)?.cloned()))
 ///             .collect::<Result<_, BoxedError>>()?;
 ///
 ///         Ok(Playlist { sounds })

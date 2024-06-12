@@ -38,11 +38,6 @@ ron = ["dep:ron", "serde"]
 yaml = ["dep:serde_yaml", "serde"]
 toml = ["dep:basic-toml", "serde"]
 
-flac = ["rodio/flac"]
-mp3 = ["rodio/minimp3"]
-vorbis = ["rodio/vorbis"]
-wav = ["rodio/wav"]
-
 bmp = ["image/bmp"]
 jpeg = ["image/jpeg"]
 png = ["image/png"]
@@ -75,7 +70,6 @@ rmp-serde = { version = "1.1", optional = true }
 ron = { version = "0.8", optional = true }
 serde_yaml = { version = "0.9.1", optional = true }
 
-rodio = { version = "0.17", optional = true, default-features = false }
 image = { version = "0.25", optional = true, default-features = false }
 ab_glyph = { version = "0.2.12", optional = true }
 
