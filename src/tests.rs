@@ -29,8 +29,6 @@ impl Asset for XS {
     const HOT_RELOADED: bool = false;
 }
 
-impl asset::NotHotReloaded for XS {}
-
 #[derive(Debug)]
 pub struct Y(pub i32);
 
@@ -101,7 +99,7 @@ mod asset_cache {
 
         assert!(cache.get_cached::<i32>("test.xxx").is_none());
         let handle = cache.get_or_insert::<i32>("test.xxx", 5);
-        assert_eq!(*handle.get(), 5);
+        assert_eq!(*handle.read(), 5);
     }
 
     #[test]
@@ -207,13 +205,6 @@ mod handle {
         let handle1 = cache.load::<X>("test.cache").unwrap();
         let handle2 = cache.load::<X>("test.cache").unwrap();
         assert!(std::ptr::eq(handle1, handle2));
-    }
-
-    #[test]
-    fn get() {
-        let cache = AssetCache::new("assets").unwrap();
-        let handle = cache.load::<XS>("test.cache").unwrap();
-        assert_eq!(*handle.get(), XS(42));
     }
 
     #[test]

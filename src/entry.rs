@@ -9,11 +9,7 @@ use std::{
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-use crate::{
-    asset::{NotHotReloaded, Storable},
-    utils::RwLock,
-    SharedString,
-};
+use crate::{asset::Storable, utils::RwLock, SharedString};
 
 #[cfg(feature = "hot-reloading")]
 use crate::utils::RwLockReadGuard;
@@ -91,18 +87,6 @@ impl<T: Storable> Entry<T> {
 }
 
 impl<T: ?Sized> EntryStorage<T> {
-    pub fn get(&self) -> &T {
-        #[cfg(feature = "hot-reloading")]
-        if self.dynamic.is_some() {
-            panic!(
-                "`{}` implements `NotHotReloaded` but do not disable hot-reloading",
-                std::any::type_name::<T>()
-            )
-        }
-
-        unsafe { &*self.value.get() }
-    }
-
     pub fn read(&self) -> AssetReadGuard<'_, T> {
         #[cfg(feature = "hot-reloading")]
         let guard = self.dynamic.as_ref().map(|d| d.lock.read());
@@ -239,9 +223,9 @@ impl UntypedHandle {
 
     /// Locks the pointed asset for reading.
     ///
-    /// If `T` implements `NotHotReloaded` or if hot-reloading is disabled, no
-    /// reloading can occur so there is no actual lock. In these cases, calling
-    /// this function does not involve synchronisation.
+    /// If hot-reloading is disabled for `T` or globally, no reloading can occur
+    /// so there is no actual lock. In these cases, calling this function does
+    /// not involve synchronisation.
     ///
     /// Returns a RAII guard which will release the lock once dropped.
     #[inline]
@@ -365,9 +349,9 @@ impl<T> Handle<T> {
 
     /// Locks the pointed asset for reading.
     ///
-    /// If `T` implements `NotHotReloaded` or if hot-reloading is disabled, no
-    /// reloading can occur so there is no actual lock. In these cases, calling
-    /// this function is cheap and does not involve synchronisation.
+    /// If hot-reloading is disabled for `T` or globally, no reloading can occur
+    /// so there is no actual lock. In these cases, calling this function does
+    /// not involve synchronisation.
     ///
     /// Returns a RAII guard which will release the lock once dropped.
     #[inline]
@@ -449,21 +433,6 @@ impl<T> Handle<T> {
             || false,
             |this| this.reload_global.swap(false, Ordering::Acquire),
         )
-    }
-}
-
-impl<T> Handle<T>
-where
-    T: NotHotReloaded,
-{
-    /// Returns a reference to the underlying asset.
-    ///
-    /// This method only works if hot-reloading is disabled for the given type.
-    #[inline]
-    #[allow(clippy::let_unit_value)]
-    pub fn get(&self) -> &T {
-        let _ = T::_CHECK_NOT_HOT_RELOADED;
-        self.inner.get()
     }
 }
 
