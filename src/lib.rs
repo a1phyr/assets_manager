@@ -202,6 +202,8 @@ pub mod loader;
 mod local_cache;
 pub use local_cache::LocalAssetCache;
 
+mod map;
+
 mod entry;
 pub use entry::{AssetReadGuard, AtomicReloadId, Handle, ReloadId, ReloadWatcher, UntypedHandle};
 

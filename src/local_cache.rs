@@ -3,7 +3,7 @@ use crate::{
     asset::DirLoadable,
     entry::{CacheEntry, UntypedHandle},
     source::Source,
-    utils::{BorrowedKey, HashMap, Key, OwnedKey},
+    utils::RandomState,
     AnyCache, Compound, Error, Handle, Storable,
 };
 use std::{any::TypeId, cell::RefCell, fmt};
@@ -12,22 +12,27 @@ use std::{any::TypeId, cell::RefCell, fmt};
 use crate::AssetReadGuard;
 
 pub(crate) struct AssetMap {
-    map: RefCell<HashMap<OwnedKey, CacheEntry>>,
+    map: RefCell<crate::map::AssetMap>,
+    hash_builder: RandomState,
 }
 
 impl AssetMap {
     fn new() -> AssetMap {
         AssetMap {
-            map: RefCell::new(HashMap::new()),
+            map: RefCell::new(crate::map::AssetMap::new()),
+            hash_builder: RandomState::new(),
         }
     }
 
-    fn take(&mut self, id: &str, type_id: TypeId) -> Option<CacheEntry> {
-        let key = BorrowedKey::new_with(id, type_id);
-        self.map.get_mut().remove(&key as &dyn Key)
+    fn hash_one(&self, key: (TypeId, &str)) -> u64 {
+        std::hash::BuildHasher::hash_one(&self.hash_builder, key)
     }
 
-    #[inline]
+    fn take(&mut self, id: &str, type_id: TypeId) -> Option<CacheEntry> {
+        let hash = self.hash_one((type_id, id));
+        self.map.get_mut().take(hash, id, type_id)
+    }
+
     fn remove(&mut self, id: &str, type_id: TypeId) -> bool {
         self.take(id, type_id).is_some()
     }
@@ -39,29 +44,31 @@ impl AssetMap {
 
 impl crate::anycache::AssetMap for AssetMap {
     fn get(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
-        let key = BorrowedKey::new_with(id, type_id);
-        let map = self.map.borrow();
-        let entry = map.get(&key as &dyn Key)?;
-        unsafe { Some(entry.inner().extend_lifetime()) }
+        let hash = self.hash_one((type_id, id));
+        unsafe { Some(self.map.borrow().get(hash, id, type_id)?.extend_lifetime()) }
     }
 
     fn insert(&self, entry: CacheEntry) -> &UntypedHandle {
-        let key = OwnedKey::new_with(entry.id().clone(), entry.type_id());
-        let mut map = self.map.borrow_mut();
-        let entry = map.entry(key).or_insert(entry);
-        unsafe { entry.inner().extend_lifetime() }
+        let hash = self.hash_one(entry.as_key());
+        unsafe {
+            self.map
+                .borrow_mut()
+                .insert(hash, entry, &self.hash_builder)
+                .extend_lifetime()
+        }
     }
 
     fn contains_key(&self, id: &str, type_id: TypeId) -> bool {
-        let key = BorrowedKey::new_with(id, type_id);
-        let map = self.map.borrow();
-        map.contains_key(&key as &dyn Key)
+        let hash = self.hash_one((type_id, id));
+        self.map.borrow().get(hash, id, type_id).is_some()
     }
 }
 
 impl fmt::Debug for AssetMap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.map.borrow().fmt(f)
+        f.debug_map()
+            .entries(self.map.borrow().iter_for_debug())
+            .finish()
     }
 }
 

@@ -10,6 +10,16 @@ pub(crate) enum Dependency {
     Asset(OwnedKey),
 }
 
+impl Dependency {
+    pub fn as_borrowed(&self) -> BorrowedDependency<'_> {
+        match self {
+            Dependency::File(id, ext) => BorrowedDependency::File(id, ext),
+            Dependency::Directory(id) => BorrowedDependency::Directory(id),
+            Dependency::Asset(key) => BorrowedDependency::Asset(key),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Dependencies(HashSet<Dependency>);
 
@@ -44,6 +54,12 @@ impl<'a> BorrowedDependency<'a> {
             BorrowedDependency::Directory(id) => Dependency::Directory(id.clone()),
             BorrowedDependency::Asset(key) => Dependency::Asset(key.clone()),
         }
+    }
+}
+
+impl hashbrown::Equivalent<Dependency> for BorrowedDependency<'_> {
+    fn equivalent(&self, key: &Dependency) -> bool {
+        *self == key.as_borrowed()
     }
 }
 

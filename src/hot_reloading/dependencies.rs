@@ -4,47 +4,7 @@ use crate::{
     source::OwnedDirEntry,
     utils::{HashMap, HashSet, OwnedKey},
 };
-use std::{collections::hash_map::Entry, hash};
-
-trait Key {
-    fn as_borrowed(&self) -> BorrowedDependency<'_>;
-}
-
-impl Key for Dependency {
-    fn as_borrowed(&self) -> BorrowedDependency<'_> {
-        match self {
-            Dependency::File(id, ext) => BorrowedDependency::File(id, ext),
-            Dependency::Directory(id) => BorrowedDependency::Directory(id),
-            Dependency::Asset(key) => BorrowedDependency::Asset(key),
-        }
-    }
-}
-
-impl Key for BorrowedDependency<'_> {
-    fn as_borrowed(&self) -> BorrowedDependency<'_> {
-        *self
-    }
-}
-
-impl PartialEq for dyn Key + '_ {
-    fn eq(&self, other: &Self) -> bool {
-        self.as_borrowed().eq(&other.as_borrowed())
-    }
-}
-
-impl Eq for dyn Key + '_ {}
-
-impl hash::Hash for dyn Key + '_ {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.as_borrowed().hash(state)
-    }
-}
-
-impl<'a> std::borrow::Borrow<dyn Key + 'a> for Dependency {
-    fn borrow(&self) -> &(dyn Key + 'a) {
-        self
-    }
-}
+use hashbrown::hash_map::Entry;
 
 struct GraphNode {
     /// `None` if the asset is part of the graph but we should not actually
@@ -137,11 +97,11 @@ impl DepsGraph {
     }
 
     fn visit(&self, sort_data: &mut TopologicalSortData, key: BorrowedDependency) {
-        if sort_data.visited.contains(&key as &dyn Key) {
+        if sort_data.visited.contains(&key) {
             return;
         }
 
-        let node = match self.0.get(&key as &dyn Key) {
+        let node = match self.0.get(&key) {
             Some(deps) => deps,
             None => return,
         };
@@ -159,7 +119,7 @@ impl DepsGraph {
     pub fn reload(&mut self, cache: crate::AnyCache, key: OwnedKey) {
         let id = &key.id;
         let b_key = BorrowedDependency::Asset(&key);
-        if let Some(entry) = self.0.get_mut(&b_key as &dyn Key) {
+        if let Some(entry) = self.0.get_mut(&b_key) {
             if let Some(typ) = entry.typ {
                 let new_deps = cache.reload_untyped(id.clone(), typ);
 
@@ -171,7 +131,7 @@ impl DepsGraph {
     }
 
     pub fn contains(&self, key: &OwnedDirEntry) -> bool {
-        self.0.contains_key(&key.as_dependency() as &dyn Key)
+        self.0.contains_key(&key.as_dependency())
     }
 }
 
