@@ -232,12 +232,6 @@ pub trait Compound: Sized + Send + Sync + 'static {
     /// default). This avoids having to lock the asset to read it (ie it makes
     /// [`Handle::read`] a noop)
     const HOT_RELOADED: bool = true;
-
-    #[doc(hidden)]
-    #[inline]
-    fn get_type(_: Private) -> crate::key::Type {
-        crate::key::Type::of_asset::<Self>()
-    }
 }
 
 #[inline]
@@ -272,12 +266,6 @@ where
     }
 
     const HOT_RELOADED: bool = Self::HOT_RELOADED;
-
-    #[doc(hidden)]
-    #[inline]
-    fn get_type(_: Private) -> crate::key::Type {
-        crate::key::Type::of_asset::<Self>()
-    }
 }
 
 impl<T> Compound for Arc<T>
@@ -294,33 +282,10 @@ where
 
 /// Trait marker to store values in a cache.
 ///
-/// Implementing this trait is necessary to use [`AssetCache::get_cached`]. This
-/// trait is already implemented for all `Compound` types.
-///
-/// This trait is a workaround about Rust's current lack of specialization.
-pub trait Storable: Sized + Send + Sync + 'static {
-    #[doc(hidden)]
-    const HOT_RELOADED: bool = false;
+/// This is the set of types that can be stored in a cache.
+pub trait Storable: Sized + Send + Sync + 'static {}
 
-    #[doc(hidden)]
-    #[inline]
-    fn get_type(_: Private) -> crate::key::Type {
-        crate::key::Type::of_storable::<Self>()
-    }
-}
-
-impl<T> Storable for T
-where
-    T: Compound,
-{
-    #[doc(hidden)]
-    const HOT_RELOADED: bool = T::HOT_RELOADED;
-
-    #[inline]
-    fn get_type(_: Private) -> crate::key::Type {
-        Self::get_type(Private)
-    }
-}
+impl<T> Storable for T where T: Send + Sync + 'static {}
 
 macro_rules! string_assets {
     ( $( $typ:ty, )* ) => {
@@ -336,24 +301,6 @@ macro_rules! string_assets {
 string_assets! {
     String, Box<str>, SharedString,
 }
-
-macro_rules! impl_storable {
-    ( $( $typ:ty, )* ) => {
-        $(
-            impl Storable for $typ {}
-        )*
-    }
-}
-
-impl_storable! {
-    i8, i16, i32, i64, i128, isize,
-    u8, u16, u32, u64, u128, usize,
-    f32, f64, char, &'static str,
-    SharedBytes,
-}
-
-impl<T: Send + Sync + 'static> Storable for Vec<T> {}
-impl<T: Send + Sync + 'static> Storable for &'static [T] {}
 
 macro_rules! serde_assets {
     (

@@ -1,6 +1,6 @@
 use crate::{
     source::{DirEntry, Source},
-    AnyCache, Asset, BoxedError, Compound, Error, Handle, SharedString,
+    AnyCache, Asset, BoxedError, Compound, Error, Handle, SharedString, Storable,
 };
 
 use std::{fmt, io, marker::PhantomData};
@@ -83,7 +83,7 @@ use crate::AssetCache;
 /// }
 /// # }}
 /// ```
-pub trait DirLoadable: Send + Sync + 'static {
+pub trait DirLoadable: Storable {
     /// Returns the ids of the assets contained in the directory given by `id`.
     ///
     /// Note that the order of the returned ids is not kept, and that redundant
@@ -181,7 +181,7 @@ impl<T> Directory<T> {
 
 impl<T> Directory<T>
 where
-    T: crate::Storable,
+    T: Storable,
 {
     /// Returns an iterator over the assets in the directory.
     ///
@@ -261,7 +261,7 @@ impl<T> RecursiveDirectory<T> {
 
 impl<T> RecursiveDirectory<T>
 where
-    T: crate::Storable,
+    T: Storable,
 {
     /// Returns an iterator over the assets in the directory.
     ///
