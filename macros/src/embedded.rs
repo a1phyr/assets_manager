@@ -68,10 +68,14 @@ fn read_dir(path: &Path, content: &mut Content, id: Id, errors: &mut Vec<syn::Er
         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
             let this_id = id.clone().push(stem);
 
-            if path.is_dir() {
+            let Ok(meta) = path.metadata() else {
+                continue;
+            };
+
+            if meta.is_dir() {
                 content.push_dir(Some(&id), this_id.clone());
                 read_dir(&path, content, this_id, errors);
-            } else if path.is_file() {
+            } else if meta.is_file() {
                 if let Some(ext) = extension_of(&path) {
                     let ext = ext.to_owned();
                     let desc = FileDesc(this_id, ext, path);
