@@ -235,44 +235,9 @@ impl fmt::Debug for CacheEntry {
 ///
 /// This is an type-erased version of [`Handle`].
 /// As with `dyn Any`, the underlying type can be queried at runtime.
-#[repr(transparent)]
-pub struct UntypedHandle {
-    inner: UntypedEntry,
-}
+pub type UntypedHandle = Handle<dyn Any + Send + Sync>;
 
 impl UntypedHandle {
-    #[inline]
-    fn either<'a, U>(
-        &'a self,
-        on_static: impl FnOnce() -> U,
-        _on_dynamic: impl FnOnce(&'a Dynamic) -> U,
-    ) -> U {
-        #[cfg(feature = "hot-reloading")]
-        if let Some(d) = &self.inner.dynamic {
-            return _on_dynamic(d);
-        }
-
-        on_static()
-    }
-
-    /// Locks the pointed asset for reading.
-    ///
-    /// If hot-reloading is disabled for `T` or globally, no reloading can occur
-    /// so there is no actual lock. In these cases, calling this function does
-    /// not involve synchronisation.
-    ///
-    /// Returns a RAII guard which will release the lock once dropped.
-    #[inline]
-    pub fn read(&self) -> AssetReadGuard<'_, dyn Any + Send + Sync> {
-        self.inner.read()
-    }
-
-    /// Returns the id of the asset.
-    #[inline]
-    pub fn id(&self) -> &SharedString {
-        &self.inner.id
-    }
-
     #[inline]
     pub(crate) unsafe fn extend_lifetime<'a>(&self) -> &'a UntypedHandle {
         &*(self as *const Self)
@@ -300,69 +265,9 @@ impl UntypedHandle {
         }
     }
 
-    #[inline]
-    fn as_arc(&self) -> ManuallyDrop<Arc<UntypedHandle>> {
-        // Safety: a `UntypedHandle` is always in a `Arc`
-        unsafe { ManuallyDrop::new(Arc::from_raw(self)) }
-    }
-
-    /// Make a `StrongHandle` that points to this handle.
-    #[inline]
-    pub fn strong(&self) -> StrongUntypedHandle {
-        StrongUntypedHandle(Arc::clone(&self.as_arc()))
-    }
-
-    /// Make a `WeakHandle` that points to this handle.
-    #[inline]
-    pub fn downgrade(&self) -> WeakUntypedHandle {
-        WeakUntypedHandle(Arc::downgrade(&self.as_arc()))
-    }
-
-    /// Returns a `ReloadWatcher` that can be used to check whether this asset
-    /// was reloaded.
-    ///
-    /// See [`Handle::reload_watcher`] for details.
-    #[inline]
-    pub fn reload_watcher(&self) -> ReloadWatcher<'_> {
-        ReloadWatcher::new(self.either(|| None, |d| Some(&d.reload)))
-    }
-
-    /// Returns the last `ReloadId` associated with this asset.
-    ///
-    /// It is only meaningful when compared to other `ReloadId`s returned by the
-    /// same handle or to [`ReloadId::NEVER`].
-    #[inline]
-    pub fn last_reload_id(&self) -> ReloadId {
-        self.either(|| ReloadId::NEVER, |this| this.reload.load())
-    }
-
-    /// Returns `true` if the asset has been reloaded since last call to this
-    /// method with **any** handle on this asset.
-    ///
-    /// Note that this method and [`reload_watcher`] are totally independant,
-    /// and the result of the two functions do not depend on whether the other
-    /// was called.
-    ///
-    /// [`reload_watcher`]: Self::reload_watcher
-    #[inline]
-    pub fn reloaded_global(&self) -> bool {
-        self.either(
-            || false,
-            |this| this.reload_global.swap(false, Ordering::Acquire),
-        )
-    }
-
     #[cfg(feature = "hot-reloading")]
     pub(crate) fn write(&self, asset: CacheEntry) {
         self.inner.write(asset);
-    }
-}
-
-impl fmt::Debug for UntypedHandle {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("UntypedHandle")
-            .field("id", self.id())
-            .finish_non_exhaustive()
     }
 }
 
@@ -380,11 +285,11 @@ impl fmt::Debug for UntypedHandle {
 /// However it is generally easier to work with `'static` data. For more
 /// information, see [top-level documentation](crate#getting-owned-data).
 #[repr(transparent)]
-pub struct Handle<T> {
+pub struct Handle<T: ?Sized> {
     inner: Entry<T>,
 }
 
-impl<T> Handle<T> {
+impl<T: ?Sized> Handle<T> {
     #[inline]
     fn either<'a, U>(
         &'a self,
@@ -545,7 +450,7 @@ where
 #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 impl<T> serde::Serialize for Handle<T>
 where
-    T: serde::Serialize,
+    T: serde::Serialize + ?Sized,
 {
     #[inline]
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
@@ -555,18 +460,18 @@ where
 
 impl<T> fmt::Debug for Handle<T>
 where
-    T: fmt::Debug,
+    T: fmt::Debug + ?Sized,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Handle")
             .field("id", self.id())
-            .field("value", &*self.read())
+            .field("value", &&*self.read())
             .finish()
     }
 }
 
 /// Like a `Arc<Handle<T>>`
-pub struct StrongHandle<T>(Arc<Handle<T>>);
+pub struct StrongHandle<T: ?Sized>(Arc<Handle<T>>);
 
 impl<T> StrongHandle<T> {
     #[inline]
@@ -582,14 +487,14 @@ impl<T> StrongHandle<T> {
     }
 }
 
-impl<T> Clone for StrongHandle<T> {
+impl<T: ?Sized> Clone for StrongHandle<T> {
     #[inline]
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
-impl<T> Deref for StrongHandle<T> {
+impl<T: ?Sized> Deref for StrongHandle<T> {
     type Target = Handle<T>;
 
     #[inline]
@@ -600,24 +505,26 @@ impl<T> Deref for StrongHandle<T> {
 
 impl<T> fmt::Debug for StrongHandle<T>
 where
-    T: fmt::Debug,
+    T: fmt::Debug + ?Sized,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("StrongHandle")
             .field("id", self.id())
-            .field("value", &*self.read())
+            .field("value", &&*self.read())
             .finish()
     }
 }
 
 /// Like a `Weak<Handle<T>>`
-pub struct WeakHandle<T>(Weak<Handle<T>>);
+pub struct WeakHandle<T: ?Sized>(Weak<Handle<T>>);
 
 impl<T> WeakHandle<T> {
     pub fn new() -> Self {
         Self(Weak::new())
     }
+}
 
+impl<T: ?Sized> WeakHandle<T> {
     /// Attempts to upgrade the `WeakUntypedHandle` to an `StrongUntypedHandle`.
     ///
     /// Returns `None` if the inner value has since been dropped.
@@ -640,84 +547,24 @@ impl<T> WeakHandle<T> {
     }
 }
 
-impl<T> Clone for WeakHandle<T> {
+impl<T: ?Sized> Clone for WeakHandle<T> {
     #[inline]
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
-impl<T> fmt::Debug for WeakHandle<T> {
+impl<T: ?Sized> fmt::Debug for WeakHandle<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("(WeakHandle)")
     }
 }
 
 /// Like a `Arc<UntypedHandle>`
-pub struct StrongUntypedHandle(Arc<UntypedHandle>);
-
-impl Clone for StrongUntypedHandle {
-    #[inline]
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-
-impl Deref for StrongUntypedHandle {
-    type Target = UntypedHandle;
-
-    #[inline]
-    fn deref(&self) -> &UntypedHandle {
-        &self.0
-    }
-}
-
-impl fmt::Debug for StrongUntypedHandle {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("StrongHandle")
-            .field("id", self.id())
-            .finish_non_exhaustive()
-    }
-}
+pub type StrongUntypedHandle = StrongHandle<dyn Any + Send + Sync>;
 
 /// Like a `Weak<UntypedHandle>`
-pub struct WeakUntypedHandle(Weak<UntypedHandle>);
-
-impl WeakUntypedHandle {
-    /// Attempts to upgrade the `WeakUntypedHandle` to an `StrongUntypedHandle`.
-    ///
-    /// Returns `None` if the inner value has since been dropped.
-    ///
-    /// This is similar to [`Weak::upgrade`].
-    #[inline]
-    pub fn upgrade(&self) -> Option<StrongUntypedHandle> {
-        let arc = self.0.upgrade()?;
-        Some(StrongUntypedHandle(arc))
-    }
-
-    #[inline]
-    pub fn strong_count(&self) -> usize {
-        Weak::strong_count(&self.0)
-    }
-
-    #[inline]
-    pub fn weak_count(&self) -> usize {
-        Weak::weak_count(&self.0)
-    }
-}
-
-impl Clone for WeakUntypedHandle {
-    #[inline]
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-
-impl fmt::Debug for WeakUntypedHandle {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("(WeakHandle)")
-    }
-}
+pub type WeakUntypedHandle = WeakHandle<dyn Any + Send + Sync>;
 
 /// RAII guard used to keep a read lock on an asset and release it when dropped.
 ///
