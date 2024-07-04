@@ -205,7 +205,10 @@ pub use local_cache::LocalAssetCache;
 mod map;
 
 mod entry;
-pub use entry::{AssetReadGuard, AtomicReloadId, Handle, ReloadId, ReloadWatcher, UntypedHandle};
+pub use entry::{
+    AssetReadGuard, AtomicReloadId, Handle, ReloadId, ReloadWatcher, StrongHandle,
+    StrongUntypedHandle, UntypedHandle, WeakHandle, WeakUntypedHandle,
+};
 
 mod key;
 

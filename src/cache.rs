@@ -3,7 +3,7 @@
 use crate::{
     anycache::{AssetMap as _, CacheExt},
     asset::{DirLoadable, Storable},
-    entry::{CacheEntry, UntypedHandle},
+    entry::{CacheEntry, StrongHandle, UntypedHandle},
     source::{FileSystem, Source},
     utils::{RandomState, RwLock},
     AnyCache, Compound, Error, Handle,
@@ -359,9 +359,8 @@ impl<S: Source> AssetCache<S> {
     ///
     /// The corresponding asset is removed from the cache.
     #[inline]
-    pub fn take<T: Storable>(&mut self, id: &str) -> Option<T> {
-        let (asset, _) = self.assets.take(id, TypeId::of::<T>())?.into_inner();
-        Some(asset)
+    pub fn take<T: Storable>(&mut self, id: &str) -> Option<StrongHandle<T>> {
+        Some(self.assets.take(id, TypeId::of::<T>())?.downcast())
     }
 
     /// Clears the cache.

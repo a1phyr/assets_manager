@@ -447,7 +447,7 @@ pub(crate) trait CacheExt: Cache {
     #[inline]
     fn _load_owned<T: Compound>(&self, id: &str) -> Result<T, Error> {
         let entry = self.load_owned_entry(id, Type::of_asset::<T>())?;
-        Ok(entry.into_inner().0)
+        Ok(entry.into_inner().1)
     }
 }
 
