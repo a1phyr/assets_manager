@@ -1,4 +1,4 @@
-use crate::{AnyCache, BoxedError, Compound, SharedString, Storable};
+use crate::{asset::DirLoadable, AnyCache, BoxedError, Compound, SharedString, Storable};
 use once_cell::sync::OnceCell;
 use std::{cell::UnsafeCell, fmt, mem::ManuallyDrop};
 
@@ -259,6 +259,34 @@ impl<U: Compound, T: Storable> Compound for OnceInitCell<Option<U>, T> {
     }
 
     const HOT_RELOADED: bool = U::HOT_RELOADED;
+}
+
+impl<U: DirLoadable, T: Storable> DirLoadable for OnceInitCell<U, T> {
+    fn select_ids(cache: AnyCache, id: &SharedString) -> std::io::Result<Vec<SharedString>> {
+        U::select_ids(cache, id)
+    }
+
+    fn sub_directories(
+        cache: AnyCache,
+        id: &SharedString,
+        f: impl FnMut(&str),
+    ) -> std::io::Result<()> {
+        U::sub_directories(cache, id, f)
+    }
+}
+
+impl<U: DirLoadable, T: Storable> DirLoadable for OnceInitCell<Option<U>, T> {
+    fn select_ids(cache: AnyCache, id: &SharedString) -> std::io::Result<Vec<SharedString>> {
+        U::select_ids(cache, id)
+    }
+
+    fn sub_directories(
+        cache: AnyCache,
+        id: &SharedString,
+        f: impl FnMut(&str),
+    ) -> std::io::Result<()> {
+        U::sub_directories(cache, id, f)
+    }
 }
 
 /// Like `drop` but cold to keep this out of the happy path
