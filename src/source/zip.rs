@@ -3,63 +3,16 @@ use crate::{
     utils::{extension_of, HashMap, IdBuilder},
     SharedString,
 };
-
-use std::{
-    fmt, hash, io,
-    path::{self, Path},
-};
-
+use std::{fmt, io, path};
 use sync_file::SyncFile;
 use zip::{read::ZipFile, ZipArchive};
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 struct FileDesc(SharedString, SharedString);
 
-/// This hack enables us to use a `(&str, &str)` as a key for an HashMap without
-/// allocating a `FileDesc`
-trait FileKey {
-    fn id(&self) -> &str;
-    fn ext(&self) -> &str;
-}
-
-impl FileKey for FileDesc {
-    fn id(&self) -> &str {
-        &self.0
-    }
-
-    fn ext(&self) -> &str {
-        &self.1
-    }
-}
-
-impl FileKey for (&'_ str, &'_ str) {
-    fn id(&self) -> &str {
-        self.0
-    }
-
-    fn ext(&self) -> &str {
-        self.1
-    }
-}
-
-impl<'a> std::borrow::Borrow<dyn FileKey + 'a> for FileDesc {
-    fn borrow(&self) -> &(dyn FileKey + 'a) {
-        self
-    }
-}
-
-impl PartialEq for dyn FileKey + '_ {
-    fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id() && self.ext() == other.ext()
-    }
-}
-
-impl Eq for dyn FileKey + '_ {}
-
-impl hash::Hash for dyn FileKey + '_ {
-    fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
-        self.id().hash(hasher);
-        self.ext().hash(hasher);
+impl hashbrown::Equivalent<FileDesc> for (&str, &str) {
+    fn equivalent(&self, key: &FileDesc) -> bool {
+        key.0 == self.0 && key.1 == self.1
     }
 }
 
@@ -165,12 +118,12 @@ pub struct Zip<R = SyncFile> {
 impl Zip<SyncFile> {
     /// Creates a `Zip` archive backed by the file at the given path.
     #[inline]
-    pub fn open<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+    pub fn open<P: AsRef<path::Path>>(path: P) -> io::Result<Self> {
         Self::_open(path.as_ref())
     }
 
     #[inline]
-    fn _open(path: &Path) -> io::Result<Self> {
+    fn _open(path: &path::Path) -> io::Result<Self> {
         let file = SyncFile::open(path)?;
         Self::from_reader_with_label(file, path.display().to_string())
     }
@@ -239,10 +192,9 @@ where
         use io::Read;
 
         // Get the file within the archive
-        let key: &dyn FileKey = &(id, ext);
         let index = *self
             .files
-            .get(key)
+            .get(&(id, ext))
             .ok_or_else(|| error::find_file(id, &self.label))?;
         let mut archive = self.archive.clone();
         let mut file = archive
@@ -268,7 +220,7 @@ where
 
     fn exists(&self, entry: DirEntry) -> bool {
         match entry {
-            DirEntry::File(id, ext) => self.files.contains_key(&(id, ext) as &dyn FileKey),
+            DirEntry::File(id, ext) => self.files.contains_key(&(id, ext)),
             DirEntry::Directory(id) => self.dirs.contains_key(id),
         }
     }

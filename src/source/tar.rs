@@ -1,10 +1,9 @@
 use super::DirEntry;
-use crate::{utils::IdBuilder, SharedString};
-use std::{
-    collections::HashMap,
-    fmt, hash, io,
-    path::{self, Path},
+use crate::{
+    utils::{HashMap, IdBuilder},
+    SharedString,
 };
+use std::{fmt, io, path};
 use sync_file::SyncFile;
 
 #[cfg(doc)]
@@ -13,60 +12,18 @@ use super::Source;
 #[derive(Clone, Hash, PartialEq, Eq)]
 struct FileDesc(SharedString, SharedString);
 
+impl hashbrown::Equivalent<FileDesc> for (&str, &str) {
+    fn equivalent(&self, key: &FileDesc) -> bool {
+        key.0 == self.0 && key.1 == self.1
+    }
+}
+
 impl fmt::Debug for FileDesc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("FileDesc")
             .field("id", &self.0)
             .field("ext", &self.1)
             .finish()
-    }
-}
-
-/// This hack enables us to use a `(&str, &str)` as a key for an HashMap without
-/// allocating a `FileDesc`
-trait FileKey {
-    fn id(&self) -> &str;
-    fn ext(&self) -> &str;
-}
-
-impl FileKey for FileDesc {
-    fn id(&self) -> &str {
-        &self.0
-    }
-
-    fn ext(&self) -> &str {
-        &self.1
-    }
-}
-
-impl FileKey for (&'_ str, &'_ str) {
-    fn id(&self) -> &str {
-        self.0
-    }
-
-    fn ext(&self) -> &str {
-        self.1
-    }
-}
-
-impl<'a> std::borrow::Borrow<dyn FileKey + 'a> for FileDesc {
-    fn borrow(&self) -> &(dyn FileKey + 'a) {
-        self
-    }
-}
-
-impl PartialEq for dyn FileKey + '_ {
-    fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id() && self.ext() == other.ext()
-    }
-}
-
-impl Eq for dyn FileKey + '_ {}
-
-impl hash::Hash for dyn FileKey + '_ {
-    fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
-        self.id().hash(hasher);
-        self.ext().hash(hasher);
     }
 }
 
@@ -177,11 +134,11 @@ pub struct Tar<R = SyncFile> {
 impl Tar<SyncFile> {
     /// Creates a `Zip` archive backed by the file at the given path.
     #[inline]
-    pub fn open<P: AsRef<std::path::Path>>(path: P) -> io::Result<Self> {
+    pub fn open<P: AsRef<path::Path>>(path: P) -> io::Result<Self> {
         Self::_open(path.as_ref())
     }
 
-    fn _open(path: &Path) -> io::Result<Self> {
+    fn _open(path: &path::Path) -> io::Result<Self> {
         let file = SyncFile::open(path)?;
         let label = path.display().to_string();
         Self::from_reader_with_label(file, label)
@@ -246,7 +203,7 @@ where
     fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
         let &(start, size) = self
             .files
-            .get(&(id, ext) as &dyn FileKey)
+            .get(&(id, ext))
             .ok_or_else(|| error::find_file(id, &self.label))?;
 
         let mut reader = self.reader.clone();
@@ -271,7 +228,7 @@ where
 
     fn exists(&self, entry: DirEntry) -> bool {
         match entry {
-            DirEntry::File(id, ext) => self.files.contains_key(&(id, ext) as &dyn FileKey),
+            DirEntry::File(id, ext) => self.files.contains_key(&(id, ext)),
             DirEntry::Directory(id) => self.dirs.contains_key(id),
         }
     }
