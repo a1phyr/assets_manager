@@ -262,7 +262,7 @@ where
 {
     #[inline]
     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
-        load_from_source(&cache.raw_source(), id)
+        load_from_source(cache.raw_source(), id)
     }
 
     const HOT_RELOADED: bool = Self::HOT_RELOADED;

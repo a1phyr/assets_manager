@@ -28,7 +28,7 @@
 //! format.
 //!
 //! - Serialisation formats (with [`serde`] crate): `bincode`, `json`,
-//! `msgpack`, `ron`, `toml`, `yaml`.
+//!   `msgpack`, `ron`, `toml`, `yaml`.
 //! - Image formats (with [`image`] crate): `bmp`, `jpeg`, `png` `webp`.
 //! - 3D formats (with [`gltf`] crate): `gltf`.
 //!
