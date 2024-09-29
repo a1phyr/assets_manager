@@ -103,9 +103,6 @@ impl<'a> AnyCache<'a> {
 
     /// Gets a value from the cache.
     ///
-    /// The value does not have to be an asset, but if it is not, its type must
-    /// be marked with the [`Storable`] trait.
-    ///
     /// This function does not attempt to load the value from the source if it
     /// is not found in the cache.
     #[inline]
