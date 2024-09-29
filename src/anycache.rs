@@ -115,7 +115,7 @@ impl<'a> AnyCache<'a> {
     /// This is an equivalent of `get_cached` but with a dynamic type.
     #[inline]
     pub fn get_cached_untyped(self, id: &str, type_id: TypeId) -> Option<&'a UntypedHandle> {
-        self.cache.get_cached_entry_inner(id, type_id)
+        self.cache.get_cached_entry(id, type_id)
     }
 
     /// Gets a value from the cache or inserts one.
@@ -268,7 +268,7 @@ pub(crate) trait Cache {
 
     fn exists(&self, entry: DirEntry) -> bool;
 
-    fn get_cached_entry_inner(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle>;
+    fn get_cached_entry(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle>;
 
     fn contains(&self, id: &str, type_id: TypeId) -> bool;
 
@@ -329,7 +329,7 @@ impl<T: RawCache> Cache for T {
         self.get_source().exists(entry)
     }
 
-    fn get_cached_entry_inner(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
+    fn get_cached_entry(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
         #[cfg(feature = "hot-reloading")]
         if let Some(reloader) = self.reloader() {
             let (id, entry) = match self.assets().get(id, type_id) {
@@ -349,7 +349,7 @@ impl<T: RawCache> Cache for T {
     }
 
     fn load_entry(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
-        match self.get_cached_entry_inner(id, typ.type_id) {
+        match self.get_cached_entry(id, typ.type_id) {
             Some(entry) => Ok(entry),
             None => self.add_asset(id, typ),
         }
@@ -388,12 +388,8 @@ pub(crate) trait CacheExt: Cache {
 
     #[inline]
     fn _get_cached<T: Storable>(&self, id: &str) -> Option<&Handle<T>> {
-        Some(self._get_cached_entry::<T>(id)?.downcast_ref_ok())
-    }
-
-    #[inline]
-    fn _get_cached_entry<T: Storable>(&self, id: &str) -> Option<&UntypedHandle> {
-        self.get_cached_entry_inner(id, TypeId::of::<T>())
+        let entry = self.get_cached_entry(id, TypeId::of::<T>())?;
+        Some(entry.downcast_ref_ok())
     }
 
     #[cold]
@@ -405,7 +401,7 @@ pub(crate) trait CacheExt: Cache {
     }
 
     fn _get_or_insert<T: Storable>(&self, id: &str, default: T) -> &Handle<T> {
-        let entry = match self._get_cached_entry::<T>(id) {
+        let entry = match self.get_cached_entry(id, TypeId::of::<T>()) {
             Some(entry) => entry,
             None => self.add_any(id, default),
         };

@@ -296,7 +296,7 @@ impl<S: Source> AssetCache<S> {
     /// This is an equivalent of `get_cached` but with a dynamic type.
     #[inline]
     pub fn get_cached_untyped(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
-        self.get_cached_entry_inner(id, type_id)
+        self.get_cached_entry(id, type_id)
     }
 
     /// Gets a value from the cache or inserts one.
