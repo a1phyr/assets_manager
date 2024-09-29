@@ -113,9 +113,11 @@ impl<'a> AnyCache<'a> {
         self.cache._get_cached(id)
     }
 
+    /// Gets a value with the given type from the cache.
+    ///
+    /// This is an equivalent of `get_cached` but with a dynamic type.
     #[inline]
-    #[cfg(feature = "hot-reloading")]
-    pub(crate) fn get_cached_untyped(self, id: &str, type_id: TypeId) -> Option<&'a UntypedHandle> {
+    pub fn get_cached_untyped(self, id: &str, type_id: TypeId) -> Option<&'a UntypedHandle> {
         self.cache.get_cached_entry_inner(id, type_id)
     }
 

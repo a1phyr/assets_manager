@@ -1,5 +1,5 @@
 use crate::{
-    anycache::CacheExt,
+    anycache::{Cache, CacheExt},
     asset::DirLoadable,
     entry::{CacheEntry, UntypedHandle},
     source::Source,
@@ -130,6 +130,14 @@ impl<S: Source> LocalAssetCache<S> {
     #[inline]
     pub fn get_cached<T: Storable>(&self, id: &str) -> Option<&Handle<T>> {
         self._get_cached(id)
+    }
+
+    /// Gets a value with the given type from the cache.
+    ///
+    /// This is an equivalent of `get_cached` but with a dynamic type.
+    #[inline]
+    pub fn get_cached_untyped(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
+        self.get_cached_entry_inner(id, type_id)
     }
 
     /// Gets a value from the cache or inserts one.
