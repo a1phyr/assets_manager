@@ -223,7 +223,9 @@ impl<'a> AnyCache<'a> {
     pub(crate) fn reload_untyped(self, id: SharedString, typ: Type) -> Option<Dependencies> {
         let handle = self.get_cached_untyped(&id, typ.type_id)?;
 
-        let load_asset = || (typ.inner.load)(self, id);
+        let load_asset = || {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (typ.inner.load)(self, id)))
+        };
         let (entry, deps) = if let Some(reloader) = self.reloader() {
             records::record(reloader, load_asset)
         } else {
@@ -231,13 +233,17 @@ impl<'a> AnyCache<'a> {
             (load_asset(), Dependencies::empty())
         };
         match entry {
-            Ok(e) => {
+            Ok(Ok(e)) => {
                 handle.write(e);
                 log::info!("Reloading \"{}\"", handle.id());
                 Some(deps)
             }
-            Err(err) => {
+            Ok(Err(err)) => {
                 log::warn!("Error reloading \"{}\": {}", err.id(), err.reason());
+                None
+            }
+            Err(_) => {
+                log::warn!("Panic while reloading asset");
                 None
             }
         }
