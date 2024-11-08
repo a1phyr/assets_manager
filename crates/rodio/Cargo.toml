@@ -26,4 +26,4 @@ symphonia-wav = ["rodio/symphonia-wav"]
 
 [dependencies]
 assets_manager = { version = "0.12", default-features = false }
-rodio = { version = "0.19", default-features = false }
+rodio = { version = "0.20", default-features = false }
