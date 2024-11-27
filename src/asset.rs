@@ -234,12 +234,24 @@ pub trait Compound: Sized + Send + Sync + 'static {
     const HOT_RELOADED: bool = true;
 }
 
+fn is_invalid_id(id: &str) -> bool {
+    id.starts_with('.')
+        || id.ends_with('.')
+        || id.contains("..")
+        || id.contains('/')
+        || id.contains('\\')
+}
+
 #[inline]
 pub(crate) fn load_and_record(
     cache: AnyCache,
     id: SharedString,
     typ: Type,
 ) -> Result<CacheEntry, Error> {
+    if is_invalid_id(&id) {
+        return Err(Error::new(id, ErrorKind::InvalidId.into()));
+    }
+
     #[cfg(feature = "hot-reloading")]
     if typ.is_hot_reloaded() {
         if let Some(reloader) = cache.reloader() {

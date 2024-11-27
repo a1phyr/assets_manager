@@ -218,3 +218,11 @@ mod handle {
         assert_eq!(*handle.read().downcast_ref::<X>().unwrap(), X(42));
     }
 }
+
+#[test]
+fn weird_id() {
+    let cache = AssetCache::new("assets").unwrap();
+
+    let err = cache.load::<X>("test/cache").unwrap_err();
+    assert_eq!(err.reason().to_string(), "invalid id");
+}

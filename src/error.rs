@@ -15,6 +15,9 @@ pub(crate) enum ErrorKind {
 
     /// The conversion from raw bytes failed.
     Conversion(BoxedError),
+
+    /// The provided ID was invalid.
+    InvalidId,
 }
 
 impl From<io::Error> for ErrorKind {
@@ -35,6 +38,7 @@ impl From<ErrorKind> for BoxedError {
             ErrorKind::NoDefaultValue => Box::new(NoDefaultValueError),
             ErrorKind::Io(err) => Box::new(err),
             ErrorKind::Conversion(err) => err,
+            ErrorKind::InvalidId => Box::new(InvalidIdError),
         }
     }
 }
@@ -62,6 +66,17 @@ impl fmt::Display for NoDefaultValueError {
 }
 
 impl std::error::Error for NoDefaultValueError {}
+
+#[derive(Debug)]
+struct InvalidIdError;
+
+impl fmt::Display for InvalidIdError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("invalid id")
+    }
+}
+
+impl std::error::Error for InvalidIdError {}
 
 struct ErrorRepr {
     id: SharedString,
