@@ -128,6 +128,14 @@ impl<'a> AnyCache<'a> {
         self.cache._get_or_insert(id, default)
     }
 
+    /// Gets a value from the cache or inserts one.
+    ///
+    /// As for `get_cached`, non-assets types must be marked with [`Storable`].
+    #[inline]
+    pub fn insert_or_update<T: Storable>(self, id: &str, default: T) -> &'a Handle<T> {
+        self.cache._insert_or_update(id, default)
+    }
+
     /// Returns `true` if the cache contains the specified asset.
     #[inline]
     pub fn contains<T: Storable>(self, id: &str) -> bool {
@@ -283,6 +291,17 @@ pub(crate) trait Cache {
     fn load_owned_entry(&self, id: &str, typ: Type) -> Result<CacheEntry, Error>;
 
     fn insert(&self, entry: CacheEntry) -> &UntypedHandle;
+
+    fn insert_or_update(&self, entry: CacheEntry) -> &UntypedHandle {
+        let (typ, id) = entry.as_key();
+        match self.get_cached_entry(id, typ) {
+            Some(e) => {
+                e.write(entry);
+                e
+            }
+            None => self.insert(entry),
+        }
+    }
 }
 
 pub(crate) trait RawCache: Sized {
@@ -413,6 +432,11 @@ pub(crate) trait CacheExt: Cache {
         };
 
         entry.downcast_ref_ok()
+    }
+
+    fn _insert_or_update<T: Storable>(&self, id: &str, value: T) -> &Handle<T> {
+        let entry = CacheEntry::new_any(value, SharedString::from(id), true);
+        self.insert_or_update(entry).downcast_ref_ok()
     }
 
     #[inline]
