@@ -10,10 +10,8 @@ use std::{
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-#[cfg(feature = "hot-reloading")]
 use crate::utils::RwLockReadGuard;
 
-#[cfg(feature = "hot-reloading")]
 unsafe fn swap_any(a: &mut dyn Any, b: &mut dyn Any) {
     debug_assert_eq!((a as &dyn Any).type_id(), (b as &dyn Any).type_id());
     debug_assert_eq!(
@@ -41,7 +39,6 @@ pub(crate) struct Dynamic {
 struct EntryStorage<T: ?Sized> {
     id: SharedString,
     type_id: TypeId,
-    #[cfg(feature = "hot-reloading")]
     dynamic: Option<Dynamic>,
     value: UnsafeCell<T>,
 }
@@ -56,13 +53,11 @@ impl<T: Storable> Entry<T> {
         Self {
             id,
             type_id: TypeId::of::<T>(),
-            #[cfg(feature = "hot-reloading")]
             dynamic: None,
             value: UnsafeCell::new(value),
         }
     }
 
-    #[cfg(feature = "hot-reloading")]
     fn new_dynamic(id: SharedString, value: T) -> Self {
         Self {
             id,
@@ -87,19 +82,16 @@ impl<T: Storable> Entry<T> {
 
 impl<T: ?Sized> EntryStorage<T> {
     pub fn read(&self) -> AssetReadGuard<'_, T> {
-        #[cfg(feature = "hot-reloading")]
         let guard = self.dynamic.as_ref().map(|d| d.lock.read());
 
         AssetReadGuard {
             value: unsafe { &*self.value.get() },
-            #[cfg(feature = "hot-reloading")]
             guard,
         }
     }
 }
 
 impl UntypedEntry {
-    #[cfg(feature = "hot-reloading")]
     pub fn write(&self, mut value: CacheEntry) {
         assert!(self.type_id == value.0.type_id);
 
@@ -149,7 +141,8 @@ impl CacheEntry {
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
     pub fn new<T: Compound>(asset: T, id: SharedString, mutable: impl FnOnce() -> bool) -> Self {
-        Self::new_any(asset, id, T::HOT_RELOADED && mutable())
+        let mutable = cfg!(feature = "hot-reloading") && T::HOT_RELOADED && mutable();
+        Self::new_any(asset, id, mutable)
     }
 
     /// Creates a new `CacheEntry` containing a value of type `T`.
@@ -157,11 +150,7 @@ impl CacheEntry {
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
     pub fn new_any<T: Storable>(value: T, id: SharedString, _mutable: bool) -> Self {
-        #[cfg(not(feature = "hot-reloading"))]
-        let inner = EntryStorage::new_static(id, value);
-
         // Even if hot-reloading is enabled, we can avoid the lock in some cases.
-        #[cfg(feature = "hot-reloading")]
         let inner = if _mutable {
             EntryStorage::new_dynamic(id, value)
         } else {
@@ -233,7 +222,6 @@ impl UntypedHandle {
         on_static: impl FnOnce() -> U,
         _on_dynamic: impl FnOnce(&'a Dynamic) -> U,
     ) -> U {
-        #[cfg(feature = "hot-reloading")]
         if let Some(d) = &self.inner.dynamic {
             return _on_dynamic(d);
         }
@@ -320,7 +308,6 @@ impl UntypedHandle {
         )
     }
 
-    #[cfg(feature = "hot-reloading")]
     pub(crate) fn write(&self, asset: CacheEntry) {
         self.inner.write(asset);
     }
@@ -359,7 +346,6 @@ impl<T> Handle<T> {
         on_static: impl FnOnce() -> U,
         _on_dynamic: impl FnOnce(&'a Dynamic) -> U,
     ) -> U {
-        #[cfg(feature = "hot-reloading")]
         if let Some(d) = &self.inner.dynamic {
             return _on_dynamic(d);
         }
@@ -512,8 +498,6 @@ where
 /// It can be obtained by calling [`Handle::read`].
 pub struct AssetReadGuard<'a, T: ?Sized> {
     value: &'a T,
-
-    #[cfg(feature = "hot-reloading")]
     guard: Option<RwLockReadGuard<'a, ()>>,
 }
 
@@ -525,7 +509,6 @@ impl<'a, T: ?Sized> AssetReadGuard<'a, T> {
     {
         AssetReadGuard {
             value: f(this.value),
-            #[cfg(feature = "hot-reloading")]
             guard: this.guard,
         }
     }
@@ -540,7 +523,6 @@ impl<'a, T: ?Sized> AssetReadGuard<'a, T> {
         match f(this.value) {
             Some(value) => Ok(AssetReadGuard {
                 value,
-                #[cfg(feature = "hot-reloading")]
                 guard: this.guard,
             }),
             None => Err(this),
@@ -607,14 +589,12 @@ where
     }
 }
 
-#[cfg(feature = "hot-reloading")]
 #[derive(Debug, Clone, Copy)]
 struct ReloadWatcherInner<'a> {
     reload_id: &'a AtomicReloadId,
     last_reload_id: ReloadId,
 }
 
-#[cfg(feature = "hot-reloading")]
 impl<'a> ReloadWatcherInner<'a> {
     #[inline]
     fn new(reload_id: &'a AtomicReloadId) -> Self {
@@ -632,7 +612,6 @@ impl<'a> ReloadWatcherInner<'a> {
 /// It can be obtained with [`Handle::reload_watcher`].
 #[derive(Debug, Clone, Copy)]
 pub struct ReloadWatcher<'a> {
-    #[cfg(feature = "hot-reloading")]
     inner: Option<ReloadWatcherInner<'a>>,
     _private: PhantomData<&'a ()>,
 }
@@ -640,10 +619,8 @@ pub struct ReloadWatcher<'a> {
 impl<'a> ReloadWatcher<'a> {
     #[inline]
     fn new(_reload_id: Option<&'a AtomicReloadId>) -> Self {
-        #[cfg(feature = "hot-reloading")]
         let inner = _reload_id.map(ReloadWatcherInner::new);
         Self {
-            #[cfg(feature = "hot-reloading")]
             inner,
             _private: PhantomData,
         }
@@ -653,7 +630,6 @@ impl<'a> ReloadWatcher<'a> {
     /// this function.
     #[inline]
     pub fn reloaded(&mut self) -> bool {
-        #[cfg(feature = "hot-reloading")]
         if let Some(inner) = &mut self.inner {
             let new_id = inner.reload_id.load();
             return inner.last_reload_id.update(new_id);
@@ -665,7 +641,6 @@ impl<'a> ReloadWatcher<'a> {
     /// Returns the last `ReloadId` associated with this asset.
     #[inline]
     pub fn last_reload_id(&self) -> ReloadId {
-        #[cfg(feature = "hot-reloading")]
         if let Some(inner) = &self.inner {
             return inner.reload_id.load();
         }
@@ -762,7 +737,6 @@ impl AtomicReloadId {
     }
 
     #[inline]
-    #[cfg(feature = "hot-reloading")]
     fn increment(&self) {
         self.0.fetch_add(1, Ordering::Release);
     }
