@@ -24,7 +24,7 @@ union State<U, T> {
 ///
 /// ```no_run
 /// use assets_manager::{asset::Png, AnyCache, BoxedError, OnceInitCell};
-
+///
 /// struct GpuCtx(/* ... */);
 /// struct Texture(/* ... */);
 ///

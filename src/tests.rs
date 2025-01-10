@@ -38,6 +38,7 @@ impl Compound for Y {
     }
 }
 
+#[allow(dead_code)]
 pub struct Z(pub i32);
 
 impl Compound for Z {

@@ -35,7 +35,7 @@ impl Dependencies {
     }
 
     #[inline]
-    pub fn difference<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = &Dependency> + 'a {
+    pub fn difference<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = &'a Dependency> {
         self.0.difference(&other.0)
     }
 }
@@ -47,7 +47,7 @@ pub(crate) enum BorrowedDependency<'a> {
     Asset(&'a OwnedKey),
 }
 
-impl<'a> BorrowedDependency<'a> {
+impl BorrowedDependency<'_> {
     pub fn into_owned(self) -> Dependency {
         match self {
             BorrowedDependency::File(id, ext) => Dependency::File(id.clone(), ext.clone()),

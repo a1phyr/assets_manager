@@ -82,7 +82,7 @@ impl Source for FsWithOverride {
     fn exists(&self, entry: DirEntry) -> bool {
         self.override_dir
             .as_ref()
-            .map_or(false, |dir| dir.exists(entry))
+            .is_some_and(|dir| dir.exists(entry))
             || self.default_dir.exists(entry)
     }
 

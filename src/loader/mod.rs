@@ -98,7 +98,6 @@ mod tests;
 /// # let fruit = b" banana \n"[..].into();
 /// # assert_eq!(FruitLoader::load(fruit, "").unwrap(), Fruit::Banana);
 /// ```
-
 pub trait Loader<T> {
     /// Loads an asset from its raw bytes representation.
     ///
