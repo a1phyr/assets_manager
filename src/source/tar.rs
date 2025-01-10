@@ -1,3 +1,5 @@
+#[cfg(feature = "mmap")]
+use super::ArcMap;
 use super::DirEntry;
 use crate::{
     utils::{HashMap, IdBuilder},
@@ -142,6 +144,26 @@ impl Tar<SyncFile> {
         let file = SyncFile::open(path)?;
         let label = path.display().to_string();
         Self::from_reader_with_label(file, label)
+    }
+}
+
+#[cfg(feature = "mmap")]
+#[cfg_attr(docsrs, doc(cfg(feature = "mmap")))]
+impl Tar<io::Cursor<ArcMap>> {
+    /// Creates a `Zip` archive backed by the file map at the given path.
+    ///
+    /// # Safety
+    ///
+    /// See [`ArcMap::map`] for why this this function is unsafe
+    #[inline]
+    pub unsafe fn mmap<P: AsRef<path::Path>>(path: P) -> io::Result<Self> {
+        Self::_mmap(path.as_ref())
+    }
+
+    unsafe fn _mmap(path: &path::Path) -> io::Result<Self> {
+        let map = ArcMap::map(&std::fs::File::open(path)?)?;
+        let label = path.display().to_string();
+        Self::from_bytes_with_label(map, label)
     }
 }
 

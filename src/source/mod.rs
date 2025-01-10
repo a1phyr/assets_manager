@@ -168,6 +168,37 @@ impl OwnedDirEntry {
     }
 }
 
+/// A handle to an immutable memory mapped buffer.
+#[cfg(feature = "mmap")]
+#[cfg_attr(docsrs, doc(cfg(feature = "mmap")))]
+#[derive(Debug, Clone)]
+pub struct ArcMap(std::sync::Arc<memmap2::Mmap>);
+
+#[cfg(feature = "mmap")]
+impl ArcMap {
+    /// Creates a read-only memory map backed by a file.
+    ///
+    /// ## Safety
+    ///
+    /// All file-backed memory map constructors are marked `unsafe` because of the potential for
+    /// *Undefined Behavior* (UB) using the map if the underlying file is subsequently modified, in or
+    /// out of process. Applications must consider the risk and take appropriate precautions when using
+    /// file-backed maps. Solutions such as file permissions, locks or process-private (e.g. unlinked)
+    /// files exist but are platform specific and limited.
+    pub unsafe fn map(file: &std::fs::File) -> io::Result<Self> {
+        let map = memmap2::Mmap::map(file)?;
+        Ok(Self(std::sync::Arc::new(map)))
+    }
+}
+
+#[cfg(feature = "mmap")]
+impl AsRef<[u8]> for ArcMap {
+    #[inline]
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
 /// The raw content of a file.
 ///
 /// This enum enables returning the raw bytes of a file in the most efficient
