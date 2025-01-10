@@ -6,8 +6,12 @@ use std::{
     cell::UnsafeCell,
     fmt,
     marker::PhantomData,
+    mem::ManuallyDrop,
     ops::Deref,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc, Weak,
+    },
 };
 
 #[cfg(feature = "hot-reloading")]
@@ -83,6 +87,11 @@ impl<T: Storable> Entry<T> {
     fn untyped_handle(&self) -> &UntypedHandle {
         unsafe { &*(self as *const Self as *const UntypedEntry as *const UntypedHandle) }
     }
+
+    fn into_handle(self: Arc<Self>) -> ArcHandle<T> {
+        let arc = unsafe { Arc::from_raw(Arc::into_raw(self) as *const Handle<T>) };
+        ArcHandle(arc)
+    }
 }
 
 impl<T: ?Sized> EntryStorage<T> {
@@ -103,17 +112,17 @@ impl UntypedEntry {
     pub fn write(&self, mut value: CacheEntry) {
         assert!(self.type_id == value.0.type_id);
 
-        if let Some(d) = &self.dynamic {
-            unsafe {
-                let _g = d.lock.write();
-                swap_any(&mut *self.value.get(), value.0.value.get_mut());
-                d.reload.increment();
-                d.reload_global.store(true, Ordering::Release);
-            }
-            return;
-        }
+        let Some(d) = &self.dynamic else {
+            wrong_handle_type();
+        };
+        let storage = Arc::get_mut(&mut value.0).unwrap();
 
-        wrong_handle_type();
+        unsafe {
+            let _g = d.lock.write();
+            swap_any(&mut *self.value.get(), storage.value.get_mut());
+            d.reload.increment();
+            d.reload_global.store(true, Ordering::Release);
+        }
     }
 
     #[inline]
@@ -131,9 +140,9 @@ impl UntypedEntry {
     }
 
     #[inline]
-    fn downcast<T: 'static>(self: Box<Self>) -> Result<Box<EntryStorage<T>>, Box<Self>> {
+    fn downcast<T: 'static>(self: Arc<Self>) -> Result<Arc<EntryStorage<T>>, Arc<Self>> {
         if self.is::<T>() {
-            unsafe { Ok(Box::from_raw(Box::into_raw(self) as *mut EntryStorage<T>)) }
+            unsafe { Ok(Arc::from_raw(Arc::into_raw(self) as *mut EntryStorage<T>)) }
         } else {
             Err(self)
         }
@@ -141,7 +150,7 @@ impl UntypedEntry {
 }
 
 /// An entry in the cache.
-pub struct CacheEntry(Box<UntypedEntry>);
+pub struct CacheEntry(Arc<UntypedEntry>);
 
 impl CacheEntry {
     /// Creates a new `CacheEntry` containing an asset of type `T`.
@@ -168,7 +177,7 @@ impl CacheEntry {
             EntryStorage::new_static(id, value)
         };
 
-        CacheEntry(Box::new(inner))
+        CacheEntry(Arc::new(inner))
     }
 
     #[inline]
@@ -184,9 +193,14 @@ impl CacheEntry {
 
     /// Consumes the `CacheEntry` and returns its inner value.
     #[inline]
-    pub fn into_inner<T: Storable>(self) -> (T, SharedString) {
+    pub fn into_inner<T: Storable>(self) -> (SharedString, T) {
+        self.downcast().into_inner().unwrap()
+    }
+
+    #[inline]
+    pub fn downcast<T: Storable>(self) -> ArcHandle<T> {
         if let Ok(storage) = self.0.downcast() {
-            return (storage.value.into_inner(), storage.id);
+            return storage.into_handle();
         }
 
         wrong_handle_type()
@@ -317,6 +331,36 @@ impl<T: ?Sized> Handle<T> {
         self.inner.untyped_handle()
     }
 
+    #[inline]
+    fn as_arc(&self) -> ManuallyDrop<Arc<Handle<T>>> {
+        // Safety: a `Handle<T>` is always in a `Arc`
+        unsafe { ManuallyDrop::new(Arc::from_raw(self)) }
+    }
+
+    /// Make a `ArcHandle` that points to this handle.
+    #[inline]
+    pub fn strong(&self) -> ArcHandle<T> {
+        ArcHandle(Arc::clone(&self.as_arc()))
+    }
+
+    /// Make a `WeakHandle` that points to this handle.
+    #[inline]
+    pub fn weak(&self) -> WeakHandle<T> {
+        WeakHandle(Arc::downgrade(&self.as_arc()))
+    }
+
+    /// Gets the number of strong ([`ArcHandle`]) pointers to this allocation.
+    #[inline]
+    pub fn strong_count(&self) -> usize {
+        Arc::strong_count(&self.as_arc())
+    }
+
+    /// Gets the number of [`WeakHandle`] pointers to this allocation.
+    #[inline]
+    pub fn weak_count(&self) -> usize {
+        Arc::weak_count(&self.as_arc())
+    }
+
     /// Returns a `ReloadWatcher` that can be used to check whether this asset
     /// was reloaded.
     ///
@@ -427,6 +471,121 @@ where
             .finish()
     }
 }
+
+/// Like a `Arc<Handle<T>>`
+pub struct ArcHandle<T: ?Sized>(Arc<Handle<T>>);
+
+impl<T> ArcHandle<T> {
+    #[inline]
+    pub fn try_unwrap(self) -> Result<(SharedString, T), Self> {
+        let entry = Arc::try_unwrap(self.0).map_err(Self)?.inner;
+        Ok((entry.id, entry.value.into_inner()))
+    }
+
+    #[inline]
+    pub fn into_inner(self) -> Option<(SharedString, T)> {
+        let entry = Arc::into_inner(self.0)?.inner;
+        Some((entry.id, entry.value.into_inner()))
+    }
+}
+
+impl<T: ?Sized> Clone for ArcHandle<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T: ?Sized> Deref for ArcHandle<T> {
+    type Target = Handle<T>;
+
+    #[inline]
+    fn deref(&self) -> &Handle<T> {
+        &self.0
+    }
+}
+
+impl<T> fmt::Debug for ArcHandle<T>
+where
+    T: fmt::Debug + ?Sized,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ArcHandle")
+            .field("id", self.id())
+            .field("value", &&*self.read())
+            .finish()
+    }
+}
+
+/// Like a `Weak<Handle<T>>`
+pub struct WeakHandle<T: ?Sized>(Weak<Handle<T>>);
+
+impl<T> WeakHandle<T> {
+    /// Constructs a new `WeakHandle<T>`, without allocating any memory.
+    /// Calling [`upgrade`] on the return value always gives [`None`].
+    ///
+    /// [`upgrade`]: WeakHandle::upgrade
+    #[inline]
+    pub fn new() -> Self {
+        Self(Weak::new())
+    }
+}
+
+impl<T: ?Sized> WeakHandle<T> {
+    /// Attempts to upgrade the `WeakHandle` to an `ArcHandle`.
+    ///
+    /// Returns `None` if the inner value has since been dropped.
+    ///
+    /// This is similar to [`Weak::upgrade`].
+    #[inline]
+    pub fn upgrade(&self) -> Option<ArcHandle<T>> {
+        let arc = self.0.upgrade()?;
+        Some(ArcHandle(arc))
+    }
+
+    /// Gets the number of strong (`Arc`) pointers pointing to this allocation.
+    ///
+    /// If `self` was created using [`WeakHandle::new`], this will return 0.
+    #[inline]
+    pub fn strong_count(&self) -> usize {
+        Weak::strong_count(&self.0)
+    }
+
+    /// Gets an approximation of the number of `Weak` pointers pointing to this
+    /// allocation.
+    ///
+    /// If `self` was created using [`WeakHandle::new`], or if there are no remaining
+    /// strong pointers, this will return 0.
+    #[inline]
+    pub fn weak_count(&self) -> usize {
+        Weak::weak_count(&self.0)
+    }
+}
+
+impl<T> Default for WeakHandle<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: ?Sized> Clone for WeakHandle<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T: ?Sized> fmt::Debug for WeakHandle<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("(WeakHandle)")
+    }
+}
+
+/// Like a `Arc<UntypedHandle>`
+pub type ArcUntypedHandle = ArcHandle<dyn Any + Send + Sync>;
+
+/// Like a `Weak<UntypedHandle>`
+pub type WeakUntypedHandle = WeakHandle<dyn Any + Send + Sync>;
 
 /// RAII guard used to keep a read lock on an asset and release it when dropped.
 ///

@@ -174,7 +174,10 @@ mod asset_cache {
 
         cache.load::<X>("test.cache").unwrap();
         assert!(cache.contains::<X>("test.cache"));
-        assert_eq!(cache.take("test.cache"), Some(X(42)));
+        assert_eq!(
+            cache.take("test.cache").unwrap().into_inner().unwrap(),
+            ("test.cache".into(), X(42))
+        );
         assert!(!cache.contains::<X>("test.cache"));
     }
 

@@ -1,7 +1,7 @@
 use crate::{
     anycache::{Cache, CacheExt},
     asset::DirLoadable,
-    entry::{CacheEntry, UntypedHandle},
+    entry::{ArcHandle, CacheEntry, UntypedHandle},
     source::Source,
     utils::RandomState,
     AnyCache, Compound, Error, Handle, Storable,
@@ -224,9 +224,9 @@ impl<S> LocalAssetCache<S> {
     ///
     /// The corresponding asset is removed from the cache.
     #[inline]
-    pub fn take<T: Storable>(&mut self, id: &str) -> Option<T> {
-        let (asset, _id) = self.assets.take(id, TypeId::of::<T>())?.into_inner();
-        Some(asset)
+    pub fn take<T: Storable>(&mut self, id: &str) -> Option<ArcHandle<T>> {
+        let handle = self.assets.take(id, TypeId::of::<T>())?.downcast();
+        Some(handle)
     }
 
     /// Clears the cache.
