@@ -23,10 +23,10 @@ wav = ["kira/wav"]
 
 [dependencies]
 assets_manager = { version = "0.12", default-features = false }
-kira = { version = "0.9", default-features = false, features = ["symphonia"] }
+kira = { version = "0.10", default-features = false, features = ["symphonia"] }
 
 [dev-dependencies]
-kira = { version = "0.9", default-features = false, features = ["cpal"] }
+kira = { version = "0.10", default-features = false, features = ["cpal"] }
 
 
 [package.metadata.docs.rs]

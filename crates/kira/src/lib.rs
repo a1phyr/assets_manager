@@ -31,7 +31,7 @@ mod static_sound {
     /// # Example
     ///
     /// ```no_run
-    /// use kira::manager::{backend::DefaultBackend, AudioManager, AudioManagerSettings};
+    /// use kira::{backend::DefaultBackend, AudioManager, AudioManagerSettings};
     /// use assets_manager_kira::StaticSound;
     ///
     /// let mut manager = AudioManager::<DefaultBackend>::new(AudioManagerSettings::default())?;
@@ -115,7 +115,7 @@ mod streaming {
     /// # Example
     ///
     /// ```no_run
-    /// use kira::manager::{backend::DefaultBackend, AudioManager, AudioManagerSettings};
+    /// use kira::{backend::DefaultBackend, AudioManager, AudioManagerSettings};
     /// use assets_manager_kira::StreamingSound;
     ///
     /// let mut manager = AudioManager::<DefaultBackend>::new(AudioManagerSettings::default())?;
