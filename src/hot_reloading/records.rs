@@ -20,25 +20,7 @@ impl Dependency {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct Dependencies(HashSet<Dependency>);
-
-impl Dependencies {
-    #[inline]
-    pub fn empty() -> Self {
-        Self(HashSet::new())
-    }
-
-    #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = &Dependency> {
-        self.0.iter()
-    }
-
-    #[inline]
-    pub fn difference<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = &'a Dependency> + 'a {
-        self.0.difference(&other.0)
-    }
-}
+pub(crate) type Dependencies = HashSet<Dependency>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum BorrowedDependency<'a> {
@@ -72,25 +54,25 @@ impl Record {
     fn new(reloader: &HotReloader) -> Record {
         Record {
             reloader,
-            records: Dependencies::empty(),
+            records: Dependencies::new(),
         }
     }
 
     fn insert_asset(&mut self, reloader: &HotReloader, key: OwnedKey) {
         if self.reloader == reloader {
-            self.records.0.insert(Dependency::Asset(key));
+            self.records.insert(Dependency::Asset(key));
         }
     }
 
     fn insert_file(&mut self, reloader: &HotReloader, id: SharedString, ext: SharedString) {
         if self.reloader == reloader {
-            self.records.0.insert(Dependency::File(id, ext));
+            self.records.insert(Dependency::File(id, ext));
         }
     }
 
     fn insert_dir(&mut self, reloader: &HotReloader, id: SharedString) {
         if self.reloader == reloader {
-            self.records.0.insert(Dependency::Directory(id));
+            self.records.insert(Dependency::Directory(id));
         }
     }
 }

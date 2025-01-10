@@ -22,7 +22,7 @@ impl Default for GraphNode {
     fn default() -> Self {
         GraphNode {
             typ: None,
-            deps: Dependencies::empty(),
+            deps: Dependencies::new(),
             rdeps: HashSet::new(),
         }
     }

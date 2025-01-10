@@ -230,7 +230,7 @@ impl<'a> AnyCache<'a> {
             records::record(reloader, load_asset)
         } else {
             log::warn!("No reloader in hot-reloading context");
-            (load_asset(), Dependencies::empty())
+            (load_asset(), Dependencies::new())
         };
         match entry {
             Ok(Ok(e)) => {
