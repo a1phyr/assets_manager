@@ -125,6 +125,12 @@ impl<U, T> OnceInitCell<U, T> {
         }
     }
 
+    /// Blocks the current thread until the cell is initialized.
+    pub fn wait(&self) -> &T {
+        self.once.wait();
+        unsafe { self.get_unchecked() }
+    }
+
     /// Gets the contents of the cell, initializing it with `f` if the cell
     /// was uninitialized.
     ///
