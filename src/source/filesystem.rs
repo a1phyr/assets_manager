@@ -1,7 +1,7 @@
 use crate::{
     hot_reloading::{EventSender, FsWatcherBuilder},
     utils::extension_of,
-    BoxedError,
+    BoxedError, Id,
 };
 
 #[cfg(doc)]
@@ -65,7 +65,7 @@ impl FileSystem {
 }
 
 impl Source for FileSystem {
-    fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
+    fn read(&self, id: &Id, ext: &str) -> io::Result<super::FileContent> {
         let path = self.path_of(DirEntry::File(id, ext));
         match fs::read(&path) {
             Ok(buf) => Ok(super::FileContent::Buffer(buf)),
@@ -73,7 +73,7 @@ impl Source for FileSystem {
         }
     }
 
-    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+    fn read_dir(&self, id: &Id, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
         let dir_path = self.path_of(DirEntry::Directory(id));
         let entries = fs::read_dir(&dir_path).map_err(|err| read_error(err, dir_path))?;
 

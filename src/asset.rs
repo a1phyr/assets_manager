@@ -51,7 +51,7 @@ use crate::{
     utils::{Private, SharedBytes, SharedString},
     AnyCache, AssetCache, BoxedError, Error,
 };
-use crate::{error::ErrorKind, key::Type, loader::Loader};
+use crate::{error::ErrorKind, key::Type, loader::Loader, OwnedId};
 
 #[allow(unused)]
 use std::{borrow::Cow, io, sync::Arc};
@@ -169,7 +169,7 @@ pub trait Asset: Sized + Send + Sync + 'static {
     /// ```
     #[inline]
     #[allow(unused_variables)]
-    fn default_value(id: &SharedString, error: BoxedError) -> Result<Self, BoxedError> {
+    fn default_value(id: &OwnedId, error: BoxedError) -> Result<Self, BoxedError> {
         Err(error)
     }
 
@@ -181,7 +181,7 @@ pub trait Asset: Sized + Send + Sync + 'static {
 
 pub(crate) fn load_from_source<T: Asset>(
     source: impl Source,
-    id: &SharedString,
+    id: &OwnedId,
 ) -> Result<T, BoxedError> {
     let load_with_ext = |ext| -> Result<T, ErrorKind> {
         let asset = source
@@ -226,7 +226,7 @@ pub trait Compound: Sized + Send + Sync + 'static {
     ///
     /// This function should not perform any kind of I/O: such concern should be
     /// delegated to [`Asset`]s.
-    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError>;
+    fn load(cache: AnyCache, id: &OwnedId) -> Result<Self, BoxedError>;
 
     /// If `false`, disable hot-reloading for assets of this type (`true` by
     /// default). This avoids having to lock the asset to read it (ie it makes
@@ -245,7 +245,7 @@ fn is_invalid_id(id: &str) -> bool {
 #[inline]
 pub(crate) fn load_and_record(
     cache: AnyCache,
-    id: SharedString,
+    id: OwnedId,
     typ: Type,
 ) -> Result<CacheEntry, Error> {
     if is_invalid_id(&id) {
@@ -273,7 +273,7 @@ where
     T: Asset,
 {
     #[inline]
-    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
+    fn load(cache: AnyCache, id: &OwnedId) -> Result<Self, BoxedError> {
         load_from_source(cache.raw_source(), id)
     }
 
@@ -284,7 +284,7 @@ impl<T> Compound for Arc<T>
 where
     T: Compound,
 {
-    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
+    fn load(cache: AnyCache, id: &OwnedId) -> Result<Self, BoxedError> {
         let asset = T::load(cache, id)?;
         Ok(Arc::new(asset))
     }

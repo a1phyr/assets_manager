@@ -3,16 +3,16 @@ use super::ArcMap;
 use super::{DirEntry, Source};
 use crate::{
     utils::{extension_of, HashMap, IdBuilder},
-    SharedString,
+    Id, OwnedId, SharedString,
 };
 use std::{fmt, io, path};
 use sync_file::SyncFile;
 use zip::{read::ZipFile, ZipArchive};
 
 #[derive(Clone, Hash, PartialEq, Eq)]
-struct FileDesc(SharedString, SharedString);
+struct FileDesc(OwnedId, SharedString);
 
-impl hashbrown::Equivalent<FileDesc> for (&str, &str) {
+impl hashbrown::Equivalent<FileDesc> for (&Id, &str) {
     fn equivalent(&self, key: &FileDesc) -> bool {
         key.0 == self.0 && key.1 == self.1
     }
@@ -21,7 +21,7 @@ impl hashbrown::Equivalent<FileDesc> for (&str, &str) {
 /// An entry in a archive directory.
 enum OwnedEntry {
     File(FileDesc),
-    Dir(SharedString),
+    Dir(OwnedId),
 }
 
 impl fmt::Debug for OwnedEntry {
@@ -47,7 +47,7 @@ fn register_file(
     file: ZipFile,
     index: usize,
     files: &mut HashMap<FileDesc, usize>,
-    dirs: &mut HashMap<SharedString, Vec<OwnedEntry>>,
+    dirs: &mut HashMap<OwnedId, Vec<OwnedEntry>>,
     id_builder: &mut IdBuilder,
 ) {
     id_builder.reset();
@@ -112,7 +112,7 @@ fn register_file(
 #[cfg_attr(docsrs, doc(cfg(feature = "zip")))]
 pub struct Zip<R = SyncFile> {
     files: HashMap<FileDesc, usize>,
-    dirs: HashMap<SharedString, Vec<OwnedEntry>>,
+    dirs: HashMap<OwnedId, Vec<OwnedEntry>>,
     archive: ZipArchive<R>,
     label: Option<String>,
 }
@@ -210,7 +210,7 @@ impl<R> Source for Zip<R>
 where
     R: io::Read + io::Seek + Clone,
 {
-    fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
+    fn read(&self, id: &Id, ext: &str) -> io::Result<super::FileContent> {
         use io::Read;
 
         // Get the file within the archive
@@ -231,7 +231,7 @@ where
         Ok(super::FileContent::Buffer(content))
     }
 
-    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+    fn read_dir(&self, id: &Id, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
         let dir = self
             .dirs
             .get(id)
@@ -258,11 +258,12 @@ impl<R> fmt::Debug for Zip<R> {
 }
 
 mod error {
+    use crate::Id;
     use std::{fmt, io};
     use zip::result::ZipError;
 
     #[cold]
-    pub fn find_file(id: &str, label: &Option<String>) -> io::Error {
+    pub fn find_file(id: &Id, label: &Option<String>) -> io::Error {
         let msg = match label {
             Some(lbl) => format!("Could not find asset \"{id}\" in {lbl}"),
             None => format!("Could not find asset \"{id}\" in ZIP"),
@@ -272,7 +273,7 @@ mod error {
     }
 
     #[cold]
-    pub fn read_file(err: io::Error, id: &str, label: &Option<String>) -> io::Error {
+    pub fn read_file(err: io::Error, id: &Id, label: &Option<String>) -> io::Error {
         #[derive(Debug)]
         struct Error {
             err: io::Error,
@@ -298,7 +299,7 @@ mod error {
     }
 
     #[cold]
-    pub fn open_file(err: ZipError, id: &str, label: &Option<String>) -> io::Error {
+    pub fn open_file(err: ZipError, id: &Id, label: &Option<String>) -> io::Error {
         #[derive(Debug)]
         struct Error {
             err: ZipError,
@@ -331,7 +332,7 @@ mod error {
     }
 
     #[cold]
-    pub fn find_dir(id: &str, label: &Option<String>) -> io::Error {
+    pub fn find_dir(id: &Id, label: &Option<String>) -> io::Error {
         let msg = match label {
             Some(lbl) => format!("Could not find directory \"{id}\" in {lbl}"),
             None => format!("Could not find directory \"{id}\" in ZIP"),

@@ -1,6 +1,6 @@
 use crate::{
     source::{DirEntry, Source},
-    AnyCache, Asset, BoxedError, Compound, Error, Handle, SharedString, Storable,
+    AnyCache, Asset, BoxedError, Compound, Error, Handle, Id, OwnedId, Storable,
 };
 
 use std::{fmt, io, marker::PhantomData};
@@ -88,16 +88,12 @@ pub trait DirLoadable: Storable {
     ///
     /// Note that the order of the returned ids is not kept, and that redundant
     /// ids are removed.
-    fn select_ids(cache: AnyCache, id: &SharedString) -> io::Result<Vec<SharedString>>;
+    fn select_ids(cache: AnyCache, id: &OwnedId) -> io::Result<Vec<OwnedId>>;
 
     /// Executes the given closure for each id of a child directory of the given
     /// directory. The default implementation reads the cache's source.
     #[inline]
-    fn sub_directories(
-        cache: AnyCache,
-        id: &SharedString,
-        mut f: impl FnMut(&str),
-    ) -> io::Result<()> {
+    fn sub_directories(cache: AnyCache, id: &OwnedId, mut f: impl FnMut(&Id)) -> io::Result<()> {
         cache.raw_source().read_dir(id, &mut |entry| {
             if let DirEntry::Directory(id) = entry {
                 f(id);
@@ -111,8 +107,8 @@ where
     T: Asset,
 {
     #[inline]
-    fn select_ids(cache: AnyCache, id: &SharedString) -> io::Result<Vec<SharedString>> {
-        fn inner(cache: AnyCache, id: &str, extensions: &[&str]) -> io::Result<Vec<SharedString>> {
+    fn select_ids(cache: AnyCache, id: &OwnedId) -> io::Result<Vec<OwnedId>> {
+        fn inner(cache: AnyCache, id: &Id, extensions: &[&str]) -> io::Result<Vec<OwnedId>> {
             let mut ids = Vec::new();
 
             // Select all files with an extension valid for type `T`
@@ -127,7 +123,7 @@ where
             Ok(ids)
         }
 
-        inner(cache, id, T::EXTENSIONS)
+        inner(cache, &id, T::EXTENSIONS)
     }
 }
 
@@ -136,19 +132,19 @@ where
     T: DirLoadable,
 {
     #[inline]
-    fn select_ids(cache: AnyCache, id: &SharedString) -> io::Result<Vec<SharedString>> {
+    fn select_ids(cache: AnyCache, id: &OwnedId) -> io::Result<Vec<OwnedId>> {
         T::select_ids(cache, id)
     }
 
     #[inline]
-    fn sub_directories(cache: AnyCache, id: &SharedString, f: impl FnMut(&str)) -> io::Result<()> {
+    fn sub_directories(cache: AnyCache, id: &OwnedId, f: impl FnMut(&Id)) -> io::Result<()> {
         T::sub_directories(cache, id, f)
     }
 }
 
 /// Stores ids in a directory containing assets of type `T`
 pub struct Directory<T> {
-    ids: Vec<SharedString>,
+    ids: Vec<OwnedId>,
     _marker: PhantomData<T>,
 }
 
@@ -156,7 +152,7 @@ impl<T> Compound for Directory<T>
 where
     T: DirLoadable,
 {
-    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
+    fn load(cache: AnyCache, id: &OwnedId) -> Result<Self, BoxedError> {
         let mut ids = T::select_ids(cache, id)?;
 
         // Remove duplicated entries
@@ -174,7 +170,7 @@ where
 
 impl<T> Directory<T> {
     /// Returns an iterator over the ids of the assets in the directory.
-    pub fn ids(&self) -> impl ExactSizeIterator<Item = &SharedString> {
+    pub fn ids(&self) -> impl ExactSizeIterator<Item = &OwnedId> {
         self.ids.iter()
     }
 }
@@ -223,7 +219,7 @@ impl<T> fmt::Debug for Directory<T> {
 
 /// Stores ids in a recursive directory containing assets of type `T`
 pub struct RecursiveDirectory<T> {
-    ids: Vec<SharedString>,
+    ids: Vec<OwnedId>,
     _marker: PhantomData<T>,
 }
 
@@ -231,7 +227,7 @@ impl<T> Compound for RecursiveDirectory<T>
 where
     T: DirLoadable,
 {
-    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
+    fn load(cache: AnyCache, id: &OwnedId) -> Result<Self, BoxedError> {
         // Load the current directory
         let this = cache.load::<Directory<T>>(id)?;
         let mut ids = this.read().ids.clone();
@@ -254,7 +250,7 @@ where
 
 impl<T> RecursiveDirectory<T> {
     /// Returns an iterator over the ids of the assets in the directory.
-    pub fn ids(&self) -> impl ExactSizeIterator<Item = &SharedString> {
+    pub fn ids(&self) -> impl ExactSizeIterator<Item = &OwnedId> {
         self.ids.iter()
     }
 }

@@ -11,14 +11,15 @@
 //! - The `CacheExt` adds generics on top of `Cache` to ease the use of
 //!   `Cache`'s methods.
 
-use std::{any::TypeId, fmt, io};
+use std::{any::TypeId, borrow::Cow, fmt, io};
 
 use crate::{
     asset::DirLoadable,
     entry::{CacheEntry, UntypedHandle},
+    id::IntoId,
     key::Type,
     source::{DirEntry, Source},
-    Compound, Error, Handle, SharedString, Storable,
+    Compound, Error, Handle, Id, OwnedId, SharedString, Storable,
 };
 
 #[cfg(feature = "hot-reloading")]
@@ -46,12 +47,12 @@ struct AnySource<'a> {
 
 impl Source for AnySource<'_> {
     #[inline]
-    fn read(&self, id: &str, ext: &str) -> io::Result<crate::source::FileContent> {
+    fn read(&self, id: &Id, ext: &str) -> io::Result<crate::source::FileContent> {
         self.cache.read(id, ext)
     }
 
     #[inline]
-    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+    fn read_dir(&self, id: &Id, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
         self.cache.read_dir(id, f)
     }
 
@@ -85,8 +86,8 @@ impl<'a> AnyCache<'a> {
     /// - Loaded data could not be converted properly
     /// - The asset has no extension
     #[inline]
-    pub fn load<T: Compound>(self, id: &str) -> Result<&'a Handle<T>, Error> {
-        self.cache._load(id)
+    pub fn load<T: Compound>(self, id: impl IntoId) -> Result<&'a Handle<T>, Error> {
+        self.cache._load(id.into_id())
     }
 
     /// Loads an asset and panic if an error happens.
@@ -97,8 +98,8 @@ impl<'a> AnyCache<'a> {
     ///
     /// [`load`]: `Self::load`
     #[inline]
-    pub fn load_expect<T: Compound>(self, id: &str) -> &'a Handle<T> {
-        self.cache._load_expect(id)
+    pub fn load_expect<T: Compound>(self, id: impl IntoId) -> &'a Handle<T> {
+        self.cache._load_expect(id.into_id())
     }
 
     /// Gets a value from the cache.
@@ -106,16 +107,21 @@ impl<'a> AnyCache<'a> {
     /// This function does not attempt to load the value from the source if it
     /// is not found in the cache.
     #[inline]
-    pub fn get_cached<T: Storable>(self, id: &str) -> Option<&'a Handle<T>> {
-        self.cache._get_cached(id)
+    pub fn get_cached<T: Storable>(self, id: impl IntoId) -> Option<&'a Handle<T>> {
+        self.cache._get_cached(id.into_id())
     }
 
     /// Gets a value with the given type from the cache.
     ///
     /// This is an equivalent of `get_cached` but with a dynamic type.
     #[inline]
-    pub fn get_cached_untyped(self, id: &str, type_id: TypeId) -> Option<&'a UntypedHandle> {
-        self.cache.get_cached_entry(id, type_id)
+    #[cfg(feature = "hot-reloading")]
+    pub(crate) fn get_cached_untyped<'id>(
+        self,
+        id: impl IntoId,
+        type_id: TypeId,
+    ) -> Option<&'a UntypedHandle> {
+        self.cache.get_cached_entry(id.into_id(), type_id)
     }
 
     /// Gets a value from the cache or inserts one.
@@ -124,14 +130,14 @@ impl<'a> AnyCache<'a> {
     ///
     /// Assets added via this function will *never* be reloaded.
     #[inline]
-    pub fn get_or_insert<T: Storable>(self, id: &str, default: T) -> &'a Handle<T> {
-        self.cache._get_or_insert(id, default)
+    pub fn get_or_insert<T: Storable>(self, id: impl IntoId, default: T) -> &'a Handle<T> {
+        self.cache._get_or_insert(id.into_id(), default)
     }
 
     /// Returns `true` if the cache contains the specified asset.
     #[inline]
-    pub fn contains<T: Storable>(self, id: &str) -> bool {
-        self.cache._contains::<T>(id)
+    pub fn contains<T: Storable>(self, id: impl IntoId) -> bool {
+        self.cache._contains::<T>(id.into_id())
     }
 
     /// Loads a directory.
@@ -149,7 +155,7 @@ impl<'a> AnyCache<'a> {
     #[inline]
     pub fn load_dir<T: DirLoadable>(
         self,
-        id: &str,
+        id: impl IntoId,
     ) -> Result<&'a Handle<crate::Directory<T>>, Error> {
         self.load::<crate::Directory<T>>(id)
     }
@@ -172,7 +178,7 @@ impl<'a> AnyCache<'a> {
     #[inline]
     pub fn load_rec_dir<T: DirLoadable>(
         self,
-        id: &str,
+        id: impl IntoId,
     ) -> Result<&'a Handle<crate::RecursiveDirectory<T>>, Error> {
         self.load::<crate::RecursiveDirectory<T>>(id)
     }
@@ -186,8 +192,8 @@ impl<'a> AnyCache<'a> {
     ///
     /// This can be useful if you need ownership on a non-clonable value.
     #[inline]
-    pub fn load_owned<T: Compound>(self, id: &str) -> Result<T, Error> {
-        self.cache._load_owned(id)
+    pub fn load_owned<T: Compound>(self, id: impl IntoId) -> Result<T, Error> {
+        self.cache._load_owned(id.into_owned_id())
     }
 
     /// Temporarily prevent `Compound` dependencies to be recorded.
@@ -220,8 +226,10 @@ impl<'a> AnyCache<'a> {
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub(crate) fn reload_untyped(self, id: SharedString, typ: Type) -> Option<Dependencies> {
-        let handle = self.get_cached_untyped(&id, typ.type_id)?;
+    pub(crate) fn reload_untyped(self, id: OwnedId, typ: Type) -> Option<Dependencies> {
+        let handle = self
+            .cache
+            .get_cached_entry(Cow::Borrowed(&id), typ.type_id)?;
 
         let load_asset = || {
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (typ.inner.load)(self, id)))
@@ -257,30 +265,30 @@ impl fmt::Debug for AnyCache<'_> {
 }
 
 pub(crate) trait AssetMap {
-    fn get(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle>;
+    fn get(&self, id: &Id, type_id: TypeId) -> Option<&UntypedHandle>;
 
     fn insert(&self, entry: CacheEntry) -> &UntypedHandle;
 
-    fn contains_key(&self, id: &str, type_id: TypeId) -> bool;
+    fn contains_key(&self, id: &Id, type_id: TypeId) -> bool;
 }
 
 pub(crate) trait Cache {
     #[cfg(feature = "hot-reloading")]
     fn reloader(&self) -> Option<&HotReloader>;
 
-    fn read(&self, id: &str, ext: &str) -> io::Result<crate::source::FileContent>;
+    fn read(&self, id: &Id, ext: &str) -> io::Result<crate::source::FileContent>;
 
-    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()>;
+    fn read_dir(&self, id: &Id, f: &mut dyn FnMut(DirEntry)) -> io::Result<()>;
 
     fn exists(&self, entry: DirEntry) -> bool;
 
-    fn get_cached_entry(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle>;
+    fn get_cached_entry(&self, id: Cow<Id>, type_id: TypeId) -> Option<&UntypedHandle>;
 
-    fn contains(&self, id: &str, type_id: TypeId) -> bool;
+    fn contains(&self, id: &Id, type_id: TypeId) -> bool;
 
-    fn load_entry(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error>;
+    fn load_entry(&self, id: Cow<Id>, typ: Type) -> Result<&UntypedHandle, Error>;
 
-    fn load_owned_entry(&self, id: &str, typ: Type) -> Result<CacheEntry, Error>;
+    fn load_owned_entry(&self, id: OwnedId, typ: Type) -> Result<CacheEntry, Error>;
 
     fn insert(&self, entry: CacheEntry) -> &UntypedHandle;
 }
@@ -297,12 +305,11 @@ pub(crate) trait RawCache: Sized {
     fn reloader(&self) -> Option<&HotReloader>;
 
     #[cold]
-    fn add_asset(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
+    fn add_asset(&self, id: Cow<Id>, typ: Type) -> Result<&UntypedHandle, Error> {
         log::trace!("Loading \"{}\"", id);
 
-        let id = SharedString::from(id);
         let cache = AnyCache { cache: self };
-        let entry = crate::asset::load_and_record(cache, id, typ)?;
+        let entry = crate::asset::load_and_record(cache, id.into_owned(), typ)?;
 
         Ok(self.assets().insert(entry))
     }
@@ -315,7 +322,7 @@ impl<T: RawCache> Cache for T {
         self.reloader()
     }
 
-    fn read(&self, id: &str, ext: &str) -> io::Result<crate::source::FileContent> {
+    fn read(&self, id: &Id, ext: &str) -> io::Result<crate::source::FileContent> {
         #[cfg(feature = "hot-reloading")]
         if let Some(reloader) = self.reloader() {
             records::add_file_record(reloader, id, ext);
@@ -323,7 +330,7 @@ impl<T: RawCache> Cache for T {
         self.get_source().read(id, ext)
     }
 
-    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+    fn read_dir(&self, id: &Id, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
         #[cfg(feature = "hot-reloading")]
         if let Some(reloader) = self.reloader() {
             records::add_dir_record(reloader, id);
@@ -335,35 +342,33 @@ impl<T: RawCache> Cache for T {
         self.get_source().exists(entry)
     }
 
-    fn get_cached_entry(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
+    fn get_cached_entry(&self, id: Cow<Id>, type_id: TypeId) -> Option<&UntypedHandle> {
         #[cfg(feature = "hot-reloading")]
         if let Some(reloader) = self.reloader() {
-            let (id, entry) = match self.assets().get(id, type_id) {
+            let (id, entry) = match self.assets().get(&id, type_id) {
                 Some(entry) => (entry.id().clone(), Some(entry)),
-                None => (id.into(), None),
+                None => (id.into_owned(), None),
             };
             records::add_record(reloader, id, type_id);
             return entry;
         }
 
-        self.assets().get(id, type_id)
+        self.assets().get(&id, type_id)
     }
 
     #[inline]
-    fn contains(&self, id: &str, type_id: TypeId) -> bool {
+    fn contains(&self, id: &Id, type_id: TypeId) -> bool {
         self.assets().contains_key(id, type_id)
     }
 
-    fn load_entry(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
-        match self.get_cached_entry(id, typ.type_id) {
+    fn load_entry(&self, id: Cow<Id>, typ: Type) -> Result<&UntypedHandle, Error> {
+        match self.get_cached_entry(id.clone().into_id(), typ.type_id) {
             Some(entry) => Ok(entry),
             None => self.add_asset(id, typ),
         }
     }
 
-    fn load_owned_entry(&self, id: &str, typ: Type) -> Result<CacheEntry, Error> {
-        let id = SharedString::from(id);
-
+    fn load_owned_entry(&self, id: OwnedId, typ: Type) -> Result<CacheEntry, Error> {
         #[cfg(feature = "hot-reloading")]
         if typ.is_hot_reloaded() {
             if let Some(reloader) = self.reloader() {
@@ -393,41 +398,42 @@ pub(crate) trait CacheExt: Cache {
     }
 
     #[inline]
-    fn _get_cached<T: Storable>(&self, id: &str) -> Option<&Handle<T>> {
-        let entry = self.get_cached_entry(id, TypeId::of::<T>())?;
+    fn _get_cached<T: Storable>(&self, id: impl IntoId) -> Option<&Handle<T>> {
+        let entry = self.get_cached_entry(id.into_id(), TypeId::of::<T>())?;
         Some(entry.downcast_ref_ok())
     }
 
     #[cold]
-    fn add_any<T: Storable>(&self, id: &str, asset: T) -> &UntypedHandle {
-        let id = SharedString::from(id);
+    fn add_any<T: Storable>(&self, id: OwnedId, asset: T) -> &UntypedHandle {
+        let id = id.into_id().into_owned();
         let entry = CacheEntry::new_any(asset, id, false);
 
         self.insert(entry)
     }
 
-    fn _get_or_insert<T: Storable>(&self, id: &str, default: T) -> &Handle<T> {
+    fn _get_or_insert<T: Storable>(&self, id: impl IntoId, default: T) -> &Handle<T> {
+        let id = id.into_id();
         let entry = match self.get_cached_entry(id, TypeId::of::<T>()) {
             Some(entry) => entry,
-            None => self.add_any(id, default),
+            None => self.add_any(id.into_owned(), default),
         };
 
         entry.downcast_ref_ok()
     }
 
     #[inline]
-    fn _contains<T: Storable>(&self, id: &str) -> bool {
+    fn _contains<T: Storable>(&self, id: Cow<Id>) -> bool {
         self.contains(id, TypeId::of::<T>())
     }
 
-    fn _load<T: Compound>(&self, id: &str) -> Result<&Handle<T>, Error> {
+    fn _load<T: Compound>(&self, id: Cow<Id>) -> Result<&Handle<T>, Error> {
         let entry = self.load_entry(id, Type::of_asset::<T>())?;
         Ok(entry.downcast_ref_ok())
     }
 
     #[inline]
     #[track_caller]
-    fn _load_expect<T: Compound>(&self, id: &str) -> &Handle<T> {
+    fn _load_expect<T: Compound>(&self, id: Cow<Id>) -> &Handle<T> {
         #[cold]
         #[track_caller]
         fn expect_failed(err: Error) -> ! {
@@ -446,7 +452,7 @@ pub(crate) trait CacheExt: Cache {
     }
 
     #[inline]
-    fn _load_owned<T: Compound>(&self, id: &str) -> Result<T, Error> {
+    fn _load_owned<T: Compound>(&self, id: OwnedId) -> Result<T, Error> {
         let entry = self.load_owned_entry(id, Type::of_asset::<T>())?;
         Ok(entry.into_inner().0)
     }

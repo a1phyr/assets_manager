@@ -1,6 +1,6 @@
 //! Definitions of cache entries
 
-use crate::{asset::Storable, utils::RwLock, Compound, SharedString};
+use crate::{asset::Storable, utils::RwLock, Compound, Id, OwnedId};
 use std::{
     any::{Any, TypeId},
     cell::UnsafeCell,
@@ -39,7 +39,7 @@ pub(crate) struct Dynamic {
 }
 
 struct EntryStorage<T: ?Sized> {
-    id: SharedString,
+    id: OwnedId,
     type_id: TypeId,
     #[cfg(feature = "hot-reloading")]
     dynamic: Option<Dynamic>,
@@ -52,7 +52,7 @@ type Entry<T> = EntryStorage<T>;
 type UntypedEntry = EntryStorage<dyn Any + Send + Sync>;
 
 impl<T: Storable> Entry<T> {
-    fn new_static(id: SharedString, value: T) -> Self {
+    fn new_static(id: OwnedId, value: T) -> Self {
         Self {
             id,
             type_id: TypeId::of::<T>(),
@@ -63,7 +63,7 @@ impl<T: Storable> Entry<T> {
     }
 
     #[cfg(feature = "hot-reloading")]
-    fn new_dynamic(id: SharedString, value: T) -> Self {
+    fn new_dynamic(id: OwnedId, value: T) -> Self {
         Self {
             id,
             type_id: TypeId::of::<T>(),
@@ -148,7 +148,7 @@ impl CacheEntry {
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new<T: Compound>(asset: T, id: SharedString, mutable: impl FnOnce() -> bool) -> Self {
+    pub fn new<T: Compound>(asset: T, id: OwnedId, mutable: impl FnOnce() -> bool) -> Self {
         Self::new_any(asset, id, T::HOT_RELOADED && mutable())
     }
 
@@ -156,7 +156,7 @@ impl CacheEntry {
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new_any<T: Storable>(value: T, id: SharedString, _mutable: bool) -> Self {
+    pub fn new_any<T: Storable>(value: T, id: OwnedId, _mutable: bool) -> Self {
         #[cfg(not(feature = "hot-reloading"))]
         let inner = EntryStorage::new_static(id, value);
 
@@ -172,7 +172,7 @@ impl CacheEntry {
     }
 
     #[inline]
-    pub(crate) fn as_key(&self) -> (TypeId, &str) {
+    pub(crate) fn as_key(&self) -> (TypeId, &Id) {
         (self.0.type_id, &self.0.id)
     }
 
@@ -184,7 +184,7 @@ impl CacheEntry {
 
     /// Consumes the `CacheEntry` and returns its inner value.
     #[inline]
-    pub fn into_inner<T: Storable>(self) -> (T, SharedString) {
+    pub fn into_inner<T: Storable>(self) -> (T, OwnedId) {
         if let Ok(storage) = self.0.downcast() {
             return (storage.value.into_inner(), storage.id);
         }
@@ -304,7 +304,7 @@ impl<T: ?Sized> Handle<T> {
 
     /// Returns the id of the asset.
     #[inline]
-    pub fn id(&self) -> &SharedString {
+    pub fn id(&self) -> &OwnedId {
         &self.inner.id
     }
 

@@ -6,7 +6,7 @@
 //! - An unified API for `HashMap`s between `std` and `ahash` hashers
 //! - A marker for private APIs
 
-use crate::{source::DirEntry, SharedString};
+use crate::{id::IdTrait, source::DirEntry, OwnedId};
 
 use std::hash::Hash;
 #[allow(unused_imports)]
@@ -22,6 +22,8 @@ pub fn path_of_entry(root: &Path, entry: DirEntry) -> PathBuf {
         DirEntry::File(id, ext) => (id, Some(ext)),
         DirEntry::Directory(id) => (id, None),
     };
+
+    let id = id.as_str();
 
     let capacity = root.as_os_str().len() + id.len() + ext.map_or(0, |ext| ext.len()) + 2;
     let mut path = PathBuf::with_capacity(capacity);
@@ -82,8 +84,8 @@ impl IdBuilder {
 
     /// Joins segments to build a id.
     #[inline]
-    pub fn join(&self) -> SharedString {
-        self.buf.as_str().into()
+    pub fn join(&self) -> OwnedId {
+        self.buf.as_str().into_owned_id()
     }
 
     /// Resets the builder without freeing buffers.
@@ -97,14 +99,14 @@ impl IdBuilder {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct OwnedKey {
     pub type_id: TypeId,
-    pub id: SharedString,
+    pub id: OwnedId,
 }
 
 impl OwnedKey {
     /// Creates a `OwnedKey` with the given type and id.
     #[allow(dead_code)]
     #[inline]
-    pub fn new_with(id: SharedString, type_id: TypeId) -> Self {
+    pub fn new_with(id: OwnedId, type_id: TypeId) -> Self {
         Self { id, type_id }
     }
 }

@@ -1,12 +1,15 @@
-use crate::utils::{HashSet, OwnedKey, SharedString};
+use crate::{
+    utils::{HashSet, OwnedKey, SharedString},
+    OwnedId,
+};
 use std::{any::TypeId, cell::Cell, ptr::NonNull};
 
 use super::HotReloader;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum Dependency {
-    File(SharedString, SharedString),
-    Directory(SharedString),
+    File(OwnedId, SharedString),
+    Directory(OwnedId),
     Asset(OwnedKey),
 }
 
@@ -24,8 +27,8 @@ pub(crate) type Dependencies = HashSet<Dependency>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum BorrowedDependency<'a> {
-    File(&'a SharedString, &'a SharedString),
-    Directory(&'a SharedString),
+    File(&'a OwnedId, &'a SharedString),
+    Directory(&'a OwnedId),
     Asset(&'a OwnedKey),
 }
 
@@ -64,13 +67,13 @@ impl Record {
         }
     }
 
-    fn insert_file(&mut self, reloader: &HotReloader, id: SharedString, ext: SharedString) {
+    fn insert_file(&mut self, reloader: &HotReloader, id: OwnedId, ext: SharedString) {
         if self.reloader == reloader {
             self.records.insert(Dependency::File(id, ext));
         }
     }
 
-    fn insert_dir(&mut self, reloader: &HotReloader, id: SharedString) {
+    fn insert_dir(&mut self, reloader: &HotReloader, id: OwnedId) {
         if self.reloader == reloader {
             self.records.insert(Dependency::Directory(id));
         }
@@ -116,7 +119,7 @@ pub(crate) fn no_record<F: FnOnce() -> T, T>(f: F) -> T {
     })
 }
 
-pub(crate) fn add_record(reloader: &HotReloader, id: SharedString, type_id: TypeId) {
+pub(crate) fn add_record(reloader: &HotReloader, id: OwnedId, type_id: TypeId) {
     RECORDING.with(|rec| {
         if let Some(mut recorder) = rec.get() {
             let recorder = unsafe { recorder.as_mut() };
@@ -125,20 +128,20 @@ pub(crate) fn add_record(reloader: &HotReloader, id: SharedString, type_id: Type
     });
 }
 
-pub(crate) fn add_file_record(reloader: &HotReloader, id: &str, ext: &str) {
+pub(crate) fn add_file_record(reloader: &HotReloader, id: &OwnedId, ext: &str) {
     RECORDING.with(|rec| {
         if let Some(mut recorder) = rec.get() {
             let recorder = unsafe { recorder.as_mut() };
-            recorder.insert_file(reloader, id.into(), ext.into());
+            recorder.insert_file(reloader, id.clone(), ext.into());
         }
     });
 }
 
-pub(crate) fn add_dir_record(reloader: &HotReloader, id: &str) {
+pub(crate) fn add_dir_record(reloader: &HotReloader, id: &OwnedId) {
     RECORDING.with(|rec| {
         if let Some(mut recorder) = rec.get() {
             let recorder = unsafe { recorder.as_mut() };
-            recorder.insert_dir(reloader, id.into());
+            recorder.insert_dir(reloader, id.clone());
         }
     });
 }

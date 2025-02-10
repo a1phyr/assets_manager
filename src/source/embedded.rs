@@ -15,11 +15,11 @@ use std::{collections::HashMap, io};
 pub struct RawEmbedded<'a> {
     /// A list of files, represented by their id and their extension, with
     /// their content.
-    pub files: &'a [((&'a str, &'a str), &'a [u8])],
+    pub files: &'a [((&'a crate::Id, &'a str), &'a [u8])],
 
     /// A list of directory, represented by their id, with the list of files
     /// they contain.
-    pub dirs: &'a [(&'a str, &'a [DirEntry<'a>])],
+    pub dirs: &'a [(&'a crate::Id, &'a [DirEntry<'a>])],
 }
 
 /// A [`Source`] which is embedded in the binary.
@@ -51,8 +51,8 @@ pub struct RawEmbedded<'a> {
 #[cfg_attr(docsrs, doc(cfg(feature = "embedded")))]
 #[derive(Clone, Debug)]
 pub struct Embedded<'a> {
-    files: HashMap<(&'a str, &'a str), &'a [u8]>,
-    dirs: HashMap<&'a str, &'a [DirEntry<'a>]>,
+    files: HashMap<(&'a crate::Id, &'a str), &'a [u8]>,
+    dirs: HashMap<&'a crate::Id, &'a [DirEntry<'a>]>,
 }
 
 impl<'a> From<RawEmbedded<'a>> for Embedded<'a> {
@@ -66,14 +66,14 @@ impl<'a> From<RawEmbedded<'a>> for Embedded<'a> {
 
 #[cfg_attr(docsrs, doc(cfg(feature = "embedded")))]
 impl Source for Embedded<'_> {
-    fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
+    fn read(&self, id: &crate::Id, ext: &str) -> io::Result<super::FileContent> {
         match self.files.get(&(id, ext)) {
             Some(content) => Ok(super::FileContent::Slice(content)),
             None => Err(io::ErrorKind::NotFound.into()),
         }
     }
 
-    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+    fn read_dir(&self, id: &crate::Id, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
         let dir = self.dirs.get(id).ok_or(io::ErrorKind::NotFound)?;
         dir.iter().copied().for_each(f);
         Ok(())

@@ -1,6 +1,6 @@
 use std::{fmt, io};
 
-use crate::SharedString;
+use crate::OwnedId;
 
 /// A boxed error
 pub type BoxedError = Box<dyn std::error::Error + Send + Sync + 'static>;
@@ -79,7 +79,7 @@ impl fmt::Display for InvalidIdError {
 impl std::error::Error for InvalidIdError {}
 
 struct ErrorRepr {
-    id: SharedString,
+    id: OwnedId,
     error: BoxedError,
 }
 
@@ -88,13 +88,13 @@ pub struct Error(Box<ErrorRepr>);
 
 impl Error {
     #[cold]
-    pub(crate) fn new(id: SharedString, error: BoxedError) -> Self {
+    pub(crate) fn new(id: OwnedId, error: BoxedError) -> Self {
         Self(Box::new(ErrorRepr { id, error }))
     }
 
     /// The id of the asset that was being loaded when the error happened.
     #[inline]
-    pub fn id(&self) -> &SharedString {
+    pub fn id(&self) -> &OwnedId {
         &self.0.id
     }
 

@@ -3,7 +3,7 @@ use super::ArcMap;
 use super::DirEntry;
 use crate::{
     utils::{HashMap, IdBuilder},
-    SharedString,
+    Id, OwnedId, SharedString,
 };
 use std::{fmt, io, path};
 use sync_file::SyncFile;
@@ -12,9 +12,9 @@ use sync_file::SyncFile;
 use super::Source;
 
 #[derive(Clone, Hash, PartialEq, Eq)]
-struct FileDesc(SharedString, SharedString);
+struct FileDesc(OwnedId, SharedString);
 
-impl hashbrown::Equivalent<FileDesc> for (&str, &str) {
+impl hashbrown::Equivalent<FileDesc> for (&Id, &str) {
     fn equivalent(&self, key: &FileDesc) -> bool {
         key.0 == self.0 && key.1 == self.1
     }
@@ -33,7 +33,7 @@ impl fmt::Debug for FileDesc {
 #[derive(Debug)]
 enum OwnedEntry {
     File(FileDesc),
-    Dir(SharedString),
+    Dir(OwnedId),
 }
 
 impl OwnedEntry {
@@ -49,7 +49,7 @@ impl OwnedEntry {
 fn register_file(
     file: tar::Entry<'_, impl io::Read>,
     files: &mut HashMap<FileDesc, (u64, u64)>,
-    dirs: &mut HashMap<SharedString, Vec<OwnedEntry>>,
+    dirs: &mut HashMap<OwnedId, Vec<OwnedEntry>>,
     id_builder: &mut IdBuilder,
 ) {
     id_builder.reset();
@@ -129,7 +129,7 @@ fn register_file(
 pub struct Tar<R = SyncFile> {
     reader: R,
     files: HashMap<FileDesc, (u64, u64)>,
-    dirs: HashMap<SharedString, Vec<OwnedEntry>>,
+    dirs: HashMap<OwnedId, Vec<OwnedEntry>>,
     label: Option<String>,
 }
 
@@ -222,7 +222,7 @@ impl<R> super::Source for Tar<R>
 where
     R: io::Read + io::Seek + Clone,
 {
-    fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
+    fn read(&self, id: &Id, ext: &str) -> io::Result<super::FileContent> {
         let &(start, size) = self
             .files
             .get(&(id, ext))
@@ -239,7 +239,7 @@ where
         Ok(super::FileContent::Buffer(buf))
     }
 
-    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+    fn read_dir(&self, id: &Id, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
         let dir = self
             .dirs
             .get(id)
@@ -266,10 +266,11 @@ impl<R> fmt::Debug for Tar<R> {
 }
 
 mod error {
+    use crate::Id;
     use std::{fmt, io};
 
     #[cold]
-    pub fn find_file(id: &str, label: &Option<String>) -> io::Error {
+    pub fn find_file(id: &Id, label: &Option<String>) -> io::Error {
         let msg = match label {
             Some(lbl) => format!("Could not find asset \"{id}\" in {lbl}"),
             None => format!("Could not find asset \"{id}\" in TAR"),
@@ -279,7 +280,7 @@ mod error {
     }
 
     #[cold]
-    pub fn read_file(err: io::Error, id: &str, label: &Option<String>) -> io::Error {
+    pub fn read_file(err: io::Error, id: &Id, label: &Option<String>) -> io::Error {
         #[derive(Debug)]
         struct Error {
             err: io::Error,
@@ -305,7 +306,7 @@ mod error {
     }
 
     #[cold]
-    pub fn find_dir(id: &str, label: &Option<String>) -> io::Error {
+    pub fn find_dir(id: &Id, label: &Option<String>) -> io::Error {
         let msg = match label {
             Some(lbl) => format!("Could not find directory \"{id}\" in {lbl}"),
             None => format!("Could not find directory \"{id}\" in TAR"),

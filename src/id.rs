@@ -9,6 +9,7 @@ use std::{
 };
 
 /// TODO
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct Id(str);
 
@@ -52,7 +53,23 @@ impl Id {
         }
     }
 
-    /// TODO
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns the parent's id, or `None` if it is the root.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use assets_manager::Id;
+    ///
+    /// let id = Id::new("example.hello.world");
+    /// assert_eq!(id.parent(), Some("example.hello"));
+    ///
+    /// let root = Id::new("");
+    /// assert!(root.parent().is_none());
+    /// ```
     #[inline]
     pub fn parent(&self) -> Option<&Id> {
         if self.is_root() {
@@ -86,6 +103,18 @@ impl Id {
             next = next.and_then(Id::parent);
             res
         })
+    }
+}
+
+impl PartialEq<str> for Id {
+    fn eq(&self, other: &str) -> bool {
+        self.0.eq(other)
+    }
+}
+
+impl PartialEq<str> for OwnedId {
+    fn eq(&self, other: &str) -> bool {
+        self.0.eq(other)
     }
 }
 
@@ -148,6 +177,12 @@ impl Borrow<Id> for OwnedId {
     }
 }
 
+impl fmt::Display for OwnedId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 trait AsId {
     fn as_id(&self) -> Cow<Id>;
 }
@@ -163,187 +198,99 @@ impl AsId for str {
     }
 }
 
-/// TODO
-pub trait IdTrait {
-    /// TODO
-    fn into_owned_id(self) -> OwnedId;
+// /// TODO
+// pub trait IdTrait {
+//     /// TODO
+//     fn into_owned_id(self) -> OwnedId;
 
-    /// TODO
-    fn to_id(&self) -> Cow<Id>;
-}
+//     /// TODO
+//     fn to_id(&self) -> Cow<Id>;
+// }
 
-impl IdTrait for &'_ Id {
-    #[inline]
-    fn into_owned_id(self) -> OwnedId {
-        self.to_owned()
-    }
+// impl IdTrait for &'_ SharedString {
+//     fn into_owned_id(self) -> OwnedId {
+//         if !self.starts_with('.') && self.ends_with('.') {
+//             if self.contains("..") {
+//                 collect_id(&self)
+//             } else {
+//                 OwnedId(self.clone())
+//             }
+//         } else {
+//             let trimmed = self.trim_matches('.');
+//             if trimmed.contains("..") {
+//                 collect_id(trimmed)
+//             } else {
+//                 OwnedId(trimmed.into())
+//             }
+//         }
+//     }
 
-    #[inline]
-    fn to_id(&self) -> Cow<Id> {
-        Cow::Borrowed(self)
-    }
-}
+//     fn to_id(&self) -> Cow<Id> {
+//         self.as_str().as_id()
+//     }
+// }
 
-impl IdTrait for &'_ OwnedId {
-    #[inline]
-    fn into_owned_id(self) -> OwnedId {
-        self.clone()
-    }
+// impl IdTrait for SharedString {
+//     fn into_owned_id(self) -> OwnedId {
+//         if !self.starts_with('.') && self.ends_with('.') {
+//             if self.contains("..") {
+//                 collect_id(&self)
+//             } else {
+//                 OwnedId(self)
+//             }
+//         } else {
+//             let trimmed = self.trim_matches('.');
+//             if trimmed.contains("..") {
+//                 collect_id(trimmed)
+//             } else {
+//                 OwnedId(trimmed.into())
+//             }
+//         }
+//     }
 
-    #[inline]
-    fn to_id(&self) -> Cow<Id> {
-        Cow::Borrowed(self)
-    }
-}
+//     fn to_id(&self) -> Cow<Id> {
+//         self.as_str().as_id()
+//     }
+// }
 
-impl IdTrait for OwnedId {
-    #[inline]
-    fn into_owned_id(self) -> OwnedId {
-        self
-    }
+// impl<S: AsRef<str>> IdTrait for &'_ [S] {
+//     fn into_owned_id(self) -> OwnedId {
+//         self.to_id().into_owned()
+//     }
 
-    #[inline]
-    fn to_id(&self) -> Cow<Id> {
-        Cow::Borrowed(self)
-    }
-}
+//     fn to_id(&self) -> Cow<Id> {
+//         slice_to_id(self)
+//     }
+// }
 
-impl IdTrait for &'_ str {
-    fn into_owned_id(self) -> OwnedId {
-        let trimmed = self.trim_matches('.');
-        if trimmed.contains("..") {
-            collect_id(trimmed)
-        } else {
-            OwnedId(trimmed.into())
-        }
-    }
+// impl<S: AsRef<str>, const N: usize> IdTrait for &'_ [S; N] {
+//     fn into_owned_id(self) -> OwnedId {
+//         self.as_slice().into_owned_id()
+//     }
 
-    #[inline]
-    fn to_id(&self) -> Cow<Id> {
-        self.as_id()
-    }
-}
+//     fn to_id(&self) -> Cow<Id> {
+//         slice_to_id(self.as_slice())
+//     }
+// }
 
-impl IdTrait for &'_ String {
-    #[inline]
-    fn into_owned_id(self) -> OwnedId {
-        self.as_str().into_owned_id()
-    }
-
-    fn to_id(&self) -> Cow<Id> {
-        self.as_str().as_id()
-    }
-}
-
-impl IdTrait for String {
-    fn into_owned_id(mut self) -> OwnedId {
-        // We can avoid allocating a new string here. Remove starting and
-        // multiple dots.
-        let mut keep_next_dot = false;
-        self.retain(|c| {
-            let not_dot = c == '.';
-            let keep = not_dot | keep_next_dot;
-            keep_next_dot = not_dot;
-            keep
-        });
-
-        // There might still be a trailing dot
-        if self.ends_with('.') {
-            self.pop();
-        }
-
-        OwnedId(self.into())
-    }
-
-    fn to_id(&self) -> Cow<Id> {
-        self.as_str().as_id()
-    }
-}
-
-impl IdTrait for &'_ SharedString {
-    fn into_owned_id(self) -> OwnedId {
-        if !self.starts_with('.') && self.ends_with('.') {
-            if self.contains("..") {
-                collect_id(&self)
-            } else {
-                OwnedId(self.clone())
-            }
-        } else {
-            let trimmed = self.trim_matches('.');
-            if trimmed.contains("..") {
-                collect_id(trimmed)
-            } else {
-                OwnedId(trimmed.into())
-            }
-        }
-    }
-
-    fn to_id(&self) -> Cow<Id> {
-        self.as_str().as_id()
-    }
-}
-
-impl IdTrait for SharedString {
-    fn into_owned_id(self) -> OwnedId {
-        if !self.starts_with('.') && self.ends_with('.') {
-            if self.contains("..") {
-                collect_id(&self)
-            } else {
-                OwnedId(self)
-            }
-        } else {
-            let trimmed = self.trim_matches('.');
-            if trimmed.contains("..") {
-                collect_id(trimmed)
-            } else {
-                OwnedId(trimmed.into())
-            }
-        }
-    }
-
-    fn to_id(&self) -> Cow<Id> {
-        self.as_str().as_id()
-    }
-}
-
-impl<S: AsRef<str>> IdTrait for &'_ [S] {
-    fn into_owned_id(self) -> OwnedId {
-        self.to_id().into_owned()
-    }
-
-    fn to_id(&self) -> Cow<Id> {
-        slice_to_id(self)
-    }
-}
-
-impl<S: AsRef<str>, const N: usize> IdTrait for &'_ [S; N] {
-    fn into_owned_id(self) -> OwnedId {
-        self.as_slice().into_owned_id()
-    }
-
-    fn to_id(&self) -> Cow<Id> {
-        slice_to_id(self.as_slice())
-    }
-}
-
-fn slice_to_id<S: AsRef<str>>(this: &[S]) -> Cow<Id> {
-    match this {
-        [] => Cow::Borrowed(Id::ROOT),
-        [s] => s.as_ref().as_id(),
-        _ => {
-            let estimate = this.iter().map(|s| s.as_ref().len()).sum();
-            let mut s = String::with_capacity(estimate);
-            collect_id_into(&mut s, split_slice_parts(this));
-            Cow::Owned(OwnedId(s.into()))
-        }
-    }
-}
+// fn slice_to_id<S: AsRef<str>>(this: &[S]) -> Cow<Id> {
+//     match this {
+//         [] => Cow::Borrowed(Id::ROOT),
+//         [s] => s.as_ref().as_id(),
+//         _ => {
+//             let estimate = this.iter().map(|s| s.as_ref().len()).sum();
+//             let mut s = String::with_capacity(estimate);
+//             collect_id_into(&mut s, split_slice_parts(this));
+//             Cow::Owned(OwnedId(s.into()))
+//         }
+//     }
+// }
 
 fn collect_id_into<'a>(s: &mut String, it: impl Iterator<Item = &'a str>) {
     let mut push_dot = false;
     it.for_each(|part| {
         if push_dot {
-            s.push_str(".");
+            s.push('.');
         }
         s.push_str(part);
         push_dot = true;
@@ -359,4 +306,127 @@ fn collect_id(id: &str) -> OwnedId {
     let mut s = String::with_capacity(id.len());
     collect_id_into(&mut s, id.split('.').filter(|p| !p.is_empty()));
     OwnedId(s.into())
+}
+
+pub trait IntoId: Sized {
+    fn into_id<'a>(self) -> Cow<'a, Id>
+    where
+        Self: 'a;
+
+    fn into_owned_id(self) -> OwnedId {
+        self.into_id().into_owned()
+    }
+}
+
+impl IntoId for &'_ str {
+    fn into_id<'a>(self) -> Cow<'a, Id>
+    where
+        Self: 'a,
+    {
+        let trimmed = self.trim_matches('.');
+        if trimmed.contains("..") {
+            Cow::Owned(collect_id(trimmed))
+        } else {
+            Cow::Borrowed(Id::unchecked(trimmed))
+        }
+    }
+}
+
+impl IntoId for String {
+    fn into_id<'a>(mut self) -> Cow<'a, Id>
+    where
+        Self: 'a,
+    {
+        // We can avoid allocating a new string here. Remove starting and
+        // multiple dots.
+        let mut keep_next_dot = false;
+        self.retain(|c| {
+            let not_dot = c == '.';
+            let keep = not_dot | keep_next_dot;
+            keep_next_dot = not_dot;
+            keep
+        });
+
+        // There might still be a trailing dot
+        if self.ends_with('.') {
+            self.pop();
+        }
+
+        Cow::Owned(OwnedId(self.into()))
+    }
+}
+
+impl IntoId for &'_ String {
+    fn into_id<'a>(self) -> Cow<'a, Id>
+    where
+        Self: 'a,
+    {
+        self.as_str().into_id()
+    }
+}
+
+impl IntoId for Cow<'_, str> {
+    fn into_id<'a>(self) -> Cow<'a, Id>
+    where
+        Self: 'a,
+    {
+        match self {
+            Cow::Borrowed(s) => s.into_id(),
+            Cow::Owned(s) => s.into_id(),
+        }
+    }
+}
+
+impl IntoId for &'_ Id {
+    fn into_id<'a>(self) -> Cow<'a, Id>
+    where
+        Self: 'a,
+    {
+        Cow::Borrowed(self)
+    }
+}
+
+impl IntoId for OwnedId {
+    fn into_id<'a>(self) -> Cow<'a, Id>
+    where
+        Self: 'a,
+    {
+        Cow::Owned(self)
+    }
+}
+
+impl IntoId for &'_ OwnedId {
+    fn into_id<'a>(self) -> Cow<'a, Id>
+    where
+        Self: 'a,
+    {
+        Cow::Owned(self.clone())
+    }
+}
+
+impl IntoId for Cow<'_, Id> {
+    fn into_id<'a>(self) -> Cow<'a, Id>
+    where
+        Self: 'a,
+    {
+        self.clone()
+    }
+}
+
+impl From<OwnedId> for Cow<'_, Id> {
+    fn from(id: OwnedId) -> Self {
+        Cow::Owned(id)
+    }
+}
+
+impl<'a> From<&'a Id> for Cow<'a, Id> {
+    fn from(id: &'a Id) -> Self {
+        Cow::Borrowed(id)
+    }
+}
+
+impl From<&'_ Id> for OwnedId {
+    fn from(id: &Id) -> Self {
+        id.to_owned()
+    }
 }

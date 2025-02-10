@@ -1,4 +1,4 @@
-use crate::{loader, utils, AnyCache, Asset, BoxedError, Compound, SharedString};
+use crate::{loader, utils, AnyCache, Asset, BoxedError, Compound, OwnedId};
 use std::path;
 
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
@@ -78,7 +78,7 @@ enum UriContent<'a> {
 
 impl<'a> UriContent<'a> {
     fn parse_uri(
-        base_id: &str,
+        base_id: &crate::Id,
         uri: &'a str,
         mime_type: Option<&'a str>,
     ) -> Result<Self, BoxedError> {
@@ -105,7 +105,7 @@ impl<'a> UriContent<'a> {
             let capacity = base_id.len() + uri.len();
             let mut id = String::with_capacity(capacity);
 
-            id.push_str(base_id);
+            id.push_str(base_id.as_str());
             id.push('.');
 
             let mut components = path.components().peekable();
@@ -131,7 +131,7 @@ impl<'a> UriContent<'a> {
 
 fn load_buffer(
     cache: AnyCache,
-    base_id: &str,
+    base_id: &crate::Id,
     buffer: gltf::Buffer,
     blob: &mut Option<Vec<u8>>,
 ) -> Result<Vec<u8>, BoxedError> {
@@ -164,7 +164,7 @@ fn load_image_from_buffer(
 
 fn load_image(
     cache: AnyCache,
-    base_id: &str,
+    base_id: &crate::Id,
     buffers: &[Vec<u8>],
     image: gltf::Image,
 ) -> Result<image::DynamicImage, BoxedError> {
@@ -175,8 +175,8 @@ fn load_image(
                     load_image_from_buffer(&content, mime_type)
                 }
                 UriContent::File { id, ext } => match ext {
-                    "png" => Ok(cache.load::<super::Png>(&id)?.cloned().0),
-                    "jpeg" | "jpg" => Ok(cache.load::<super::Jpeg>(&id)?.cloned().0),
+                    "png" => Ok(cache.load::<super::Png>(id)?.cloned().0),
+                    "jpeg" | "jpg" => Ok(cache.load::<super::Jpeg>(id)?.cloned().0),
                     _ => Err("Unknown image type".into()),
                 },
             }
@@ -193,13 +193,10 @@ fn load_image(
 
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
 impl Compound for Gltf {
-    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
+    fn load(cache: AnyCache, id: &OwnedId) -> Result<Self, BoxedError> {
         let gltf::Gltf { document, mut blob } = cache.load::<gltf::Gltf>(id)?.cloned();
 
-        let base_id = match id.rfind('.') {
-            Some(index) => &id[..index],
-            None => "",
-        };
+        let base_id = id.parent().unwrap_or(crate::Id::ROOT);
 
         let buffers: Vec<_> = document
             .buffers()
@@ -220,7 +217,7 @@ impl Compound for Gltf {
 
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
 impl super::DirLoadable for Gltf {
-    fn select_ids(cache: AnyCache, id: &SharedString) -> std::io::Result<Vec<SharedString>> {
+    fn select_ids(cache: AnyCache, id: &OwnedId) -> std::io::Result<Vec<OwnedId>> {
         gltf::Gltf::select_ids(cache, id)
     }
 }

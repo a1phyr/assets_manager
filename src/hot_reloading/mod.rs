@@ -28,7 +28,7 @@ use crate::{
     key::Type,
     source::{OwnedDirEntry, Source},
     utils::{Condvar, Mutex},
-    SharedString,
+    OwnedId,
 };
 
 #[cfg(doc)]
@@ -181,7 +181,7 @@ impl HotReloader {
     // without hot-reloading if it stopped, and an error should have already
     // been logged.
 
-    pub(crate) fn add_asset(&self, id: SharedString, deps: Dependencies, typ: Type) {
+    pub(crate) fn add_asset(&self, id: OwnedId, deps: Dependencies, typ: Type) {
         let infos = AssetReloadInfos::from_type(id, deps, typ);
         let _ = self.sender.send(CacheMessage::AddAsset(infos));
     }

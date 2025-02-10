@@ -35,7 +35,7 @@ use std::{borrow::Cow, fmt, io};
 
 #[cfg(doc)]
 use crate::{asset::DirLoadable, AssetCache};
-use crate::{hot_reloading::EventSender, BoxedError, SharedString};
+use crate::{hot_reloading::EventSender, BoxedError, Id, OwnedId, SharedString};
 
 mod filesystem;
 pub use filesystem::FileSystem;
@@ -85,10 +85,10 @@ mod tests;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DirEntry<'a> {
     /// A file with an id and an extension.
-    File(&'a str, &'a str),
+    File(&'a Id, &'a str),
 
     /// A directory with an id.
-    Directory(&'a str),
+    Directory(&'a Id),
 }
 
 impl<'a> DirEntry<'a> {
@@ -106,7 +106,7 @@ impl<'a> DirEntry<'a> {
 
     /// Returns the id of the pointed entity.
     #[inline]
-    pub const fn id(self) -> &'a str {
+    pub const fn id(self) -> &'a Id {
         match self {
             DirEntry::File(id, _) => id,
             DirEntry::Directory(id) => id,
@@ -127,16 +127,8 @@ impl<'a> DirEntry<'a> {
     /// assert!(root.parent_id().is_none());
     /// ```
     #[inline]
-    pub fn parent_id(self) -> Option<&'a str> {
-        let id = self.id();
-        if id.is_empty() {
-            None
-        } else {
-            match id.rfind('.') {
-                Some(n) => Some(&id[..n]),
-                None => Some(""),
-            }
-        }
+    pub fn parent_id(self) -> Option<&'a Id> {
+        self.id().parent()
     }
 }
 
@@ -144,10 +136,10 @@ impl<'a> DirEntry<'a> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum OwnedDirEntry {
     /// A file with an id and an extension.
-    File(SharedString, SharedString),
+    File(OwnedId, SharedString),
 
     /// A directory with an id.
-    Directory(SharedString),
+    Directory(OwnedId),
 }
 
 impl OwnedDirEntry {
@@ -281,7 +273,7 @@ pub trait Source {
     /// done for you by an [`AssetCache`] when you load [`Asset`]s.
     ///
     /// [`Asset`]: crate::Asset
-    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent>;
+    fn read(&self, id: &Id, ext: &str) -> io::Result<FileContent>;
 
     /// Reads the content of a directory.
     ///
@@ -313,7 +305,7 @@ pub trait Source {
     /// assert_eq!(dir_content, ["example.monsters.giant_bat", "example.monsters.goblin"]);
     /// # Ok::<(), std::io::Error>(())
     /// ```
-    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()>;
+    fn read_dir(&self, id: &Id, f: &mut dyn FnMut(DirEntry)) -> io::Result<()>;
 
     /// Returns `true` if the entry points at an existing entity.
     ///
@@ -356,12 +348,12 @@ where
     S: Source + ?Sized,
 {
     #[inline]
-    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent> {
+    fn read(&self, id: &Id, ext: &str) -> io::Result<FileContent> {
         self.as_ref().read(id, ext)
     }
 
     #[inline]
-    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+    fn read_dir(&self, id: &Id, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
         self.as_ref().read_dir(id, f)
     }
 
@@ -386,12 +378,12 @@ where
     S: Source + ?Sized,
 {
     #[inline]
-    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent> {
+    fn read(&self, id: &Id, ext: &str) -> io::Result<FileContent> {
         (**self).read(id, ext)
     }
 
     #[inline]
-    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+    fn read_dir(&self, id: &Id, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
         (**self).read_dir(id, f)
     }
 
@@ -416,12 +408,12 @@ where
     S: Source + ?Sized,
 {
     #[inline]
-    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent> {
+    fn read(&self, id: &Id, ext: &str) -> io::Result<FileContent> {
         self.as_ref().read(id, ext)
     }
 
     #[inline]
-    fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+    fn read_dir(&self, id: &Id, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
         self.as_ref().read_dir(id, f)
     }
 
@@ -449,12 +441,12 @@ pub struct Empty;
 
 impl Source for Empty {
     #[inline]
-    fn read(&self, _id: &str, _ext: &str) -> io::Result<FileContent> {
+    fn read(&self, _id: &Id, _ext: &str) -> io::Result<FileContent> {
         Err(io::Error::from(io::ErrorKind::NotFound))
     }
 
     #[inline]
-    fn read_dir(&self, _id: &str, _f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+    fn read_dir(&self, _id: &Id, _f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
         Err(io::Error::from(io::ErrorKind::NotFound))
     }
 

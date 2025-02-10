@@ -2,7 +2,7 @@ use crate::{
     cache::AssetMap,
     source::{OwnedDirEntry, Source},
     utils::{HashSet, OwnedKey},
-    AnyCache, SharedString,
+    AnyCache, OwnedId,
 };
 
 use super::{dependencies::DepsGraph, records::Dependencies};
@@ -53,7 +53,7 @@ pub(crate) struct AssetReloadInfos(OwnedKey, Dependencies, crate::key::Type);
 
 impl AssetReloadInfos {
     #[inline]
-    pub(crate) fn from_type(id: SharedString, deps: Dependencies, typ: crate::key::Type) -> Self {
+    pub(crate) fn from_type(id: OwnedId, deps: Dependencies, typ: crate::key::Type) -> Self {
         let key = OwnedKey::new_with(id, typ.type_id);
         Self(key, deps, typ)
     }

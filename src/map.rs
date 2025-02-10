@@ -14,7 +14,7 @@ impl AssetMap {
         }
     }
 
-    pub fn get(&self, hash: u64, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
+    pub fn get(&self, hash: u64, id: &crate::Id, type_id: TypeId) -> Option<&UntypedHandle> {
         let entry = self.map.find(hash, |e| e.as_key() == (type_id, id))?;
         Some(entry.inner())
     }
@@ -34,7 +34,7 @@ impl AssetMap {
         entry.into_mut().inner()
     }
 
-    pub fn take(&mut self, hash: u64, id: &str, type_id: TypeId) -> Option<CacheEntry> {
+    pub fn take(&mut self, hash: u64, id: &crate::Id, type_id: TypeId) -> Option<CacheEntry> {
         self.map
             .find_entry(hash, |e| e.as_key() == (type_id, id))
             .ok()
@@ -45,7 +45,7 @@ impl AssetMap {
         self.map.clear();
     }
 
-    pub fn iter_for_debug(&self) -> impl Iterator<Item = (&str, &CacheEntry)> + '_ {
+    pub fn iter_for_debug(&self) -> impl Iterator<Item = (&crate::Id, &CacheEntry)> + '_ {
         self.map.iter().map(|e| (e.as_key().1, e))
     }
 }

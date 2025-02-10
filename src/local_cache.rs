@@ -2,9 +2,10 @@ use crate::{
     anycache::{Cache, CacheExt},
     asset::DirLoadable,
     entry::{CacheEntry, UntypedHandle},
+    id::IntoId,
     source::Source,
     utils::RandomState,
-    AnyCache, Compound, Error, Handle, Storable,
+    AnyCache, Compound, Error, Handle, Id, Storable,
 };
 use std::{any::TypeId, cell::RefCell, fmt};
 
@@ -24,16 +25,16 @@ impl AssetMap {
         }
     }
 
-    fn hash_one(&self, key: (TypeId, &str)) -> u64 {
+    fn hash_one(&self, key: (TypeId, &Id)) -> u64 {
         std::hash::BuildHasher::hash_one(&self.hash_builder, key)
     }
 
-    fn take(&mut self, id: &str, type_id: TypeId) -> Option<CacheEntry> {
+    fn take(&mut self, id: &Id, type_id: TypeId) -> Option<CacheEntry> {
         let hash = self.hash_one((type_id, id));
         self.map.get_mut().take(hash, id, type_id)
     }
 
-    fn remove(&mut self, id: &str, type_id: TypeId) -> bool {
+    fn remove(&mut self, id: &Id, type_id: TypeId) -> bool {
         self.take(id, type_id).is_some()
     }
 
@@ -43,7 +44,7 @@ impl AssetMap {
 }
 
 impl crate::anycache::AssetMap for AssetMap {
-    fn get(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
+    fn get(&self, id: &Id, type_id: TypeId) -> Option<&UntypedHandle> {
         let hash = self.hash_one((type_id, id));
         unsafe { Some(self.map.borrow().get(hash, id, type_id)?.extend_lifetime()) }
     }
@@ -58,7 +59,7 @@ impl crate::anycache::AssetMap for AssetMap {
         }
     }
 
-    fn contains_key(&self, id: &str, type_id: TypeId) -> bool {
+    fn contains_key(&self, id: &Id, type_id: TypeId) -> bool {
         let hash = self.hash_one((type_id, id));
         self.map.borrow().get(hash, id, type_id).is_some()
     }
@@ -128,7 +129,7 @@ impl<S: Source> LocalAssetCache<S> {
     ///
     /// See [`AnyCache::get_cached`] for more details.
     #[inline]
-    pub fn get_cached<T: Storable>(&self, id: &str) -> Option<&Handle<T>> {
+    pub fn get_cached<T: Storable>(&self, id: impl IntoId) -> Option<&Handle<T>> {
         self._get_cached(id)
     }
 
@@ -136,7 +137,7 @@ impl<S: Source> LocalAssetCache<S> {
     ///
     /// This is an equivalent of `get_cached` but with a dynamic type.
     #[inline]
-    pub fn get_cached_untyped(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
+    pub fn get_cached_untyped(&self, id: impl IntoId, type_id: TypeId) -> Option<&UntypedHandle> {
         self.get_cached_entry(id, type_id)
     }
 
@@ -144,7 +145,7 @@ impl<S: Source> LocalAssetCache<S> {
     ///
     /// See [`AnyCache::get_or_insert`] for more details.
     #[inline]
-    pub fn get_or_insert<T: Storable>(&self, id: &str, default: T) -> &Handle<T> {
+    pub fn get_or_insert<T: Storable>(&self, id: impl IntoId, default: T) -> &Handle<T> {
         self._get_or_insert(id, default)
     }
 
@@ -152,7 +153,7 @@ impl<S: Source> LocalAssetCache<S> {
     ///
     /// See [`AnyCache::contains`] for more details.
     #[inline]
-    pub fn contains<T: Storable>(&self, id: &str) -> bool {
+    pub fn contains<T: Storable>(&self, id: impl IntoId) -> bool {
         self._contains::<T>(id)
     }
 
@@ -160,7 +161,7 @@ impl<S: Source> LocalAssetCache<S> {
     ///
     /// See [`AnyCache::load`] for more details.
     #[inline]
-    pub fn load<T: Compound>(&self, id: &str) -> Result<&Handle<T>, Error> {
+    pub fn load<T: Compound>(&self, id: impl IntoId) -> Result<&Handle<T>, Error> {
         self._load(id)
     }
 
@@ -168,7 +169,7 @@ impl<S: Source> LocalAssetCache<S> {
     ///
     /// See [`AnyCache::load_expect`] for more details.
     #[inline]
-    pub fn load_expect<T: Compound>(&self, id: &str) -> &Handle<T> {
+    pub fn load_expect<T: Compound>(&self, id: impl IntoId) -> &Handle<T> {
         self._load_expect(id)
     }
 
@@ -198,7 +199,7 @@ impl<S: Source> LocalAssetCache<S> {
     ///
     /// See [`AnyCache::load_owned`] for more details.
     #[inline]
-    pub fn load_owned<T: Compound>(&self, id: &str) -> Result<T, Error> {
+    pub fn load_owned<T: Compound>(&self, id: impl IntoId) -> Result<T, Error> {
         self._load_owned(id)
     }
 
@@ -216,7 +217,7 @@ impl<S> LocalAssetCache<S> {
     /// Note that you need a mutable reference to the cache, so you cannot have
     /// any [`Handle`], [`AssetReadGuard`], etc when you call this function.
     #[inline]
-    pub fn remove<T: Storable>(&mut self, id: &str) -> bool {
+    pub fn remove<T: Storable>(&mut self, id: impl IntoId) -> bool {
         self.assets.remove(id, TypeId::of::<T>())
     }
 
@@ -224,7 +225,7 @@ impl<S> LocalAssetCache<S> {
     ///
     /// The corresponding asset is removed from the cache.
     #[inline]
-    pub fn take<T: Storable>(&mut self, id: &str) -> Option<T> {
+    pub fn take<T: Storable>(&mut self, id: impl IntoId) -> Option<T> {
         let (asset, _id) = self.assets.take(id, TypeId::of::<T>())?.into_inner();
         Some(asset)
     }
