@@ -27,7 +27,7 @@ pub fn path_of_entry(root: &Path, entry: DirEntry) -> PathBuf {
     let mut path = PathBuf::with_capacity(capacity);
 
     path.push(root);
-    path.extend(id.split('.'));
+    path.extend(id.split(crate::SEPARATOR));
     if let Some(ext) = ext {
         path.set_extension(ext);
     }
@@ -57,12 +57,12 @@ pub struct IdBuilder {
 impl IdBuilder {
     /// Pushs a segment in the builder.
     pub fn push(&mut self, s: &str) -> Option<()> {
-        if s.contains('.') {
+        if s.contains(crate::SEPARATOR) {
             return None;
         }
 
         if !self.buf.is_empty() {
-            self.buf.push('.');
+            self.buf.push(crate::SEPARATOR);
         }
         self.buf.push_str(s);
         Some(())
@@ -75,7 +75,7 @@ impl IdBuilder {
         if self.buf.is_empty() {
             return None;
         }
-        let pos = self.buf.rfind('.').unwrap_or(0);
+        let pos = self.buf.rfind(crate::SEPARATOR).unwrap_or(0);
         self.buf.truncate(pos);
         Some(())
     }

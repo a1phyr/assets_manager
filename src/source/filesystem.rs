@@ -77,7 +77,11 @@ impl Source for FileSystem {
         let dir_path = self.path_of(DirEntry::Directory(id));
         let entries = fs::read_dir(&dir_path).map_err(|err| read_error(err, dir_path))?;
 
-        let mut entry_id = id.to_owned();
+        let base_len = id.len() + 1;
+
+        let mut entry_id = String::with_capacity(base_len);
+        entry_id.push_str(id);
+        entry_id.push(crate::SEPARATOR);
 
         // Ignore entries that return an error
         for entry in entries.flatten() {
@@ -89,8 +93,8 @@ impl Source for FileSystem {
             };
 
             let this_id: &str = if !id.is_empty() {
-                entry_id.truncate(id.len());
-                entry_id.extend([".", name].iter().copied());
+                entry_id.truncate(base_len);
+                entry_id.push_str(name);
                 &entry_id
             } else {
                 name

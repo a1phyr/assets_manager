@@ -106,7 +106,7 @@ impl<'a> UriContent<'a> {
             let mut id = String::with_capacity(capacity);
 
             id.push_str(base_id);
-            id.push('.');
+            id.push(crate::SEPARATOR);
 
             let mut components = path.components().peekable();
 
@@ -196,7 +196,7 @@ impl Compound for Gltf {
     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
         let gltf::Gltf { document, mut blob } = cache.load::<gltf::Gltf>(id)?.cloned();
 
-        let base_id = match id.rfind('.') {
+        let base_id = match id.rfind(crate::SEPARATOR) {
             Some(index) => &id[..index],
             None => "",
         };

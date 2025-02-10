@@ -278,3 +278,5 @@ pub use assets_manager_macros::Asset;
 
 #[cfg(test)]
 mod tests;
+
+const SEPARATOR: char = '.';

@@ -132,7 +132,7 @@ impl<'a> DirEntry<'a> {
         if id.is_empty() {
             None
         } else {
-            match id.rfind('.') {
+            match id.rfind(crate::SEPARATOR) {
                 Some(n) => Some(&id[..n]),
                 None => Some(""),
             }
