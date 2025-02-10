@@ -255,11 +255,10 @@ pub(crate) fn load_and_record(
     #[cfg(feature = "hot-reloading")]
     if typ.is_hot_reloaded() {
         if let Some(reloader) = cache.reloader() {
-            let (entry, deps) = crate::hot_reloading::records::record(reloader, || {
-                (typ.inner.load)(cache, id.clone())
-            });
-            if entry.is_ok() {
-                reloader.add_asset(id, deps, typ);
+            let (entry, deps) =
+                crate::hot_reloading::records::record(reloader, || (typ.inner.load)(cache, id));
+            if let Ok(entry) = &entry {
+                reloader.add_asset(entry.inner().id().clone(), deps, typ);
             }
             return entry;
         }
