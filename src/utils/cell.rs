@@ -110,7 +110,7 @@ impl<U, T> OnceInitCell<U, T> {
 
     #[inline]
     unsafe fn get_unchecked(&self) -> &T {
-        &(*self.data.get()).init
+        unsafe { &(*self.data.get()).init }
     }
 
     /// Gets the reference to the underlying value.

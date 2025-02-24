@@ -178,6 +178,7 @@
 //! directories.
 
 #![warn(missing_docs, missing_debug_implementations)]
+#![warn(unsafe_op_in_unsafe_fn)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 extern crate self as assets_manager;

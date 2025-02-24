@@ -186,7 +186,7 @@ impl ArcMap {
     /// file-backed maps. Solutions such as file permissions, locks or process-private (e.g. unlinked)
     /// files exist but are platform specific and limited.
     pub unsafe fn map(file: &std::fs::File) -> io::Result<Self> {
-        let map = memmap2::Mmap::map(file)?;
+        let map = unsafe { memmap2::Mmap::map(file)? };
         Ok(Self(std::sync::Arc::new(map)))
     }
 }

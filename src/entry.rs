@@ -226,7 +226,7 @@ pub type UntypedHandle = Handle<dyn Any + Send + Sync>;
 impl UntypedHandle {
     #[inline]
     pub(crate) unsafe fn extend_lifetime<'a>(&self) -> &'a UntypedHandle {
-        &*(self as *const Self)
+        unsafe { &*(self as *const Self) }
     }
 
     /// Returns `true` if the inner type is the same as T.

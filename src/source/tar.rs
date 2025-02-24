@@ -157,11 +157,11 @@ impl Tar<io::Cursor<ArcMap>> {
     /// See [`ArcMap::map`] for why this this function is unsafe
     #[inline]
     pub unsafe fn mmap<P: AsRef<path::Path>>(path: P) -> io::Result<Self> {
-        Self::_mmap(path.as_ref())
+        unsafe { Self::_mmap(path.as_ref()) }
     }
 
     unsafe fn _mmap(path: &path::Path) -> io::Result<Self> {
-        let map = ArcMap::map(&std::fs::File::open(path)?)?;
+        let map = unsafe { ArcMap::map(&std::fs::File::open(path)?)? };
         let label = path.display().to_string();
         Self::from_bytes_with_label(map, label)
     }

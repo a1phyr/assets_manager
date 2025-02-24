@@ -92,23 +92,25 @@ impl SharedBytes {
 
     #[cold]
     unsafe fn drop_slow(&mut self) {
-        let inner = self.inner();
+        unsafe {
+            let inner = self.inner();
 
-        // Synchronize with `drop`
-        inner.count.load(Ordering::Acquire);
+            // Synchronize with `drop`
+            inner.count.load(Ordering::Acquire);
 
-        let layout = if inner.capacity != 0 {
-            drop(Vec::from_raw_parts(
-                inner.ptr as *mut u8,
-                inner.len,
-                inner.capacity,
-            ));
-            alloc::Layout::new::<Inner>()
-        } else {
-            Self::get_inner_layout(inner.len)
-        };
+            let layout = if inner.capacity != 0 {
+                drop(Vec::from_raw_parts(
+                    inner.ptr as *mut u8,
+                    inner.len,
+                    inner.capacity,
+                ));
+                alloc::Layout::new::<Inner>()
+            } else {
+                Self::get_inner_layout(inner.len)
+            };
 
-        alloc::dealloc(self.ptr.as_ptr().cast(), layout);
+            alloc::dealloc(self.ptr.as_ptr().cast(), layout);
+        }
     }
 
     /// Creates a `SharedBytes` from a slice.
