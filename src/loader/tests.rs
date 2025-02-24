@@ -66,7 +66,7 @@ cfg_if::cfg_if! { if #[cfg(feature = "serde")] {
     use serde::{Serialize, Deserialize};
     use rand::{
         Rng,
-        distributions::{Distribution, Standard},
+        distr::{Distribution, StandardUniform},
     };
 
     #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
@@ -75,11 +75,11 @@ cfg_if::cfg_if! { if #[cfg(feature = "serde")] {
         y: i32,
     }
 
-    impl Distribution<Point> for Standard {
+    impl Distribution<Point> for StandardUniform {
         fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Point {
             Point {
-                x: rng.gen(),
-                y: rng.gen(),
+                x: rng.random(),
+                y: rng.random(),
             }
         }
     }
