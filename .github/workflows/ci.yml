@@ -13,7 +13,7 @@ jobs:
       matrix:
         rust:
           - stable
-          - "1.72"
+          - "1.85"
     steps:
       - name: Install development libraries
         run: sudo apt update && sudo apt install libasound2-dev -y
@@ -24,10 +24,9 @@ jobs:
         run: rustup toolchain add ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
 
       - name: Downgrade dependencies to MSRV
-        if: ${{ matrix.rust == '1.72' }}
+        if: ${{ matrix.rust == '1.85' }}
         run: |
-          cargo update -p image-webp --precise 0.2.0
-
+          true
 
       - run: cargo test
       - run: cargo test --all-features
