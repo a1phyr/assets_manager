@@ -5,7 +5,7 @@ use std::{
     cmp, fmt, hash,
 };
 
-use crate::{asset::Storable, entry::CacheEntry, AnyCache, Compound, Error, SharedString};
+use crate::{AnyCache, Compound, Error, SharedString, asset::Storable, entry::CacheEntry};
 
 impl Inner {
     fn of_asset<T: Compound>() -> &'static Self {

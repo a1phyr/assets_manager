@@ -56,8 +56,9 @@ pub fn run(input: syn::DeriveInput) -> syn::Result<TokenStream> {
     })
 }
 
-fn add_clauses(gen: &mut syn::WhereClause, format: Format) {
-    gen.predicates
+fn add_clauses(generics: &mut syn::WhereClause, format: Format) {
+    generics
+        .predicates
         .push(syn::parse_quote!(Self: ::std::marker::Send + ::std::marker::Sync + 'static));
 
     let trait_clause = match format {
@@ -66,7 +67,7 @@ fn add_clauses(gen: &mut syn::WhereClause, format: Format) {
         }
         Format::Txt => syn::parse_quote!(Self: ::std::str::FromStr),
     };
-    gen.predicates.push(trait_clause);
+    generics.predicates.push(trait_clause);
 }
 
 fn is_format_attribute(meta: &syn::Meta) -> bool {
@@ -101,7 +102,7 @@ fn get_format(attrs: &[syn::Attribute]) -> syn::Result<Format> {
                 return Err(syn::Error::new(
                     name.span(),
                     format_args!("unsupported format: {s:?}"),
-                ))
+                ));
             }
         };
 

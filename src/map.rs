@@ -1,6 +1,6 @@
 use std::{any::TypeId, hash::BuildHasher};
 
-use crate::{entry::CacheEntry, UntypedHandle};
+use crate::{UntypedHandle, entry::CacheEntry};
 use hashbrown::HashTable;
 
 pub(crate) struct AssetMap {

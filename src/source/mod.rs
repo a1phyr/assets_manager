@@ -34,8 +34,8 @@
 use std::{borrow::Cow, fmt, io};
 
 #[cfg(doc)]
-use crate::{asset::DirLoadable, AssetCache};
-use crate::{hot_reloading::EventSender, BoxedError, SharedString};
+use crate::{AssetCache, asset::DirLoadable};
+use crate::{BoxedError, SharedString, hot_reloading::EventSender};
 
 mod filesystem;
 pub use filesystem::FileSystem;

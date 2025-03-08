@@ -1,4 +1,4 @@
-use crate::{loader, utils, AnyCache, Asset, BoxedError, Compound, SharedString};
+use crate::{AnyCache, Asset, BoxedError, Compound, SharedString, loader, utils};
 use std::path;
 
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]

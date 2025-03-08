@@ -14,15 +14,15 @@
 use std::{any::TypeId, fmt, io};
 
 use crate::{
+    Compound, Error, Handle, SharedString, Storable,
     asset::DirLoadable,
     entry::{CacheEntry, UntypedHandle},
     key::Type,
     source::{DirEntry, Source},
-    Compound, Error, Handle, SharedString, Storable,
 };
 
 #[cfg(feature = "hot-reloading")]
-use crate::hot_reloading::{records, Dependencies, HotReloader};
+use crate::hot_reloading::{Dependencies, HotReloader, records};
 
 #[cfg(doc)]
 use crate::AssetCache;

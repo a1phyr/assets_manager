@@ -2,7 +2,7 @@
 //!
 //! The asset is stored in RON, in the file `assets/example/monsters/goblin.ron`.
 
-use assets_manager::{loader, Asset, AssetCache, BoxedError};
+use assets_manager::{Asset, AssetCache, BoxedError, loader};
 
 #[derive(serde::Deserialize)]
 struct Monster {

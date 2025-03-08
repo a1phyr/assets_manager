@@ -2,12 +2,12 @@
 use super::ArcMap;
 use super::{DirEntry, Source};
 use crate::{
-    utils::{extension_of, HashMap, IdBuilder},
     SharedString,
+    utils::{HashMap, IdBuilder, extension_of},
 };
 use std::{fmt, io, path};
 use sync_file::SyncFile;
-use zip::{read::ZipFile, ZipArchive};
+use zip::{ZipArchive, read::ZipFile};
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 struct FileDesc(SharedString, SharedString);

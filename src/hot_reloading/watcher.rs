@@ -1,4 +1,4 @@
-use crate::{source::OwnedDirEntry, utils::IdBuilder, BoxedError};
+use crate::{BoxedError, source::OwnedDirEntry, utils::IdBuilder};
 use std::{
     fmt,
     path::{self, Path, PathBuf},

@@ -1,4 +1,4 @@
-use crate::{asset::DirLoadable, AnyCache, BoxedError, Compound, SharedString, Storable};
+use crate::{AnyCache, BoxedError, Compound, SharedString, Storable, asset::DirLoadable};
 use once_cell::sync::OnceCell;
 use std::{cell::UnsafeCell, fmt, mem::ManuallyDrop};
 

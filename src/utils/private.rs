@@ -6,7 +6,7 @@
 //! - An unified API for `HashMap`s between `std` and `ahash` hashers
 //! - A marker for private APIs
 
-use crate::{source::DirEntry, SharedString};
+use crate::{SharedString, source::DirEntry};
 
 use std::hash::Hash;
 #[allow(unused_imports)]

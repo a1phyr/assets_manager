@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{loader, Asset, BoxedError};
+use crate::{Asset, BoxedError, loader};
 use ab_glyph::{FontArc, FontVec};
 
 #[cfg_attr(docsrs, doc(cfg(feature = "ab_glyph")))]

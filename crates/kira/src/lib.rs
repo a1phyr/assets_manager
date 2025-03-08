@@ -22,7 +22,7 @@ pub use static_sound::StaticSound;
 pub use streaming::StreamingSound;
 
 mod static_sound {
-    use assets_manager::{loader, Asset};
+    use assets_manager::{Asset, loader};
     use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
     use std::io::Cursor;
 
@@ -103,10 +103,10 @@ mod static_sound {
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg_attr(docsrs, doc(cfg(not(target_arch = "wasm32"))))]
 mod streaming {
-    use assets_manager::{loader, Asset};
+    use assets_manager::{Asset, loader};
     use kira::sound::{
-        streaming::{StreamingSoundData, StreamingSoundSettings},
         FromFileError,
+        streaming::{StreamingSoundData, StreamingSoundSettings},
     };
     use std::io::Cursor;
 

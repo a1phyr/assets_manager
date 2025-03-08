@@ -2,7 +2,7 @@
 
 #![allow(missing_docs)]
 
-use crate::{source::OwnedDirEntry, BoxedError};
+use crate::{BoxedError, source::OwnedDirEntry};
 
 #[derive(Debug, Clone)]
 enum Void {}

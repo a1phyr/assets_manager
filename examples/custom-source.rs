@@ -6,9 +6,9 @@
 //! the code of FsWatcherBuilder`.
 
 use assets_manager::{
+    AssetCache, BoxedError,
     hot_reloading::{EventSender, FsWatcherBuilder},
     source::{DirEntry, FileContent, FileSystem, Source},
-    AssetCache, BoxedError,
 };
 use std::{
     io,

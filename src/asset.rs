@@ -45,11 +45,11 @@ pub use crate::dirs::DirLoadable;
 
 #[allow(unused)]
 use crate::{
+    AnyCache, AssetCache, BoxedError, Error,
     entry::CacheEntry,
     loader,
     source::Source,
     utils::{Private, SharedBytes, SharedString},
-    AnyCache, AssetCache, BoxedError, Error,
 };
 use crate::{error::ErrorKind, key::Type, loader::Loader};
 

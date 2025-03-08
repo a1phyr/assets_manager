@@ -1,6 +1,6 @@
 use crate::{
-    source::{DirEntry, Source},
     AnyCache, Asset, BoxedError, Compound, Error, Handle, SharedString, Storable,
+    source::{DirEntry, Source},
 };
 
 use std::{fmt, io, marker::PhantomData};

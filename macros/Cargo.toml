@@ -2,7 +2,7 @@
 name = "assets_manager_macros"
 version = "0.2.5"
 authors = ["Benoît du Garreau"]
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 description = "Procedural macros for assets_manager"

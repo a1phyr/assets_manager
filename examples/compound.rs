@@ -1,7 +1,7 @@
 //! This example shows the use of Compound assets: assets able to load other
 //! assets, and their integration with hot-reloading.
 
-use assets_manager::{loader, AnyCache, Asset, AssetCache, BoxedError, Compound, SharedString};
+use assets_manager::{AnyCache, Asset, AssetCache, BoxedError, Compound, SharedString, loader};
 use serde::Deserialize;
 use std::sync::Arc;
 

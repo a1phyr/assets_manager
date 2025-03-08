@@ -7,7 +7,7 @@
 #![warn(missing_docs, missing_debug_implementations)]
 #![forbid(unsafe_code)]
 
-use assets_manager::{loader, Asset, BoxedError, SharedBytes};
+use assets_manager::{Asset, BoxedError, SharedBytes, loader};
 use rodio::decoder::{Decoder, DecoderError};
 use std::{borrow::Cow, io};
 

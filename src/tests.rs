@@ -113,17 +113,19 @@ mod asset_cache {
         assert_eq!(err.id(), "test.a");
         let err = err.reason().downcast_ref::<crate::Error>().unwrap();
         assert_eq!(err.id(), "test.a");
-        assert!(err
-            .reason()
-            .downcast_ref::<std::num::ParseIntError>()
-            .is_some());
+        assert!(
+            err.reason()
+                .downcast_ref::<std::num::ParseIntError>()
+                .is_some()
+        );
 
         let err = cache.load_owned::<X>("test.a").unwrap_err();
         assert_eq!(err.id(), "test.a");
-        assert!(err
-            .reason()
-            .downcast_ref::<std::num::ParseIntError>()
-            .is_some());
+        assert!(
+            err.reason()
+                .downcast_ref::<std::num::ParseIntError>()
+                .is_some()
+        );
     }
 
     #[test]

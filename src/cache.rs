@@ -1,12 +1,12 @@
 //! Definition of the cache
 
 use crate::{
+    AnyCache, Compound, Error, Handle,
     anycache::{AssetMap as _, Cache, CacheExt},
     asset::{DirLoadable, Storable},
     entry::{CacheEntry, UntypedHandle},
     source::{FileSystem, Source},
     utils::{RandomState, RwLock},
-    AnyCache, Compound, Error, Handle,
 };
 
 #[cfg(doc)]
@@ -15,7 +15,7 @@ use crate::AssetReadGuard;
 use std::{any::TypeId, fmt, io, path::Path};
 
 #[cfg(feature = "hot-reloading")]
-use crate::hot_reloading::{records, HotReloader};
+use crate::hot_reloading::{HotReloader, records};
 
 // Make shards go to different cache lines to reduce contention
 #[repr(align(64))]

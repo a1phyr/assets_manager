@@ -1,7 +1,7 @@
 use crate::{
+    BoxedError,
     hot_reloading::{EventSender, FsWatcherBuilder},
     utils::extension_of,
-    BoxedError,
 };
 
 #[cfg(doc)]

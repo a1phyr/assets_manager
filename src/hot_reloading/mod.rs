@@ -18,17 +18,17 @@ use std::{
     fmt,
     ptr::NonNull,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     thread,
 };
 
 use crate::{
+    SharedString,
     key::Type,
     source::{OwnedDirEntry, Source},
     utils::{Condvar, Mutex},
-    SharedString,
 };
 
 #[cfg(doc)]

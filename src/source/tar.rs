@@ -2,8 +2,8 @@
 use super::ArcMap;
 use super::DirEntry;
 use crate::{
-    utils::{HashMap, IdBuilder},
     SharedString,
+    utils::{HashMap, IdBuilder},
 };
 use std::{fmt, io, path};
 use sync_file::SyncFile;

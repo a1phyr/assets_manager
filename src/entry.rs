@@ -1,6 +1,6 @@
 //! Definitions of cache entries
 
-use crate::{asset::Storable, utils::RwLock, Compound, SharedString};
+use crate::{Compound, SharedString, asset::Storable, utils::RwLock};
 use std::{
     any::{Any, TypeId},
     cell::UnsafeCell,

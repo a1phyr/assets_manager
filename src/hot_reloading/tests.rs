@@ -1,7 +1,7 @@
 use crate::{
+    AssetCache, BoxedError,
     source::DirEntry,
     tests::{X, Y, Z},
-    AssetCache, BoxedError,
 };
 use std::{fs::File, io, io::Write, path::Path, sync::Arc};
 
