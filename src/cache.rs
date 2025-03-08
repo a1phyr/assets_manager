@@ -43,7 +43,7 @@ impl AssetMap {
             }
         };
 
-        let hash_builder = RandomState::new();
+        let hash_builder = RandomState::default();
         let shards = (0..shards)
             .map(|_| Shard(RwLock::new(crate::map::AssetMap::new())))
             .collect();

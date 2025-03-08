@@ -20,7 +20,7 @@ impl AssetMap {
     fn new() -> AssetMap {
         AssetMap {
             map: RefCell::new(crate::map::AssetMap::new()),
-            hash_builder: RandomState::new(),
+            hash_builder: RandomState::default(),
         }
     }
 

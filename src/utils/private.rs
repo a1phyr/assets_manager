@@ -230,10 +230,10 @@ impl Condvar {
 #[derive(Debug)]
 pub struct Private;
 
-#[cfg(feature = "ahash")]
-pub(crate) use ahash::RandomState;
+#[cfg(feature = "faster-hash")]
+pub(crate) use foldhash::fast::RandomState;
 
-#[cfg(not(feature = "ahash"))]
+#[cfg(not(feature = "faster-hash"))]
 pub(crate) use std::collections::hash_map::RandomState;
 
 pub(crate) struct HashMap<K, V>(hashbrown::HashMap<K, V, RandomState>);
@@ -242,7 +242,7 @@ impl<K, V> HashMap<K, V> {
     #[inline]
     #[allow(unused)]
     pub fn new() -> Self {
-        Self(hashbrown::HashMap::with_hasher(RandomState::new()))
+        Self(hashbrown::HashMap::with_hasher(RandomState::default()))
     }
 
     #[cfg(feature = "zip")]
@@ -250,7 +250,7 @@ impl<K, V> HashMap<K, V> {
     pub fn with_capacity(capacity: usize) -> Self {
         Self(hashbrown::HashMap::with_capacity_and_hasher(
             capacity,
-            RandomState::new(),
+            RandomState::default(),
         ))
     }
 }
@@ -288,7 +288,7 @@ pub(crate) struct HashSet<T>(hashbrown::HashSet<T, RandomState>);
 impl<T> HashSet<T> {
     #[inline]
     pub fn new() -> Self {
-        Self(hashbrown::HashSet::with_hasher(RandomState::new()))
+        Self(hashbrown::HashSet::with_hasher(RandomState::default()))
     }
 }
 
