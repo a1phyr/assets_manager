@@ -1,6 +1,6 @@
 use crate::{
     AssetCache, BoxedError,
-    source::DirEntry,
+    source::{DirEntry, FileSystem},
     tests::{X, Y, Z},
 };
 use std::{fs::File, io, io::Write, path::Path, sync::Arc};
@@ -44,7 +44,8 @@ macro_rules! test_scenario {
 
             test_scenario!(@leak cache $is_static);
 
-            let path = cache.raw_source().path_of(DirEntry::File(id, "x"));
+            let source = cache.raw_source().downcast_ref::<FileSystem>().unwrap();
+            let path = source.path_of(DirEntry::File(id, "x"));
             write_i32(&path, $n)?;
             sleep();
 
