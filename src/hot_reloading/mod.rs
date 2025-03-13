@@ -25,22 +25,19 @@ use std::{
 };
 
 use crate::{
-    SharedString,
+    AssetCache, SharedString,
     key::Type,
     source::{OwnedDirEntry, Source},
     utils::{Condvar, Mutex},
 };
-
-#[cfg(doc)]
-use crate::AssetCache;
 
 pub use watcher::FsWatcherBuilder;
 
 pub(crate) use records::{BorrowedDependency, Dependencies, Dependency};
 
 enum CacheMessage {
-    Ptr(NonNull<crate::cache::AssetMap>, NonNull<HotReloader>, usize),
-    Static(&'static crate::cache::AssetMap, &'static HotReloader),
+    Ptr(NonNull<AssetCache>, usize),
+    Static(&'static AssetCache),
 
     AddAsset(AssetReloadInfos),
 }
@@ -146,14 +143,14 @@ pub(crate) struct HotReloader {
 
 impl HotReloader {
     /// Starts hot-reloading.
-    fn start(events: Receiver<Events>, source: Box<dyn Source + Send>) -> Self {
+    fn start(events: Receiver<Events>, _source: Box<dyn Source + Send>) -> Self {
         let (cache_msg_tx, cache_msg_rx) = channel::unbounded();
         let answers = Arc::new(Answers::default());
         let answers_clone = answers.clone();
 
         thread::Builder::new()
             .name("assets_hot_reload".to_string())
-            .spawn(|| hot_reloading_thread(source, events, cache_msg_rx, answers_clone))
+            .spawn(|| hot_reloading_thread(events, cache_msg_rx, answers_clone))
             .unwrap();
 
         Self {
@@ -185,15 +182,11 @@ impl HotReloader {
         let _ = self.sender.send(CacheMessage::AddAsset(infos));
     }
 
-    pub(crate) fn reload(&self, map: &crate::cache::AssetMap) {
+    pub(crate) fn reload(&self, cache: &AssetCache) {
         let token = self.answers.get_unique_token();
         if self
             .sender
-            .send(CacheMessage::Ptr(
-                NonNull::from(map),
-                NonNull::from(self),
-                token,
-            ))
+            .send(CacheMessage::Ptr(NonNull::from(cache), token))
             .is_ok()
         {
             // When the hot-reloading thread is done, it sends back our back our token
@@ -201,8 +194,8 @@ impl HotReloader {
         }
     }
 
-    pub(crate) fn send_static(&'static self, map: &'static crate::cache::AssetMap) {
-        let _ = self.sender.send(CacheMessage::Static(map, self));
+    pub(crate) fn send_static(&self, cache: &'static AssetCache) {
+        let _ = self.sender.send(CacheMessage::Static(cache));
     }
 }
 
@@ -213,14 +206,13 @@ impl fmt::Debug for HotReloader {
 }
 
 fn hot_reloading_thread(
-    source: Box<dyn Source>,
     events: Receiver<Events>,
     cache_msg: Receiver<CacheMessage>,
     answers: Arc<Answers>,
 ) {
     log::info!("Starting hot-reloading");
 
-    let mut cache = HotReloadingData::new(source);
+    let mut cache = HotReloadingData::new();
 
     let mut select = channel::Select::new();
     select.recv(&cache_msg);
@@ -233,17 +225,15 @@ fn hot_reloading_thread(
 
         loop {
             match cache_msg.try_recv() {
-                Ok(CacheMessage::Ptr(ptr, reloader, token)) => {
+                Ok(CacheMessage::Ptr(asset_cache, token)) => {
                     // Safety: The received pointer is guaranteed to
                     // be valid until we reply back
                     unsafe {
-                        cache.update_if_local(ptr.as_ref(), reloader.as_ref());
+                        cache.update_if_local(asset_cache.as_ref());
                     }
                     answers.notify(token);
                 }
-                Ok(CacheMessage::Static(asset_cache, reloader)) => {
-                    cache.use_static_ref(asset_cache, reloader)
-                }
+                Ok(CacheMessage::Static(asset_cache)) => cache.use_static_ref(asset_cache),
                 Ok(CacheMessage::AddAsset(infos)) => cache.add_asset(infos),
                 Err(_) => break,
             }

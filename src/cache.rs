@@ -360,7 +360,7 @@ impl AssetCache {
     #[inline]
     pub fn hot_reload(&self) {
         if let Some(reloader) = &self.inner.reloader {
-            reloader.reload(&self.inner.assets);
+            reloader.reload(self);
         }
     }
 
@@ -382,7 +382,7 @@ impl AssetCache {
     #[inline]
     pub fn enhance_hot_reloading(&'static self) {
         if let Some(reloader) = &self.inner.reloader {
-            reloader.send_static(&self.inner.assets);
+            reloader.send_static(self);
         }
     }
 }
