@@ -135,15 +135,6 @@ impl UntypedEntry {
             None
         }
     }
-
-    #[inline]
-    fn downcast<T: 'static>(self: Box<Self>) -> Result<Box<EntryStorage<T>>, Box<Self>> {
-        if self.is::<T>() {
-            unsafe { Ok(Box::from_raw(Box::into_raw(self) as *mut EntryStorage<T>)) }
-        } else {
-            Err(self)
-        }
-    }
 }
 
 /// An entry in the cache.
@@ -186,16 +177,6 @@ impl CacheEntry {
     #[inline]
     pub(crate) fn inner(&self) -> &UntypedHandle {
         unsafe { &*(&*self.0 as *const _ as *const UntypedHandle) }
-    }
-
-    /// Consumes the `CacheEntry` and returns its inner value.
-    #[inline]
-    pub fn into_inner<T: Storable>(self) -> (T, SharedString) {
-        if let Ok(storage) = self.0.downcast() {
-            return (storage.value.into_inner(), storage.id);
-        }
-
-        wrong_handle_type()
     }
 }
 
