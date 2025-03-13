@@ -87,7 +87,7 @@ impl Source for FsWithOverride {
     }
 
     // Here is the hot-reloading magic
-    fn configure_hot_reloading(&self, events: EventSender) -> Result<(), BoxedError> {
+    fn start_hot_reloading(&self, events: EventSender) -> Result<(), BoxedError> {
         let mut builder = FsWatcherBuilder::new()?;
 
         // Register watched directories
@@ -100,10 +100,6 @@ impl Source for FsWithOverride {
         builder.build(events);
 
         Ok(())
-    }
-
-    fn make_source(&self) -> Option<Box<dyn Source + Send>> {
-        Some(Box::new(self.clone()))
     }
 }
 

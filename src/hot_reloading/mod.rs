@@ -143,34 +143,30 @@ pub(crate) struct HotReloader {
 
 impl HotReloader {
     /// Starts hot-reloading.
-    fn start(events: Receiver<Events>, _source: Box<dyn Source + Send>) -> Self {
+    pub fn make(source: &dyn Source) -> Option<Self> {
+        let (events_tx, events_rx) = channel::unbounded();
+
+        if let Err(err) = source.start_hot_reloading(EventSender(events_tx)) {
+            if !err.is::<crate::source::HotReloadingUnsupported>() {
+                log::error!("Unable to start hot-reloading: {err}");
+            }
+            return None;
+        }
+
         let (cache_msg_tx, cache_msg_rx) = channel::unbounded();
         let answers = Arc::new(Answers::default());
         let answers_clone = answers.clone();
 
         thread::Builder::new()
             .name("assets_hot_reload".to_string())
-            .spawn(|| hot_reloading_thread(events, cache_msg_rx, answers_clone))
-            .unwrap();
-
-        Self {
-            sender: cache_msg_tx,
-            answers,
-        }
-    }
-
-    pub fn make<S: Source>(source: S) -> Option<Self> {
-        let sent_source = source.make_source()?;
-        let (events_tx, events_rx) = channel::unbounded();
-
-        source
-            .configure_hot_reloading(EventSender(events_tx))
-            .map_err(|err| {
-                log::error!("Unable to start hot-reloading: {err}");
-            })
+            .spawn(|| hot_reloading_thread(events_rx, cache_msg_rx, answers_clone))
+            .map_err(|err| log::error!("Unable to start hot-reloading thread: {err}"))
             .ok()?;
 
-        Some(Self::start(events_rx, sent_source))
+        Some(Self {
+            sender: cache_msg_tx,
+            answers,
+        })
     }
 
     // All theses methods ignore send/recv errors: the program can continue

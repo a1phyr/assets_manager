@@ -267,6 +267,18 @@ mod private {
     pub struct Private;
 }
 
+/// Error type for when hot-reloading is unsupported by a source.
+#[derive(Debug)]
+pub struct HotReloadingUnsupported;
+
+impl fmt::Display for HotReloadingUnsupported {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("this source does not support hot-reloading")
+    }
+}
+
+impl std::error::Error for HotReloadingUnsupported {}
+
 /// Bytes sources to load assets from.
 ///
 /// This trait provides an abstraction over a basic filesystem, which is used to
@@ -335,24 +347,16 @@ pub trait Source {
     /// ```
     fn exists(&self, entry: DirEntry) -> bool;
 
-    /// Returns a source to use with hot-reloading.
-    ///
-    /// This method returns `None` when the source does not support
-    /// hot-reloading. In this case, `configure_hot_reloading` will never be
-    /// called.
-    #[inline]
-    fn make_source(&self) -> Option<Box<dyn Source + Send>> {
-        None
-    }
-
-    /// Configures hot-reloading.
+    /// Starts hot-reloading.
     ///
     /// This method receives an `EventSender` to notify the hot-reloading
-    /// subsystem when assets should be reloaded. It returns a `DynUpdateSender`
-    /// to be notified of cache state changes.
+    /// subsystem when assets should be reloaded.
+    ///
+    /// The default implementation returns `Èrr(HotReloadingUnsupported)`,
+    /// which means that the source does not support hot-reloading.
     #[inline]
-    fn configure_hot_reloading(&self, _events: EventSender) -> Result<(), BoxedError> {
-        Err("this source does not support hot-reloading".into())
+    fn start_hot_reloading(&self, _events: EventSender) -> Result<(), BoxedError> {
+        Err(Box::new(HotReloadingUnsupported))
     }
 
     #[doc(hidden)]
@@ -403,13 +407,8 @@ where
     }
 
     #[inline]
-    fn make_source(&self) -> Option<Box<dyn Source + Send>> {
-        self.as_ref().make_source()
-    }
-
-    #[inline]
-    fn configure_hot_reloading(&self, events: EventSender) -> Result<(), BoxedError> {
-        self.as_ref().configure_hot_reloading(events)
+    fn start_hot_reloading(&self, events: EventSender) -> Result<(), BoxedError> {
+        self.as_ref().start_hot_reloading(events)
     }
 }
 
@@ -433,13 +432,8 @@ where
     }
 
     #[inline]
-    fn make_source(&self) -> Option<Box<dyn Source + Send>> {
-        (**self).make_source()
-    }
-
-    #[inline]
-    fn configure_hot_reloading(&self, events: EventSender) -> Result<(), BoxedError> {
-        (**self).configure_hot_reloading(events)
+    fn start_hot_reloading(&self, events: EventSender) -> Result<(), BoxedError> {
+        (**self).start_hot_reloading(events)
     }
 }
 
@@ -463,13 +457,8 @@ where
     }
 
     #[inline]
-    fn make_source(&self) -> Option<Box<dyn Source + Send>> {
-        (**self).make_source()
-    }
-
-    #[inline]
-    fn configure_hot_reloading(&self, events: EventSender) -> Result<(), BoxedError> {
-        self.as_ref().configure_hot_reloading(events)
+    fn start_hot_reloading(&self, events: EventSender) -> Result<(), BoxedError> {
+        self.as_ref().start_hot_reloading(events)
     }
 }
 

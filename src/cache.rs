@@ -206,14 +206,19 @@ impl AssetCache {
     /// start hot-reloading (if feature `hot-reloading` is used).
     ///
     /// If hot-reloading fails to start, an error is logged.
+    #[inline]
     pub fn with_source<S: Source + Send + Sync + 'static>(source: S) -> AssetCache {
+        Self::_with_source(Box::new(source))
+    }
+
+    fn _with_source(source: Box<dyn Source + Send + Sync>) -> AssetCache {
         Self {
             inner: Arc::new(AssetCacheInner {
                 #[cfg(feature = "hot-reloading")]
-                reloader: HotReloader::make(&source),
+                reloader: HotReloader::make(&*source),
 
                 assets: AssetMap::new(),
-                source: Box::new(source),
+                source,
             }),
         }
     }
