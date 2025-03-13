@@ -34,17 +34,6 @@ impl AssetMap {
         entry.into_mut().inner()
     }
 
-    pub fn take(&mut self, hash: u64, id: &str, type_id: TypeId) -> Option<CacheEntry> {
-        self.map
-            .find_entry(hash, |e| e.as_key() == (type_id, id))
-            .ok()
-            .map(|e| e.remove().0)
-    }
-
-    pub fn clear(&mut self) {
-        self.map.clear();
-    }
-
     pub fn iter_for_debug(&self) -> impl Iterator<Item = (&str, &CacheEntry)> + '_ {
         self.map.iter().map(|e| (e.as_key().1, e))
     }

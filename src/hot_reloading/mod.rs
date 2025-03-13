@@ -42,7 +42,6 @@ enum CacheMessage {
     Ptr(NonNull<crate::cache::AssetMap>, NonNull<HotReloader>, usize),
     Static(&'static crate::cache::AssetMap, &'static HotReloader),
 
-    Clear,
     AddAsset(AssetReloadInfos),
 }
 unsafe impl Send for CacheMessage where crate::cache::AssetMap: Sync {}
@@ -186,10 +185,6 @@ impl HotReloader {
         let _ = self.sender.send(CacheMessage::AddAsset(infos));
     }
 
-    pub(crate) fn clear(&self) {
-        let _ = self.sender.send(CacheMessage::Clear);
-    }
-
     pub(crate) fn reload(&self, map: &crate::cache::AssetMap) {
         let token = self.answers.get_unique_token();
         if self
@@ -249,7 +244,6 @@ fn hot_reloading_thread(
                 Ok(CacheMessage::Static(asset_cache, reloader)) => {
                     cache.use_static_ref(asset_cache, reloader)
                 }
-                Ok(CacheMessage::Clear) => cache.clear_local_cache(),
                 Ok(CacheMessage::AddAsset(infos)) => cache.add_asset(infos),
                 Err(_) => break,
             }

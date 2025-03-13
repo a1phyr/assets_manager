@@ -125,10 +125,6 @@ impl HotReloadingData {
         let AssetReloadInfos(key, new_deps, typ) = infos;
         self.deps.insert_asset(key, new_deps, typ);
     }
-
-    pub fn clear_local_cache(&mut self) {
-        self.to_reload.clear();
-    }
 }
 
 fn run_update(changed: &mut HashSet<OwnedDirEntry>, deps: &mut DepsGraph, cache: BorrowedCache) {
