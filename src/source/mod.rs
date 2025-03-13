@@ -262,6 +262,11 @@ impl From<Vec<u8>> for FileContent<'_> {
     }
 }
 
+mod private {
+    #[derive(Debug)]
+    pub struct Private;
+}
+
 /// Bytes sources to load assets from.
 ///
 /// This trait provides an abstraction over a basic filesystem, which is used to
@@ -348,6 +353,33 @@ pub trait Source {
     #[inline]
     fn configure_hot_reloading(&self, _events: EventSender) -> Result<(), BoxedError> {
         Err("this source does not support hot-reloading".into())
+    }
+
+    #[doc(hidden)]
+    #[inline]
+    fn type_id(&self, _: private::Private) -> std::any::TypeId
+    where
+        Self: 'static,
+    {
+        std::any::TypeId::of::<Self>()
+    }
+}
+
+impl dyn Source + Send + Sync {
+    /// TODO
+    #[inline]
+    pub fn is<S: Source + 'static>(&self) -> bool {
+        self.type_id(private::Private) == std::any::TypeId::of::<S>()
+    }
+
+    /// TODO
+    #[inline]
+    pub fn downcast_ref<S: Source + 'static>(&self) -> Option<&S> {
+        if self.is::<S>() {
+            unsafe { Some(&*(self as *const dyn Source as *const S)) }
+        } else {
+            None
+        }
     }
 }
 
