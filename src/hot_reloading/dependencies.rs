@@ -116,7 +116,7 @@ impl DepsGraph {
         }
     }
 
-    pub fn reload(&mut self, cache: crate::AnyCache, key: OwnedKey) {
+    pub fn reload(&mut self, cache: &crate::AssetCache, key: OwnedKey) {
         let id = &key.id;
         let b_key = BorrowedDependency::Asset(&key);
         if let Some(entry) = self.0.get_mut(&b_key) {

@@ -213,7 +213,7 @@ impl HotReloadingData {
             self.to_reload.clear();
 
             for key in to_update.into_iter() {
-                self.deps.reload(asset_cache.as_any_cache(), key);
+                self.deps.reload(asset_cache, key);
             }
         }
     }
