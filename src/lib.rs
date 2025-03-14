@@ -183,9 +183,6 @@
 
 extern crate self as assets_manager;
 
-mod anycache;
-pub use anycache::{AnyCache, AsAnyCache};
-
 pub mod asset;
 pub use asset::{Asset, Compound, Storable};
 
@@ -273,6 +270,10 @@ pub use utils::{SharedBytes, SharedString};
 #[cfg_attr(docsrs, doc(cfg(feature = "macros")))]
 #[cfg(feature = "macros")]
 pub use assets_manager_macros::Asset;
+
+#[deprecated = "Use `AssetCache` instead"]
+/// Type alias to `AssetCache` to ease migration.
+pub type AnyCache<'a> = &'a AssetCache;
 
 #[cfg(test)]
 mod tests;

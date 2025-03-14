@@ -1,4 +1,4 @@
-use crate::{AnyCache, BoxedError, Compound, SharedString, Storable, asset::DirLoadable};
+use crate::{AssetCache, BoxedError, Compound, SharedString, Storable, asset::DirLoadable};
 use once_cell::sync::OnceCell;
 use std::{cell::UnsafeCell, fmt, mem::ManuallyDrop};
 
@@ -23,7 +23,7 @@ union State<U, T> {
 /// # Example
 ///
 /// ```no_run
-/// use assets_manager::{asset::Png, AnyCache, BoxedError, OnceInitCell};
+/// use assets_manager::{asset::Png, AssetCache, BoxedError, OnceInitCell};
 ///
 /// struct GpuCtx(/* ... */);
 /// struct Texture(/* ... */);
@@ -42,7 +42,7 @@ union State<U, T> {
 ///     }
 ///
 ///     /// Loads a texture from an image the cache and uses it.
-///     fn load_and_use_texture(&self, cache: AnyCache, id: &str) -> Result<(), BoxedError> {
+///     fn load_and_use_texture(&self, cache: &AssetCache, id: &str) -> Result<(), BoxedError> {
 ///         // Load the cached texture or the source PNG image.
 ///         let img = cache.load::<OnceInitCell<Png, Texture>>(id)?.read();
 ///
@@ -252,7 +252,7 @@ impl<U, T: fmt::Debug> fmt::Debug for OnceInitCell<U, T> {
 }
 
 impl<U: Compound, T: Storable> Compound for OnceInitCell<U, T> {
-    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
+    fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
         Ok(OnceInitCell::new(U::load(cache, id)?))
     }
 
@@ -260,7 +260,7 @@ impl<U: Compound, T: Storable> Compound for OnceInitCell<U, T> {
 }
 
 impl<U: Compound, T: Storable> Compound for OnceInitCell<Option<U>, T> {
-    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
+    fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
         Ok(OnceInitCell::new(Some(U::load(cache, id)?)))
     }
 
@@ -268,12 +268,12 @@ impl<U: Compound, T: Storable> Compound for OnceInitCell<Option<U>, T> {
 }
 
 impl<U: DirLoadable, T: Storable> DirLoadable for OnceInitCell<U, T> {
-    fn select_ids(cache: AnyCache, id: &SharedString) -> std::io::Result<Vec<SharedString>> {
+    fn select_ids(cache: &AssetCache, id: &SharedString) -> std::io::Result<Vec<SharedString>> {
         U::select_ids(cache, id)
     }
 
     fn sub_directories(
-        cache: AnyCache,
+        cache: &AssetCache,
         id: &SharedString,
         f: impl FnMut(&str),
     ) -> std::io::Result<()> {
@@ -282,12 +282,12 @@ impl<U: DirLoadable, T: Storable> DirLoadable for OnceInitCell<U, T> {
 }
 
 impl<U: DirLoadable, T: Storable> DirLoadable for OnceInitCell<Option<U>, T> {
-    fn select_ids(cache: AnyCache, id: &SharedString) -> std::io::Result<Vec<SharedString>> {
+    fn select_ids(cache: &AssetCache, id: &SharedString) -> std::io::Result<Vec<SharedString>> {
         U::select_ids(cache, id)
     }
 
     fn sub_directories(
-        cache: AnyCache,
+        cache: &AssetCache,
         id: &SharedString,
         f: impl FnMut(&str),
     ) -> std::io::Result<()> {
