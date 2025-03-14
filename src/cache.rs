@@ -161,11 +161,11 @@ pub struct AssetCache {
     inner: Arc<AssetCacheInner>,
 }
 
-pub struct AssetCacheInner {
+struct AssetCacheInner {
     #[cfg(feature = "hot-reloading")]
-    pub(crate) reloader: Option<HotReloader>,
+    reloader: Option<HotReloader>,
 
-    pub(crate) assets: AssetMap,
+    assets: AssetMap,
     source: Box<dyn Source + Send + Sync>,
 }
 
@@ -207,11 +207,31 @@ impl AssetCache {
     ///
     /// If hot-reloading fails to start, an error is logged.
     pub fn with_source<S: Source + Send + Sync + 'static>(source: S) -> AssetCache {
+        Self::_with_source(Box::new(source))
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    fn _with_source(source: Box<dyn Source + Send + Sync>) -> AssetCache {
+        let inner = Arc::new_cyclic(|weak| {
+            let weak = WeakAssetCache {
+                inner: weak.clone(),
+            };
+            AssetCacheInner {
+                reloader: HotReloader::start(weak, &*source),
+
+                assets: AssetMap::new(),
+                source,
+            }
+        });
+
+        Self { inner }
+    }
+
+    #[cfg(not(feature = "hot-reloading"))]
+    #[inline]
+    fn _with_source(source: Box<dyn Source + Send + Sync>) -> AssetCache {
         Self {
             inner: Arc::new(AssetCacheInner {
-                #[cfg(feature = "hot-reloading")]
-                reloader: HotReloader::start(&source),
-
                 assets: AssetMap::new(),
                 source: Box::new(source),
             }),
@@ -337,54 +357,14 @@ impl AssetCache {
     pub fn as_any_cache(&self) -> AnyCache {
         self._as_any_cache()
     }
-}
 
-impl AssetCache {
-    /// Reloads changed assets.
-    ///
-    /// This function is typically called within a loop.
-    ///
-    /// If an error occurs while reloading an asset, a warning will be logged
-    /// and the asset will be left unchanged.
-    ///
-    /// This function blocks the current thread until all changed assets are
-    /// reloaded, but it does not perform any I/O. However, it needs to lock
-    /// some assets for writing, so you **must not** have any [`AssetReadGuard`]
-    /// from the given `AssetCache`, or you might experience deadlocks. You are
-    /// free to keep [`Handle`]s, though.
-    ///
-    /// If `self.inner.source()` was created without hot-reloading or if it failed to
-    /// start, this function is a no-op.
-    #[cfg(feature = "hot-reloading")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
-    #[inline]
-    pub fn hot_reload(&self) {
-        if let Some(reloader) = &self.inner.reloader {
-            reloader.reload(self.as_any_cache());
-        }
-    }
+    #[deprecated = "This function does not need to be called anymore"]
+    #[doc(hidden)]
+    pub fn hot_reload(&self) {}
 
-    /// Enhances hot-reloading.
-    ///
-    /// Having a `'static` reference to the cache enables some optimizations,
-    /// which you can take advantage of with this function. If an `AssetCache`
-    /// is behind a `'static` reference, you should always prefer using this
-    /// function over [`hot_reload`](`Self::hot_reload`).
-    ///
-    /// You only have to call this function once for it to take effect. After
-    /// calling this function, subsequent calls to `hot_reload` and to this
-    /// function have no effect.
-    ///
-    /// If `self.source()` was created without hot-reloading or if it failed to
-    /// start, this function is a no-op.
-    #[cfg(feature = "hot-reloading")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
-    #[inline]
-    pub fn enhance_hot_reloading(&'static self) {
-        if let Some(reloader) = &self.inner.reloader {
-            reloader.send_static(self.as_any_cache());
-        }
-    }
+    #[deprecated = "This function does not need to be called anymore"]
+    #[doc(hidden)]
+    pub fn enhance_hot_reloading(&'static self) {}
 }
 
 impl<'a> crate::AsAnyCache<'a> for &'a AssetCache {
@@ -399,5 +379,18 @@ impl fmt::Debug for AssetCache {
         f.debug_struct("AssetCache")
             .field("assets", &self.inner.assets)
             .finish()
+    }
+}
+
+#[cfg(feature = "hot-reloading")]
+#[derive(Clone)]
+pub(crate) struct WeakAssetCache {
+    inner: std::sync::Weak<AssetCacheInner>,
+}
+
+#[cfg(feature = "hot-reloading")]
+impl WeakAssetCache {
+    pub fn upgrade(&self) -> Option<AssetCache> {
+        self.inner.upgrade().map(|inner| AssetCache { inner })
     }
 }
