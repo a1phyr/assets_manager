@@ -114,9 +114,6 @@ fn main() -> Result<(), BoxedError> {
     let msg = cache.load::<String>("example.hello")?;
 
     loop {
-        #[cfg(feature = "hot-reloading")]
-        cache.hot_reload();
-
         println!("{}", msg.read());
         std::thread::sleep(std::time::Duration::from_secs(1))
     }

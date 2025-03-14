@@ -91,8 +91,6 @@ fn main() -> Result<(), BoxedError> {
     println!("{level:#?}");
 
     loop {
-        cache.hot_reload();
-
         // Touching one of these files will cause `level` to be reloaded:
         //  - assets/example/levels/forest.ron
         //  - assets/example/monsters/goblin.ron
