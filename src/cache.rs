@@ -156,15 +156,15 @@ impl fmt::Debug for AssetMap {
 /// ```
 #[derive(Clone)]
 pub struct AssetCache {
-    inner: Arc<AssetCacheInner>,
+    inner: Arc<AssetCacheInner<dyn Source + Send + Sync>>,
 }
 
-struct AssetCacheInner {
+struct AssetCacheInner<S: ?Sized = dyn Source + Send + Sync> {
     #[cfg(feature = "hot-reloading")]
     reloader: Option<HotReloader>,
 
     assets: AssetMap,
-    source: Box<dyn Source + Send + Sync>,
+    source: S,
 }
 
 impl AssetCache {
@@ -184,17 +184,17 @@ impl AssetCache {
     ///
     /// If hot-reloading fails to start, an error is logged.
     pub fn with_source<S: Source + Send + Sync + 'static>(source: S) -> AssetCache {
-        Self::_with_source(Box::new(source))
+        Self::_with_source(source)
     }
 
     #[cfg(feature = "hot-reloading")]
-    fn _with_source(source: Box<dyn Source + Send + Sync>) -> AssetCache {
+    fn _with_source<S: Source + Send + Sync + 'static>(source: S) -> AssetCache {
         let inner = Arc::new_cyclic(|weak| {
             let weak = WeakAssetCache {
-                inner: weak.clone(),
+                inner: weak.clone() as _,
             };
             AssetCacheInner {
-                reloader: HotReloader::start(weak, &*source),
+                reloader: HotReloader::start(weak, &source),
 
                 assets: AssetMap::new(),
                 source,
@@ -206,7 +206,7 @@ impl AssetCache {
 
     #[cfg(not(feature = "hot-reloading"))]
     #[inline]
-    fn _with_source(source: Box<dyn Source + Send + Sync>) -> AssetCache {
+    fn _with_source<S: Source + Send + Sync + 'static>(source: S) -> AssetCache {
         Self {
             inner: Arc::new(AssetCacheInner {
                 assets: AssetMap::new(),
@@ -235,13 +235,13 @@ impl AssetCache {
         return CacheSource { cache: self };
 
         #[cfg(not(feature = "hot-reloading"))]
-        &*self.inner.source
+        &self.inner.source
     }
 
     /// Returns a reference to the cache's [`Source`].
     #[inline]
     pub fn raw_source(&self) -> &(dyn Source + Send + Sync + 'static) {
-        &*self.inner.source
+        &self.inner.source
     }
 
     /// Temporarily prevent `Compound` dependencies to be recorded.
