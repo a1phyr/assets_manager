@@ -43,3 +43,16 @@ impl FsWatcherBuilder {
         match self.0 {}
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct Recorder(Void);
+
+impl Recorder {
+    pub fn current() -> Self {
+        panic!("no recorder installed")
+    }
+
+    pub fn install<T>(&self, _: impl FnOnce() -> T) -> T {
+        match self.0 {}
+    }
+}

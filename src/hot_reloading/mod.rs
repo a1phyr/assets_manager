@@ -21,6 +21,7 @@ use crate::{
     utils::{HashSet, OwnedKey},
 };
 
+pub use records::Recorder;
 pub use watcher::FsWatcherBuilder;
 
 pub(crate) use records::{BorrowedDependency, Dependencies, Dependency};
@@ -118,6 +119,10 @@ impl HotReloader {
         Some(Self {
             sender: cache_msg_tx,
         })
+    }
+
+    fn addr(&self) -> usize {
+        (self as *const Self).addr()
     }
 
     // All theses methods ignore send/recv errors: the program can continue
