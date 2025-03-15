@@ -169,6 +169,24 @@ mod asset_cache {
 
         assert!(loaded.next().is_none());
     }
+
+    #[test]
+    fn fallback() {
+        let fallback = AssetCache::new("assets").unwrap();
+        let cache = AssetCache::with_fallback(fallback.clone());
+
+        let handle = fallback.load::<X>("test.cache").unwrap();
+
+        assert_eq!(*handle.read(), X(42));
+        assert_eq!(*cache.get_cached::<X>("test.cache").unwrap().read(), X(42));
+
+        assert_eq!(*cache.load::<X>("test.b").unwrap().read(), X(-7));
+        assert!(fallback.get_cached::<X>("test.b").is_none());
+
+        drop(cache);
+
+        assert_eq!(*handle.read(), X(42));
+    }
 }
 
 mod handle {
