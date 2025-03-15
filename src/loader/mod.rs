@@ -287,7 +287,9 @@ macro_rules! serde_loaders {
 serde_loaders! {
     /// Loads assets from Bincode encoded files.
     #[cfg(feature = "bincode")]
-    struct BincodeLoader => bincode::deserialize;
+    struct BincodeLoader => |data| {
+        bincode::serde::decode_from_slice(data, bincode::config::legacy()).map(|v| v.0)
+    };
 
     /// Loads assets from JSON files.
     #[cfg(feature = "json")]

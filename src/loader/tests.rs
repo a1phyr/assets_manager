@@ -112,7 +112,7 @@ test_loader!(
     bincode_loader_ok,
     bincode_loader_err,
     BincodeLoader,
-    bincode::serialize
+    |val| bincode::serde::encode_to_vec(val, bincode::config::legacy())
 );
 
 #[cfg(feature = "json")]
