@@ -226,7 +226,7 @@ impl<S: Source> AssetCache<S> {
     pub fn with_source(source: S) -> AssetCache<S> {
         Self {
             #[cfg(feature = "hot-reloading")]
-            reloader: HotReloader::make(&source),
+            reloader: HotReloader::start(&source),
 
             assets: AssetMap::new(),
             source,

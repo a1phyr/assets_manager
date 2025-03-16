@@ -101,10 +101,6 @@ impl Source for FsWithOverride {
 
         Ok(())
     }
-
-    fn make_source(&self) -> Option<Box<dyn Source + Send>> {
-        Some(Box::new(self.clone()))
-    }
 }
 
 fn main() -> Result<(), BoxedError> {
