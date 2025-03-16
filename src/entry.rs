@@ -259,6 +259,12 @@ impl UntypedHandle {
         &self.inner.id
     }
 
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    pub(crate) fn type_id(&self) -> TypeId {
+        self.inner.type_id
+    }
+
     #[inline]
     pub(crate) unsafe fn extend_lifetime<'a>(&self) -> &'a UntypedHandle {
         &*(self as *const Self)
