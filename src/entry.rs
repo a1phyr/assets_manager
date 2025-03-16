@@ -40,7 +40,20 @@ pub(crate) struct Dynamic {
     reload: AtomicReloadId,
 }
 
-struct EntryStorage<T: ?Sized> {
+/// A handle on an asset.
+///
+/// Such a handle can be used to get access to an asset of type `T`. It is
+/// generally obtained by call `AssetCache::load` and its variants.
+///
+/// If feature `hot-reloading` is used, this structure wraps a RwLock, so
+/// assets can be written to be reloaded. As such, any number of read guard can
+/// exist at the same time, but none can exist while reloading an asset (when
+/// calling `AssetCache::hot_reload`).
+///
+/// You can use thus structure to store a reference to an asset.
+/// However it is generally easier to work with `'static` data. For more
+/// information, see [top-level documentation](crate#getting-owned-data).
+pub struct Handle<T: ?Sized> {
     id: SharedString,
     type_id: TypeId,
     #[cfg(feature = "hot-reloading")]
@@ -48,12 +61,9 @@ struct EntryStorage<T: ?Sized> {
     value: UnsafeCell<T>,
 }
 
-unsafe impl<T: Sync + ?Sized> Sync for EntryStorage<T> {}
+unsafe impl<T: Sync + ?Sized> Sync for Handle<T> {}
 
-type Entry<T> = EntryStorage<T>;
-type UntypedEntry = EntryStorage<dyn Any + Send + Sync>;
-
-impl<T: Storable> Entry<T> {
+impl<T: Storable> Handle<T> {
     fn new_static(id: SharedString, value: T) -> Self {
         Self {
             id,
@@ -81,32 +91,11 @@ impl<T: Storable> Entry<T> {
             value: UnsafeCell::new(value),
         }
     }
-
-    fn handle(&self) -> &Handle<T> {
-        unsafe { &*(self as *const Self as *const Handle<T>) }
-    }
-
-    fn untyped_handle(&self) -> &UntypedHandle {
-        unsafe { &*(self as *const Self as *const UntypedEntry as *const UntypedHandle) }
-    }
 }
 
-impl<T: ?Sized> EntryStorage<T> {
-    pub fn read(&self) -> AssetReadGuard<'_, T> {
-        #[cfg(feature = "hot-reloading")]
-        let guard = self.dynamic.as_ref().map(|d| d.lock.read());
-
-        AssetReadGuard {
-            value: unsafe { &*self.value.get() },
-            #[cfg(feature = "hot-reloading")]
-            guard,
-        }
-    }
-}
-
-impl UntypedEntry {
+impl UntypedHandle {
     #[cfg(feature = "hot-reloading")]
-    pub fn write(&self, mut value: CacheEntry) {
+    pub(crate) fn write(&self, mut value: CacheEntry) {
         assert!(self.type_id == value.0.type_id);
 
         if let Some(d) = &self.dynamic {
@@ -121,33 +110,10 @@ impl UntypedEntry {
 
         wrong_handle_type();
     }
-
-    #[inline]
-    fn is<T: 'static>(&self) -> bool {
-        self.type_id == TypeId::of::<T>()
-    }
-
-    #[inline]
-    fn downcast_ref<T: 'static>(&self) -> Option<&EntryStorage<T>> {
-        if self.is::<T>() {
-            unsafe { Some(&*(self as *const Self as *const EntryStorage<T>)) }
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    fn downcast<T: 'static>(self: Box<Self>) -> Result<Box<EntryStorage<T>>, Box<Self>> {
-        if self.is::<T>() {
-            unsafe { Ok(Box::from_raw(Box::into_raw(self) as *mut EntryStorage<T>)) }
-        } else {
-            Err(self)
-        }
-    }
 }
 
 /// An entry in the cache.
-pub struct CacheEntry(Box<UntypedEntry>);
+pub(crate) struct CacheEntry(Box<UntypedHandle>);
 
 impl CacheEntry {
     /// Creates a new `CacheEntry` containing an asset of type `T`.
@@ -156,14 +122,14 @@ impl CacheEntry {
     #[inline]
     pub fn new<T: Compound>(asset: T, id: SharedString, _mutable: impl FnOnce() -> bool) -> Self {
         #[cfg(not(feature = "hot-reloading"))]
-        let inner = EntryStorage::new_static(id, asset);
+        let inner = Handle::new_static(id, asset);
 
         // Even if hot-reloading is enabled, we can avoid the lock in some cases.
         #[cfg(feature = "hot-reloading")]
         let inner = if T::HOT_RELOADED && _mutable() {
-            EntryStorage::new_dynamic(id, asset)
+            Handle::new_dynamic(id, asset)
         } else {
-            EntryStorage::new_static(id, asset)
+            Handle::new_static(id, asset)
         };
 
         CacheEntry(Box::new(inner))
@@ -174,7 +140,7 @@ impl CacheEntry {
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
     pub fn new_any<T: Storable>(value: T, id: SharedString, _mutable: bool) -> Self {
-        CacheEntry(Box::new(EntryStorage::new_static(id, value)))
+        CacheEntry(Box::new(Handle::new_static(id, value)))
     }
 
     #[inline]
@@ -185,7 +151,7 @@ impl CacheEntry {
     /// Returns a reference on the inner storage of the entry.
     #[inline]
     pub(crate) fn inner(&self) -> &UntypedHandle {
-        unsafe { &*(&*self.0 as *const _ as *const UntypedHandle) }
+        &self.0
     }
 
     /// Consumes the `CacheEntry` and returns its inner value.
@@ -238,14 +204,17 @@ impl UntypedHandle {
     /// Returns `true` if the inner type is the same as T.
     #[inline]
     pub fn is<T: 'static>(&self) -> bool {
-        self.inner.is::<T>()
+        self.type_id == TypeId::of::<T>()
     }
 
     /// Returns a handle to the asset if it is of type `T`.
     #[inline]
     pub fn downcast_ref<T: Storable>(&self) -> Option<&Handle<T>> {
-        let entry = self.inner.downcast_ref()?;
-        Some(entry.handle())
+        if self.is::<T>() {
+            unsafe { Some(&*(self as *const Self as *const Handle<T>)) }
+        } else {
+            None
+        }
     }
 
     /// Like `downcast_ref`, but panics in the wrong type is given.
@@ -257,28 +226,14 @@ impl UntypedHandle {
         }
     }
 
-    #[cfg(feature = "hot-reloading")]
-    pub(crate) fn write(&self, asset: CacheEntry) {
-        self.inner.write(asset);
+    #[inline]
+    fn downcast<T: 'static>(self: Box<Self>) -> Result<Box<Handle<T>>, Box<Self>> {
+        if self.is::<T>() {
+            unsafe { Ok(Box::from_raw(Box::into_raw(self) as *mut Handle<T>)) }
+        } else {
+            Err(self)
+        }
     }
-}
-
-/// A handle on an asset.
-///
-/// Such a handle can be used to get access to an asset of type `T`. It is
-/// generally obtained by call `AssetCache::load` and its variants.
-///
-/// If feature `hot-reloading` is used, this structure wraps a RwLock, so
-/// assets can be written to be reloaded. As such, any number of read guard can
-/// exist at the same time, but none can exist while reloading an asset (when
-/// calling `AssetCache::hot_reload`).
-///
-/// You can use thus structure to store a reference to an asset.
-/// However it is generally easier to work with `'static` data. For more
-/// information, see [top-level documentation](crate#getting-owned-data).
-#[repr(transparent)]
-pub struct Handle<T: ?Sized> {
-    inner: Entry<T>,
 }
 
 impl<T: ?Sized> Handle<T> {
@@ -289,7 +244,7 @@ impl<T: ?Sized> Handle<T> {
         _on_dynamic: impl FnOnce(&'a Dynamic) -> U,
     ) -> U {
         #[cfg(feature = "hot-reloading")]
-        if let Some(d) = &self.inner.dynamic {
+        if let Some(d) = &self.dynamic {
             return _on_dynamic(d);
         }
 
@@ -305,13 +260,20 @@ impl<T: ?Sized> Handle<T> {
     /// Returns a RAII guard which will release the lock once dropped.
     #[inline]
     pub fn read(&self) -> AssetReadGuard<'_, T> {
-        self.inner.read()
+        #[cfg(feature = "hot-reloading")]
+        let guard = self.dynamic.as_ref().map(|d| d.lock.read());
+
+        AssetReadGuard {
+            value: unsafe { &*self.value.get() },
+            #[cfg(feature = "hot-reloading")]
+            guard,
+        }
     }
 
     /// Returns the id of the asset.
     #[inline]
     pub fn id(&self) -> &SharedString {
-        &self.inner.id
+        &self.id
     }
 
     #[cfg(feature = "hot-reloading")]
@@ -326,7 +288,7 @@ impl<T: ?Sized> Handle<T> {
     where
         T: Storable,
     {
-        self.inner.untyped_handle()
+        self
     }
 
     /// Returns a `ReloadWatcher` that can be used to check whether this asset
