@@ -7,8 +7,8 @@ use crate::{
 use hashbrown::hash_map::Entry;
 
 struct GraphNode {
-    /// `None` if the asset is part of the graph but we should not actually
-    /// reload it when changed (eg when `load_owned` was used)
+    /// `None` if this is not an asset but a source operation or if the type
+    /// wasn't filled yet
     typ: Option<Type>,
 
     /// Reverse dependencies (backward edges)

@@ -180,11 +180,12 @@ impl<'a> AnyCache<'a> {
     /// Loads an owned version of an asset.
     ///
     /// Note that the asset will not be fetched from the cache nor will it be
-    /// cached. In addition, hot-reloading does not affect the returned value
-    /// (if used during [`Compound::load`]. It will still be registered as a
-    /// dependency).
+    /// cached. In addition, hot-reloading does not affect the returned value.
     ///
     /// This can be useful if you need ownership on a non-clonable value.
+    ///
+    /// Inside an implementation [`Compound::load`], you should use `T::load`
+    /// directly.
     #[inline]
     pub fn load_owned<T: Compound>(self, id: &str) -> Result<T, Error> {
         self.cache._load_owned(id)
@@ -280,8 +281,6 @@ pub(crate) trait Cache {
 
     fn load_entry(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error>;
 
-    fn load_owned_entry(&self, id: &str, typ: Type) -> Result<CacheEntry, Error>;
-
     fn insert(&self, entry: CacheEntry) -> &UntypedHandle;
 }
 
@@ -361,19 +360,6 @@ impl<T: RawCache> Cache for T {
         }
     }
 
-    fn load_owned_entry(&self, id: &str, typ: Type) -> Result<CacheEntry, Error> {
-        let id = SharedString::from(id);
-
-        #[cfg(feature = "hot-reloading")]
-        if typ.is_hot_reloaded() {
-            if let Some(reloader) = self.reloader() {
-                records::add_record(reloader, id.clone(), typ.type_id);
-            }
-        }
-
-        crate::asset::load_and_record(self._as_any_cache(), id, typ)
-    }
-
     #[inline]
     fn insert(&self, entry: CacheEntry) -> &UntypedHandle {
         self.assets().insert(entry)
@@ -447,8 +433,8 @@ pub(crate) trait CacheExt: Cache {
 
     #[inline]
     fn _load_owned<T: Compound>(&self, id: &str) -> Result<T, Error> {
-        let entry = self.load_owned_entry(id, Type::of_asset::<T>())?;
-        Ok(entry.into_inner().0)
+        let id = SharedString::from(id);
+        T::load(self._as_any_cache(), &id).map_err(|err| Error::new(id, err))
     }
 }
 
