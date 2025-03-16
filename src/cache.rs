@@ -12,7 +12,7 @@ use crate::{
 #[cfg(doc)]
 use crate::AssetReadGuard;
 
-use std::{any::TypeId, fmt, io, path::Path, sync::Arc};
+use std::{any::TypeId, fmt, hash, io, path::Path, sync::Arc};
 
 #[cfg(feature = "hot-reloading")]
 use crate::hot_reloading::{HotReloader, records};
@@ -96,6 +96,16 @@ impl fmt::Debug for AssetMap {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct CacheId(usize);
+
+impl Default for CacheId {
+    fn default() -> Self {
+        static NEXT_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        Self(NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+    }
+}
+
 /// The main structure of this crate, used to cache assets.
 ///
 /// It uses interior mutability, so assets can be added in the cache without
@@ -156,7 +166,7 @@ impl fmt::Debug for AssetMap {
 /// ```
 #[derive(Clone)]
 pub struct AssetCache {
-    inner: Arc<AssetCacheInner<dyn Source + Send + Sync>>,
+    inner: Arc<AssetCacheInner>,
 }
 
 struct AssetCacheInner<S: ?Sized = dyn Source + Send + Sync> {
@@ -165,6 +175,7 @@ struct AssetCacheInner<S: ?Sized = dyn Source + Send + Sync> {
 
     assets: AssetMap,
     fallback: Option<AssetCache>,
+    id: CacheId,
 
     source: S,
 }
@@ -192,14 +203,20 @@ impl AssetCache {
     #[cfg(feature = "hot-reloading")]
     fn _with_source<S: Source + Send + Sync + 'static>(source: S) -> AssetCache {
         let inner = Arc::new_cyclic(|weak| {
+            let id = CacheId::default();
+
             let weak = WeakAssetCache {
                 inner: weak.clone() as _,
+                id,
             };
+
             AssetCacheInner {
                 reloader: HotReloader::start(weak, &source),
 
                 assets: AssetMap::new(),
                 fallback: None,
+                id,
+
                 source,
             }
         });
@@ -228,6 +245,7 @@ impl AssetCache {
 
                 assets: AssetMap::new(),
                 fallback: None,
+                id: CacheId::default(),
 
                 source,
             }),
@@ -243,6 +261,7 @@ impl AssetCache {
 
                 assets: AssetMap::new(),
                 fallback: Some(fallback),
+                id: CacheId::default(),
 
                 source: crate::source::Empty,
             }),
@@ -282,6 +301,10 @@ impl AssetCache {
         self.inner.reloader.as_ref()
     }
 
+    pub(crate) fn id(&self) -> CacheId {
+        self.inner.id
+    }
+
     /// Returns a reference to the cache's fallback.
     #[inline]
     pub fn fallback(&self) -> Option<&Self> {
@@ -315,7 +338,7 @@ impl AssetCache {
     fn add_record(&self, handle: &UntypedHandle) {
         if let Some(reloader) = self.reloader() {
             if let Some(typ) = handle.typ() {
-                let key = crate::key::AssetKey::new(handle.id().clone(), typ);
+                let key = crate::key::AssetKey::new(handle.id().clone(), typ, self.inner.id);
                 records::add_record(reloader, key);
             }
         }
@@ -564,6 +587,14 @@ impl AssetCache {
     }
 }
 
+impl<S: ?Sized> Drop for AssetCacheInner<S> {
+    fn drop(&mut self) {
+        if let Some(reloader) = &self.reloader {
+            reloader.remove_cache(self.id);
+        }
+    }
+}
+
 impl fmt::Debug for AssetCache {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AssetCache")
@@ -603,11 +634,32 @@ impl Source for CacheSource<'_> {
 #[derive(Clone)]
 pub(crate) struct WeakAssetCache {
     inner: std::sync::Weak<AssetCacheInner>,
+    id: CacheId,
 }
 
 #[cfg(feature = "hot-reloading")]
 impl WeakAssetCache {
     pub fn upgrade(&self) -> Option<AssetCache> {
         self.inner.upgrade().map(|inner| AssetCache { inner })
+    }
+}
+
+impl PartialEq for WeakAssetCache {
+    fn eq(&self, other: &Self) -> bool {
+        self.id.eq(&other.id)
+    }
+}
+
+impl Eq for WeakAssetCache {}
+
+impl hash::Hash for WeakAssetCache {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
+impl std::borrow::Borrow<CacheId> for WeakAssetCache {
+    fn borrow(&self) -> &CacheId {
+        &self.id
     }
 }

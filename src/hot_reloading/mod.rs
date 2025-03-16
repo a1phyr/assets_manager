@@ -15,7 +15,7 @@ use std::thread;
 
 use crate::{
     SharedString,
-    cache::WeakAssetCache,
+    cache::{CacheId, WeakAssetCache},
     key::{AssetKey, Type},
     source::{OwnedDirEntry, Source},
     utils::HashSet,
@@ -27,6 +27,7 @@ pub use watcher::FsWatcherBuilder;
 pub(crate) use records::{BorrowedDependency, Dependencies, Dependency};
 
 enum CacheMessage {
+    RemoveCache(CacheId),
     AddAsset(AssetKey, Dependencies),
 }
 
@@ -130,9 +131,19 @@ impl HotReloader {
     // without hot-reloading if it stopped, and an error should have already
     // been logged.
 
-    pub(crate) fn add_asset(&self, id: SharedString, deps: Dependencies, typ: Type) {
-        let key = AssetKey::new(id, typ);
+    pub(crate) fn add_asset(
+        &self,
+        cache: CacheId,
+        id: SharedString,
+        deps: Dependencies,
+        typ: Type,
+    ) {
+        let key = AssetKey::new(id, typ, cache);
         let _ = self.sender.send(CacheMessage::AddAsset(key, deps));
+    }
+
+    pub(crate) fn remove_cache(&self, cache: CacheId) {
+        let _ = self.sender.send(CacheMessage::RemoveCache(cache));
     }
 }
 
@@ -157,6 +168,7 @@ fn hot_reloading_thread(
         loop {
             match cache_msg.try_recv() {
                 Ok(CacheMessage::AddAsset(key, deps)) => cache.add_asset(key, deps),
+                Ok(CacheMessage::RemoveCache(id)) => cache.remove_cache(id),
                 Err(channel::TryRecvError::Empty) => break,
                 Err(channel::TryRecvError::Disconnected) => return,
             }
@@ -179,7 +191,7 @@ struct HotReloadingData {
     // It is important to keep a weak reference here, because we rely on the
     // fact that dropping the `HotReloader` drop the channel and therefore stop
     // the hot-reloading thread
-    cache: WeakAssetCache,
+    caches: HashSet<WeakAssetCache>,
     to_reload: HashSet<OwnedDirEntry>,
     deps: dependencies::DepsGraph,
 }
@@ -188,7 +200,7 @@ impl HotReloadingData {
     fn new(cache: WeakAssetCache) -> Self {
         HotReloadingData {
             to_reload: HashSet::new(),
-            cache,
+            caches: HashSet::from_iter([cache]),
             deps: dependencies::DepsGraph::new(),
         }
     }
@@ -204,21 +216,32 @@ impl HotReloadingData {
     }
 
     fn run_update(&mut self) {
-        if let Some(asset_cache) = &mut self.cache.upgrade() {
-            let to_update = self.deps.topological_sort_from(self.to_reload.iter());
-            self.to_reload.clear();
+        let to_update = self.deps.topological_sort_from(self.to_reload.iter());
+        self.to_reload.clear();
 
-            for key in to_update.into_iter() {
-                let new_deps = asset_cache.reload_untyped(&key.id, key.typ);
+        for key in to_update.into_iter() {
+            let Some(weak) = self.caches.get(&key.cache) else {
+                continue;
+            };
 
-                if let Some(new_deps) = new_deps {
-                    self.deps.insert_asset(key, new_deps);
-                };
-            }
+            let Some(asset_cache) = weak.upgrade() else {
+                continue;
+            };
+
+            let new_deps = asset_cache.reload_untyped(&key.id, key.typ);
+
+            if let Some(new_deps) = new_deps {
+                self.deps.insert_asset(key, new_deps);
+            };
         }
     }
 
     fn add_asset(&mut self, key: AssetKey, deps: Dependencies) {
         self.deps.insert_asset(key, deps);
+    }
+
+    fn remove_cache(&mut self, id: CacheId) {
+        self.caches.remove(&id);
+        self.deps.remove_cache(id);
     }
 }

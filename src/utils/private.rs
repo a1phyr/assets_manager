@@ -7,7 +7,7 @@
 //! - A marker for private APIs
 
 #[allow(unused_imports)]
-use crate::{SharedString, source::DirEntry};
+use crate::{SharedString, key::Type, source::DirEntry};
 
 use std::{
     fmt,
@@ -308,6 +308,12 @@ impl<T> IntoIterator for HashSet<T> {
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
+    }
+}
+
+impl<T: Eq + std::hash::Hash> FromIterator<T> for HashSet<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self(hashbrown::HashSet::from_iter(iter))
     }
 }
 

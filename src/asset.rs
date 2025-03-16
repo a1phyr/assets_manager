@@ -258,7 +258,7 @@ pub(crate) fn load_and_record(
             let (entry, deps) =
                 crate::hot_reloading::records::record(reloader, || (typ.inner.load)(cache, id));
             if let Ok(entry) = &entry {
-                reloader.add_asset(entry.inner().id().clone(), deps, typ);
+                reloader.add_asset(cache.id(), entry.inner().id().clone(), deps, typ);
             }
             return entry;
         }

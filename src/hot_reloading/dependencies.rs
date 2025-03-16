@@ -1,5 +1,6 @@
 use super::{BorrowedDependency, Dependencies, Dependency};
 use crate::{
+    cache::CacheId,
     key::AssetKey,
     source::OwnedDirEntry,
     utils::{HashMap, HashSet},
@@ -111,6 +112,13 @@ impl DepsGraph {
 
     pub fn contains(&self, key: &OwnedDirEntry) -> bool {
         self.0.contains_key(&key.as_dependency())
+    }
+
+    pub fn remove_cache(&mut self, id: CacheId) {
+        self.0.retain(|key, _| match key {
+            Dependency::Asset(AssetKey { cache, .. }) => *cache == id,
+            _ => false,
+        });
     }
 }
 
