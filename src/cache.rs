@@ -410,7 +410,7 @@ where
     #[inline]
     pub fn hot_reload(&self) {
         if let Some(reloader) = &self.reloader {
-            reloader.reload(&self.assets);
+            reloader.reload(self.as_any_cache());
         }
     }
 
@@ -432,7 +432,7 @@ where
     #[inline]
     pub fn enhance_hot_reloading(&'static self) {
         if let Some(reloader) = &self.reloader {
-            reloader.send_static(&self.assets);
+            reloader.send_static(self.as_any_cache());
         }
     }
 }
