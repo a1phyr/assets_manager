@@ -305,6 +305,13 @@ pub(crate) trait RawCache: Sized {
 
         Ok(self.assets().insert(entry))
     }
+
+    #[cfg(feature = "hot-reloading")]
+    fn add_record(&self, handle: &UntypedHandle) {
+        if let Some(reloader) = self.reloader() {
+            records::add_record(reloader, handle.id().clone(), handle.type_id());
+        }
+    }
 }
 
 impl<T: RawCache> Cache for T {
@@ -335,17 +342,14 @@ impl<T: RawCache> Cache for T {
     }
 
     fn get_cached_entry(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
+        let entry = self.assets().get(id, type_id);
+
         #[cfg(feature = "hot-reloading")]
-        if let Some(reloader) = self.reloader() {
-            let (id, entry) = match self.assets().get(id, type_id) {
-                Some(entry) => (entry.id().clone(), Some(entry)),
-                None => (id.into(), None),
-            };
-            records::add_record(reloader, id, type_id);
-            return entry;
+        if let Some(entry) = entry {
+            self.add_record(entry);
         }
 
-        self.assets().get(id, type_id)
+        entry
     }
 
     #[inline]
@@ -354,10 +358,17 @@ impl<T: RawCache> Cache for T {
     }
 
     fn load_entry(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
-        match self.get_cached_entry(id, typ.type_id) {
+        let entry = match self.assets().get(id, typ.type_id) {
             Some(entry) => Ok(entry),
             None => self.add_asset(id, typ),
+        };
+
+        #[cfg(feature = "hot-reloading")]
+        if let Ok(entry) = entry {
+            self.add_record(entry);
         }
+
+        entry
     }
 
     #[inline]

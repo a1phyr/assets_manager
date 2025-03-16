@@ -308,6 +308,12 @@ impl<T: ?Sized> Handle<T> {
         &self.inner.id
     }
 
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    pub(crate) fn type_id(&self) -> TypeId {
+        self.inner.type_id
+    }
+
     /// Returns an untyped version of the handle.
     #[inline]
     pub fn as_untyped(&self) -> &UntypedHandle
