@@ -1,16 +1,12 @@
 use super::{BorrowedDependency, Dependencies, Dependency};
 use crate::{
-    key::Type,
+    key::AssetKey,
     source::OwnedDirEntry,
-    utils::{HashMap, HashSet, OwnedKey},
+    utils::{HashMap, HashSet},
 };
 use hashbrown::hash_map::Entry;
 
 struct GraphNode {
-    /// `None` if this is not an asset but a source operation or if the type
-    /// wasn't filled yet
-    typ: Option<Type>,
-
     /// Reverse dependencies (backward edges)
     rdeps: HashSet<Dependency>,
 
@@ -21,7 +17,6 @@ struct GraphNode {
 impl Default for GraphNode {
     fn default() -> Self {
         GraphNode {
-            typ: None,
             deps: Dependencies::new(),
             rdeps: HashSet::new(),
         }
@@ -29,9 +24,8 @@ impl Default for GraphNode {
 }
 
 impl GraphNode {
-    fn new(typ: Type, deps: Dependencies) -> Self {
+    fn new(deps: Dependencies) -> Self {
         GraphNode {
-            typ: Some(typ),
             deps,
             rdeps: HashSet::new(),
         }
@@ -45,11 +39,11 @@ impl DepsGraph {
         DepsGraph(HashMap::new())
     }
 
-    pub fn insert_asset(&mut self, asset_key: OwnedKey, deps: Dependencies, typ: Type) {
-        self.insert(Dependency::Asset(asset_key), deps, typ)
+    pub fn insert_asset(&mut self, asset_key: AssetKey, deps: Dependencies) {
+        self.insert(Dependency::Asset(asset_key), deps)
     }
 
-    pub fn insert(&mut self, asset_key: Dependency, deps: Dependencies, typ: Type) {
+    pub fn insert(&mut self, asset_key: Dependency, deps: Dependencies) {
         for key in deps.iter() {
             let entry = self.0.entry(key.clone()).or_default();
             entry.rdeps.insert(asset_key.clone());
@@ -57,13 +51,12 @@ impl DepsGraph {
 
         match self.0.entry(asset_key.clone()) {
             Entry::Vacant(entry) => {
-                entry.insert(GraphNode::new(typ, deps));
+                entry.insert(GraphNode::new(deps));
             }
             Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
                 let removed: Vec<_> = entry.deps.difference(&deps).cloned().collect();
                 entry.deps = deps;
-                entry.typ = Some(typ);
 
                 for key in removed {
                     let removed = match self.0.get_mut(&key) {
@@ -116,20 +109,6 @@ impl DepsGraph {
         }
     }
 
-    pub fn reload(&mut self, cache: crate::AnyCache, key: OwnedKey) {
-        let id = &key.id;
-        let b_key = BorrowedDependency::Asset(&key);
-        if let Some(entry) = self.0.get_mut(&b_key) {
-            if let Some(typ) = entry.typ {
-                let new_deps = cache.reload_untyped(id.clone(), typ);
-
-                if let Some(new_deps) = new_deps {
-                    self.insert(Dependency::Asset(key), new_deps, typ);
-                }
-            }
-        }
-    }
-
     pub fn contains(&self, key: &OwnedDirEntry) -> bool {
         self.0.contains_key(&key.as_dependency())
     }
@@ -137,13 +116,13 @@ impl DepsGraph {
 
 struct TopologicalSortData {
     visited: HashSet<Dependency>,
-    list: Vec<OwnedKey>,
+    list: Vec<AssetKey>,
 }
 
-pub(crate) struct TopologicalSort(Vec<OwnedKey>);
+pub(crate) struct TopologicalSort(Vec<AssetKey>);
 
 impl TopologicalSort {
-    pub fn into_iter(self) -> impl ExactSizeIterator<Item = OwnedKey> {
+    pub fn into_iter(self) -> impl ExactSizeIterator<Item = AssetKey> {
         self.0.into_iter().rev()
     }
 }

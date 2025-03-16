@@ -1,6 +1,6 @@
 //! Definitions of cache entries
 
-use crate::{Compound, SharedString, asset::Storable, utils::RwLock};
+use crate::{Compound, SharedString, asset::Storable, key::Type, utils::RwLock};
 use std::{
     any::{Any, TypeId},
     cell::UnsafeCell,
@@ -33,6 +33,8 @@ unsafe fn swap_any(a: &mut dyn Any, b: &mut dyn Any) {
 
 #[allow(dead_code)]
 pub(crate) struct Dynamic {
+    typ: Type,
+
     lock: RwLock<()>,
     reload_global: AtomicBool,
     reload: AtomicReloadId,
@@ -63,11 +65,15 @@ impl<T: Storable> Entry<T> {
     }
 
     #[cfg(feature = "hot-reloading")]
-    fn new_dynamic(id: SharedString, value: T) -> Self {
+    fn new_dynamic(id: SharedString, value: T) -> Self
+    where
+        T: Compound,
+    {
         Self {
             id,
             type_id: TypeId::of::<T>(),
             dynamic: Some(Dynamic {
+                typ: Type::of_asset::<T>(),
                 lock: RwLock::new(()),
                 reload_global: AtomicBool::new(false),
                 reload: AtomicReloadId::new(),
@@ -148,8 +154,19 @@ impl CacheEntry {
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new<T: Compound>(asset: T, id: SharedString, mutable: impl FnOnce() -> bool) -> Self {
-        Self::new_any(asset, id, T::HOT_RELOADED && mutable())
+    pub fn new<T: Compound>(asset: T, id: SharedString, _mutable: impl FnOnce() -> bool) -> Self {
+        #[cfg(not(feature = "hot-reloading"))]
+        let inner = EntryStorage::new_static(id, asset);
+
+        // Even if hot-reloading is enabled, we can avoid the lock in some cases.
+        #[cfg(feature = "hot-reloading")]
+        let inner = if T::HOT_RELOADED && _mutable() {
+            EntryStorage::new_dynamic(id, asset)
+        } else {
+            EntryStorage::new_static(id, asset)
+        };
+
+        CacheEntry(Box::new(inner))
     }
 
     /// Creates a new `CacheEntry` containing a value of type `T`.
@@ -157,18 +174,7 @@ impl CacheEntry {
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
     pub fn new_any<T: Storable>(value: T, id: SharedString, _mutable: bool) -> Self {
-        #[cfg(not(feature = "hot-reloading"))]
-        let inner = EntryStorage::new_static(id, value);
-
-        // Even if hot-reloading is enabled, we can avoid the lock in some cases.
-        #[cfg(feature = "hot-reloading")]
-        let inner = if _mutable {
-            EntryStorage::new_dynamic(id, value)
-        } else {
-            EntryStorage::new_static(id, value)
-        };
-
-        CacheEntry(Box::new(inner))
+        CacheEntry(Box::new(EntryStorage::new_static(id, value)))
     }
 
     #[inline]
@@ -310,8 +316,8 @@ impl<T: ?Sized> Handle<T> {
 
     #[cfg(feature = "hot-reloading")]
     #[inline]
-    pub(crate) fn type_id(&self) -> TypeId {
-        self.inner.type_id
+    pub(crate) fn typ(&self) -> Option<Type> {
+        self.either(|| None, |d| Some(d.typ))
     }
 
     /// Returns an untyped version of the handle.

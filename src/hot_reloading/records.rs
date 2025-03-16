@@ -1,5 +1,5 @@
-use crate::utils::{HashSet, OwnedKey, SharedString};
-use std::{any::TypeId, cell::Cell, ptr::NonNull};
+use crate::{SharedString, key::AssetKey, utils::HashSet};
+use std::{cell::Cell, ptr::NonNull};
 
 use super::HotReloader;
 
@@ -7,7 +7,7 @@ use super::HotReloader;
 pub(crate) enum Dependency {
     File(SharedString, SharedString),
     Directory(SharedString),
-    Asset(OwnedKey),
+    Asset(AssetKey),
 }
 
 impl Dependency {
@@ -26,7 +26,7 @@ pub(crate) type Dependencies = HashSet<Dependency>;
 pub(crate) enum BorrowedDependency<'a> {
     File(&'a SharedString, &'a SharedString),
     Directory(&'a SharedString),
-    Asset(&'a OwnedKey),
+    Asset(&'a AssetKey),
 }
 
 impl BorrowedDependency<'_> {
@@ -58,7 +58,7 @@ impl Record {
         }
     }
 
-    fn insert_asset(&mut self, reloader: &HotReloader, key: OwnedKey) {
+    fn insert_asset(&mut self, reloader: &HotReloader, key: AssetKey) {
         if self.reloader == reloader {
             self.records.insert(Dependency::Asset(key));
         }
@@ -116,11 +116,11 @@ pub(crate) fn no_record<F: FnOnce() -> T, T>(f: F) -> T {
     })
 }
 
-pub(crate) fn add_record(reloader: &HotReloader, id: SharedString, type_id: TypeId) {
+pub(crate) fn add_record(reloader: &HotReloader, key: AssetKey) {
     RECORDING.with(|rec| {
         if let Some(mut recorder) = rec.get() {
             let recorder = unsafe { recorder.as_mut() };
-            recorder.insert_asset(reloader, OwnedKey::new_with(id, type_id));
+            recorder.insert_asset(reloader, key);
         }
     });
 }

@@ -11,7 +11,7 @@ mod watcher;
 #[cfg(test)]
 mod tests;
 
-use paths::{AssetReloadInfos, HotReloadingData};
+use paths::HotReloadingData;
 
 use crossbeam_channel::{self as channel, Receiver, Sender};
 use std::{
@@ -25,7 +25,7 @@ use std::{
 
 use crate::{
     SharedString,
-    key::Type,
+    key::{AssetKey, Type},
     source::{OwnedDirEntry, Source},
     utils::{Condvar, Mutex},
 };
@@ -42,7 +42,7 @@ enum CacheMessage {
     Static(crate::AnyCache<'static>),
 
     Clear,
-    AddAsset(AssetReloadInfos),
+    AddAsset(AssetKey, Dependencies),
 }
 unsafe impl Send for CacheMessage where crate::cache::AssetMap: Sync {}
 
@@ -181,8 +181,8 @@ impl HotReloader {
     // been logged.
 
     pub(crate) fn add_asset(&self, id: SharedString, deps: Dependencies, typ: Type) {
-        let infos = AssetReloadInfos::from_type(id, deps, typ);
-        let _ = self.sender.send(CacheMessage::AddAsset(infos));
+        let key = AssetKey::new(id, typ);
+        let _ = self.sender.send(CacheMessage::AddAsset(key, deps));
     }
 
     pub(crate) fn clear(&self) {
@@ -241,7 +241,7 @@ fn hot_reloading_thread(
                 }
                 Ok(CacheMessage::Static(asset_cache)) => cache.use_static_ref(asset_cache),
                 Ok(CacheMessage::Clear) => cache.clear_local_cache(),
-                Ok(CacheMessage::AddAsset(infos)) => cache.add_asset(infos),
+                Ok(CacheMessage::AddAsset(key, deps)) => cache.add_asset(key, deps),
                 Err(_) => break,
             }
         }

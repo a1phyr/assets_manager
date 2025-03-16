@@ -221,11 +221,13 @@ impl<'a> AnyCache<'a> {
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub(crate) fn reload_untyped(self, id: SharedString, typ: Type) -> Option<Dependencies> {
-        let handle = self.get_cached_untyped(&id, typ.type_id)?;
+    pub(crate) fn reload_untyped(self, id: &SharedString, typ: Type) -> Option<Dependencies> {
+        let handle = self.get_cached_untyped(id, typ.type_id)?;
 
         let load_asset = || {
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (typ.inner.load)(self, id)))
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                (typ.inner.load)(self, id.clone())
+            }))
         };
         let (entry, deps) = if let Some(reloader) = self.reloader() {
             records::record(reloader, load_asset)
@@ -236,15 +238,15 @@ impl<'a> AnyCache<'a> {
         match entry {
             Ok(Ok(e)) => {
                 handle.write(e);
-                log::info!("Reloading \"{}\"", handle.id());
+                log::info!("Reloading \"{id}\"");
                 Some(deps)
             }
             Ok(Err(err)) => {
-                log::warn!("Error reloading \"{}\": {}", err.id(), err.reason());
+                log::warn!("Error reloading \"{id}\": {}", err.reason());
                 None
             }
             Err(_) => {
-                log::warn!("Panic while reloading asset");
+                log::warn!("Panic while reloading \"{id}\"");
                 None
             }
         }
@@ -309,7 +311,10 @@ pub(crate) trait RawCache: Sized {
     #[cfg(feature = "hot-reloading")]
     fn add_record(&self, handle: &UntypedHandle) {
         if let Some(reloader) = self.reloader() {
-            records::add_record(reloader, handle.id().clone(), handle.type_id());
+            if let Some(typ) = handle.typ() {
+                let key = crate::key::AssetKey::new(handle.id().clone(), typ);
+                records::add_record(reloader, key);
+            }
         }
     }
 }

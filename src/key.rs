@@ -109,3 +109,19 @@ impl fmt::Debug for Type {
             .finish()
     }
 }
+
+/// The key used to identify assets
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct AssetKey {
+    pub typ: Type,
+    pub id: SharedString,
+}
+
+impl AssetKey {
+    /// Creates a `OwnedKey` with the given type and id.
+    #[allow(dead_code)]
+    #[inline]
+    pub fn new(id: SharedString, typ: Type) -> Self {
+        Self { id, typ }
+    }
+}

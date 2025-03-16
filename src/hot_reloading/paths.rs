@@ -1,20 +1,6 @@
-use crate::{
-    AnyCache, SharedString,
-    source::OwnedDirEntry,
-    utils::{HashSet, OwnedKey},
-};
+use crate::{AnyCache, key::AssetKey, source::OwnedDirEntry, utils::HashSet};
 
 use super::{dependencies::DepsGraph, records::Dependencies};
-
-pub(crate) struct AssetReloadInfos(OwnedKey, Dependencies, crate::key::Type);
-
-impl AssetReloadInfos {
-    #[inline]
-    pub(crate) fn from_type(id: SharedString, deps: Dependencies, typ: crate::key::Type) -> Self {
-        let key = OwnedKey::new_with(id, typ.type_id);
-        Self(key, deps, typ)
-    }
-}
 
 enum CacheKind {
     Local,
@@ -69,9 +55,8 @@ impl HotReloadingData {
         }
     }
 
-    pub fn add_asset(&mut self, infos: AssetReloadInfos) {
-        let AssetReloadInfos(key, new_deps, typ) = infos;
-        self.deps.insert_asset(key, new_deps, typ);
+    pub fn add_asset(&mut self, key: AssetKey, deps: Dependencies) {
+        self.deps.insert_asset(key, deps);
     }
 
     pub fn clear_local_cache(&mut self) {
@@ -84,6 +69,10 @@ fn run_update(changed: &mut HashSet<OwnedDirEntry>, deps: &mut DepsGraph, cache:
     changed.clear();
 
     for key in to_update.into_iter() {
-        deps.reload(cache, key);
+        let new_deps = cache.reload_untyped(&key.id, key.typ);
+
+        if let Some(new_deps) = new_deps {
+            deps.insert_asset(key, new_deps);
+        };
     }
 }

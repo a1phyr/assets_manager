@@ -6,12 +6,10 @@
 //! - An unified API for `HashMap`s between `std` and `ahash` hashers
 //! - A marker for private APIs
 
+#[allow(unused_imports)]
 use crate::{SharedString, source::DirEntry};
 
-use std::hash::Hash;
-#[allow(unused_imports)]
 use std::{
-    any::TypeId,
     fmt,
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
@@ -90,22 +88,6 @@ impl IdBuilder {
     #[inline]
     pub fn reset(&mut self) {
         self.buf.clear()
-    }
-}
-
-/// The key used to identify assets
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct OwnedKey {
-    pub type_id: TypeId,
-    pub id: SharedString,
-}
-
-impl OwnedKey {
-    /// Creates a `OwnedKey` with the given type and id.
-    #[allow(dead_code)]
-    #[inline]
-    pub fn new_with(id: SharedString, type_id: TypeId) -> Self {
-        Self { id, type_id }
     }
 }
 
