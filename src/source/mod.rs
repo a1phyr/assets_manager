@@ -262,18 +262,6 @@ impl From<Vec<u8>> for FileContent<'_> {
     }
 }
 
-/// Error type for when hot-reloading is unsupported by a source.
-#[derive(Debug)]
-pub struct HotReloadingUnsupported;
-
-impl fmt::Display for HotReloadingUnsupported {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("this source does not support hot-reloading")
-    }
-}
-
-impl std::error::Error for HotReloadingUnsupported {}
-
 /// Bytes sources to load assets from.
 ///
 /// This trait provides an abstraction over a basic filesystem, which is used to
@@ -347,11 +335,13 @@ pub trait Source {
     /// This method receives an `EventSender` to notify the hot-reloading
     /// subsystem when assets should be reloaded.
     ///
-    /// The default implementation returns `Èrr(HotReloadingUnsupported)`,
-    /// which means that the source does not support hot-reloading.
+    /// The returned result is there purely for conveniency: if this function
+    /// returns an error, it is logged and nothing more is done with it.
+    ///
+    /// The default implementation does nothing and returns `Ok(())`.
     #[inline]
     fn configure_hot_reloading(&self, _events: EventSender) -> Result<(), BoxedError> {
-        Err(Box::new(HotReloadingUnsupported))
+        Ok(())
     }
 }
 

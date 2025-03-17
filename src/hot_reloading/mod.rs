@@ -147,9 +147,14 @@ impl HotReloader {
         let (events_tx, events_rx) = channel::unbounded();
 
         if let Err(err) = source.configure_hot_reloading(EventSender(events_tx)) {
-            if !err.is::<crate::source::HotReloadingUnsupported>() {
-                log::error!("Unable to start hot-reloading: {err}");
-            }
+            log::error!("Failed to start hot-reloading: {err}");
+        }
+
+        // We do a `try_recv` here as a workaround for the lack of method to
+        // knwo whether a channel is disconnected. We might lose an event there,
+        // but this is fine because there is nothing to reload yet.
+        if let Err(channel::TryRecvError::Disconnected) = events_rx.try_recv() {
+            // Hot-reloading is unsupported or failed to start
             return None;
         }
 
@@ -160,7 +165,7 @@ impl HotReloader {
         thread::Builder::new()
             .name("assets_hot_reload".to_string())
             .spawn(|| hot_reloading_thread(events_rx, cache_msg_rx, answers_clone))
-            .map_err(|err| log::error!("Unable to start hot-reloading thread: {err}"))
+            .map_err(|err| log::error!("Failed to start hot-reloading thread: {err}"))
             .ok()?;
 
         Some(Self {
