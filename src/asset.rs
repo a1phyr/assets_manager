@@ -179,29 +179,6 @@ pub trait Asset: Sized + Send + Sync + 'static {
     const HOT_RELOADED: bool = true;
 }
 
-pub(crate) fn load_from_source<T: Asset>(
-    source: impl Source,
-    id: &SharedString,
-) -> Result<T, BoxedError> {
-    let load_with_ext = |ext| -> Result<T, ErrorKind> {
-        let asset = source
-            .read(id, ext)?
-            .with_cow(|content| T::Loader::load(content, ext))?;
-        Ok(asset)
-    };
-
-    let mut error = ErrorKind::NoDefaultValue;
-
-    for ext in T::EXTENSIONS {
-        match load_with_ext(ext) {
-            Err(err) => error = err.or(error),
-            Ok(asset) => return Ok(asset),
-        }
-    }
-
-    T::default_value(id, error.into())
-}
-
 /// An asset type that can load other kinds of assets.
 ///
 /// `Compound`s can be loaded and retrieved by an [`AssetCache`].
@@ -273,7 +250,25 @@ where
 {
     #[inline]
     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
-        load_from_source(cache.raw_source(), id)
+        let source = cache.raw_source();
+
+        let load_with_ext = |ext| -> Result<T, ErrorKind> {
+            let asset = source
+                .read(id, ext)?
+                .with_cow(|content| T::Loader::load(content, ext))?;
+            Ok(asset)
+        };
+
+        let mut error = ErrorKind::NoDefaultValue;
+
+        for ext in T::EXTENSIONS {
+            match load_with_ext(ext) {
+                Err(err) => error = err.or(error),
+                Ok(asset) => return Ok(asset),
+            }
+        }
+
+        T::default_value(id, error.into())
     }
 
     const HOT_RELOADED: bool = Self::HOT_RELOADED;
