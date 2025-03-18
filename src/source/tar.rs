@@ -119,15 +119,17 @@ fn register_file(
     }
 }
 
+type FileReader<R> = fn(&Tar<R>, start: u64, size: usize) -> io::Result<super::FileContent<'_>>;
+
 /// A [`Source`] to load assets from a tar archive.
 ///
 /// The archive can be backed by any reader that also implements [`io::Seek`]
-/// and [`Clone`].
-///
-/// **Warning**: This will clone the reader each time it is read, so you should
-/// ensure that is cheap to clone (eg *not* `Vec<u8>`).
+/// and [`Clone`] or by a byte slice. In the second case, reading files will
+/// not involve copying data.
 pub struct Tar<R = SyncFile> {
     reader: R,
+    read_file: FileReader<R>,
+
     files: HashMap<FileDesc, (u64, u64)>,
     dirs: HashMap<SharedString, Vec<OwnedEntry>>,
     label: Option<String>,
@@ -152,6 +154,8 @@ impl Tar<SyncFile> {
 impl Tar<io::Cursor<ArcMap>> {
     /// Creates a `Zip` archive backed by the file map at the given path.
     ///
+    /// Reading a file from this archive will not copy its content.
+    ///
     /// # Safety
     ///
     /// See [`ArcMap::map`] for why this this function is unsafe
@@ -169,47 +173,55 @@ impl Tar<io::Cursor<ArcMap>> {
 
 impl<T: AsRef<[u8]>> Tar<io::Cursor<T>> {
     /// Creates a `Tar` archive backed by a byte buffer in memory.
+    ///
+    /// Reading a file from this archive will not copy its content.
     #[inline]
     pub fn from_bytes(bytes: T) -> io::Result<Self> {
-        Self::from_reader(io::Cursor::new(bytes))
+        Self::new(io::Cursor::new(bytes), read_file_bytes::<T>, None)
     }
 
     /// Creates a `Tar` archive backed by a byte buffer in memory.
+    ///
+    /// Reading a file from this archive will not copy its content.
+    ///
+    /// An additionnal label that will be used in errors can be added.
     #[inline]
     pub fn from_bytes_with_label(bytes: T, label: String) -> io::Result<Self> {
-        Self::from_reader_with_label(io::Cursor::new(bytes), label)
+        Self::new(io::Cursor::new(bytes), read_file_bytes::<T>, Some(label))
     }
 }
 
 impl<R> Tar<R>
 where
-    R: io::Read + io::Seek,
+    R: io::Read + io::Seek + Clone,
 {
     /// Creates a `Tar` archive backed by a reader that supports seeking.
+    ///
+    /// **Warning**: This will clone the reader each time a file is read, so you
+    /// should ensure that cloning is cheap.
     pub fn from_reader(reader: R) -> io::Result<Self> {
-        Self::create(reader, None)
+        Self::new(reader, read_file_reader::<R>, None)
     }
 
     /// Creates a `Tar` archive backed by a reader that supports seeking.
     ///
     /// An additionnal label that will be used in errors can be added.
+    ///
+    /// **Warning**: This will clone the reader each time a file is read, so you
+    /// should ensure that cloning is cheap.
     pub fn from_reader_with_label(reader: R, label: String) -> io::Result<Self> {
-        Self::create(reader, Some(label))
+        Self::new(reader, read_file_reader::<R>, Some(label))
     }
+}
 
-    fn create(reader: R, label: Option<String>) -> io::Result<Self> {
-        let mut archive = tar::Archive::new(reader);
-        let mut id_builder = IdBuilder::default();
-
-        let mut files = HashMap::new();
-        let mut dirs = HashMap::new();
-
-        for file in archive.entries_with_seek()? {
-            register_file(file?, &mut files, &mut dirs, &mut id_builder)
-        }
+impl<R: io::Read + io::Seek> Tar<R> {
+    fn new(mut reader: R, read_file: FileReader<R>, label: Option<String>) -> io::Result<Self> {
+        let (files, dirs) = read_archive(&mut reader)?;
 
         Ok(Tar {
-            reader: archive.into_inner(),
+            reader,
+            read_file,
+
             files,
             dirs,
             label,
@@ -218,25 +230,15 @@ where
 }
 
 #[cfg_attr(docsrs, doc(cfg(feature = "tar")))]
-impl<R> super::Source for Tar<R>
-where
-    R: io::Read + io::Seek + Clone,
-{
+impl<R: io::Read + io::Seek> super::Source for Tar<R> {
     fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
         let &(start, size) = self
             .files
             .get(&(id, ext))
             .ok_or_else(|| error::find_file(id, &self.label))?;
 
-        let mut reader = self.reader.clone();
-
-        let mut buf = vec![0; size as usize];
-        reader
-            .seek(io::SeekFrom::Start(start))
-            .and_then(|_| reader.read_exact(&mut buf))
-            .map_err(|err| error::read_file(err, id, &self.label))?;
-
-        Ok(super::FileContent::Buffer(buf))
+        (self.read_file)(self, start, size as usize)
+            .map_err(|err| error::read_file(err, id, &self.label))
     }
 
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
@@ -263,6 +265,56 @@ impl<R> fmt::Debug for Tar<R> {
             .field("dirs", &self.dirs)
             .finish()
     }
+}
+
+trait ReadSeek: io::Read + io::Seek {}
+impl<R: io::Read + io::Seek> ReadSeek for R {}
+
+#[allow(clippy::type_complexity)]
+fn read_archive(
+    reader: &mut dyn ReadSeek,
+) -> io::Result<(
+    HashMap<FileDesc, (u64, u64)>,
+    HashMap<SharedString, Vec<OwnedEntry>>,
+)> {
+    let mut archive = tar::Archive::new(reader);
+    let mut id_builder = IdBuilder::default();
+
+    let mut files = HashMap::new();
+    let mut dirs = HashMap::new();
+
+    for file in archive.entries_with_seek()? {
+        register_file(file?, &mut files, &mut dirs, &mut id_builder)
+    }
+
+    Ok((files, dirs))
+}
+
+fn read_file_reader<R: io::Read + io::Seek + Clone>(
+    tar: &Tar<R>,
+    start: u64,
+    size: usize,
+) -> io::Result<super::FileContent<'_>> {
+    let mut reader = tar.reader.clone();
+
+    let mut buf = vec![0; size];
+    reader.seek(io::SeekFrom::Start(start))?;
+    reader.read_exact(&mut buf)?;
+
+    Ok(super::FileContent::Buffer(buf))
+}
+
+fn read_file_bytes<B: AsRef<[u8]>>(
+    tar: &Tar<io::Cursor<B>>,
+    start: u64,
+    size: usize,
+) -> io::Result<super::FileContent<'_>> {
+    let start = start as usize;
+    let tar = tar.reader.get_ref().as_ref();
+    let file = tar
+        .get(start..start + size)
+        .ok_or(io::ErrorKind::InvalidData)?;
+    Ok(super::FileContent::Slice(file))
 }
 
 mod error {

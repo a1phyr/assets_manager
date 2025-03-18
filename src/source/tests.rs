@@ -118,6 +118,15 @@ mod tar {
         assert!(err.to_string().contains("assets/test/test.tar"));
         assert!(err.kind() == io::ErrorKind::NotFound);
     }
+
+    #[test]
+    fn direct_read() {
+        let tar = std::fs::read("assets/test/test.tar").unwrap();
+        let tar = Tar::from_bytes(tar).unwrap();
+
+        let file = tar.read("test.b", "x").unwrap();
+        assert!(matches!(file, FileContent::Slice(_)));
+    }
 }
 
 #[cfg(feature = "zip-deflate")]
