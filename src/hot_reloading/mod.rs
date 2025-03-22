@@ -39,7 +39,6 @@ enum CacheMessage {
     Ptr(&'static AssetCache, usize),
     Static(&'static AssetCache),
 
-    Clear,
     AddAsset(AssetKey, Dependencies),
 }
 unsafe impl Send for CacheMessage where AssetCache: Sync {}
@@ -188,10 +187,6 @@ impl HotReloader {
         let _ = self.sender.send(CacheMessage::AddAsset(key, deps));
     }
 
-    pub(crate) fn clear(&self) {
-        let _ = self.sender.send(CacheMessage::Clear);
-    }
-
     pub(crate) fn reload(&self, cache: &AssetCache) {
         let token = self.answers.get_unique_token();
         // Safety: We are sure the cache will be valid until we send the answer
@@ -241,7 +236,6 @@ fn hot_reloading_thread(
                     answers.notify(token);
                 }
                 Ok(CacheMessage::Static(asset_cache)) => cache.use_static_ref(asset_cache),
-                Ok(CacheMessage::Clear) => cache.clear_local_cache(),
                 Ok(CacheMessage::AddAsset(key, deps)) => cache.add_asset(key, deps),
                 Err(_) => break,
             }

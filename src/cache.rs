@@ -63,26 +63,6 @@ impl AssetMap {
         &self.shards[id]
     }
 
-    fn get_shard_mut(&mut self, hash: u64) -> &mut Shard {
-        let id = (hash as usize) & (self.shards.len() - 1);
-        &mut self.shards[id]
-    }
-
-    fn take(&mut self, id: &str, type_id: TypeId) -> Option<CacheEntry> {
-        let hash = self.hash_one((type_id, id));
-        self.get_shard_mut(hash).0.get_mut().take(hash, id, type_id)
-    }
-
-    fn remove(&mut self, id: &str, type_id: TypeId) -> bool {
-        self.take(id, type_id).is_some()
-    }
-
-    fn clear(&mut self) {
-        for shard in &mut *self.shards {
-            shard.0.get_mut().clear();
-        }
-    }
-
     fn get(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
         let hash = self.hash_one((type_id, id));
         let shard = self.get_shard(hash).0.read();
@@ -470,43 +450,7 @@ impl AssetCache {
         let id = SharedString::from(id);
         T::load(self, &id).map_err(|err| Error::new(id, err))
     }
-}
 
-impl AssetCache {
-    /// Removes an asset from the cache, and returns whether it was present in
-    /// the cache.
-    ///
-    /// Note that you need a mutable reference to the cache, so you cannot have
-    /// any [`Handle`], [`AssetReadGuard`], etc when you call this function.
-    #[inline]
-    pub fn remove<T: Storable>(&mut self, id: &str) -> bool {
-        self.assets.remove(id, TypeId::of::<T>())
-    }
-
-    /// Takes ownership on a cached asset.
-    ///
-    /// The corresponding asset is removed from the cache.
-    #[inline]
-    pub fn take<T: Storable>(&mut self, id: &str) -> Option<T> {
-        let (asset, _) = self.assets.take(id, TypeId::of::<T>())?.into_inner();
-        Some(asset)
-    }
-
-    /// Clears the cache.
-    ///
-    /// Removes all cached assets and directories.
-    #[inline]
-    pub fn clear(&mut self) {
-        self.assets.clear();
-
-        #[cfg(feature = "hot-reloading")]
-        if let Some(reloader) = &self.reloader {
-            reloader.clear();
-        }
-    }
-}
-
-impl AssetCache {
     /// Reloads changed assets.
     ///
     /// This function is typically called within a loop.

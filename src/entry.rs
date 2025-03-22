@@ -153,16 +153,6 @@ impl CacheEntry {
     pub(crate) fn inner(&self) -> &UntypedHandle {
         &self.0
     }
-
-    /// Consumes the `CacheEntry` and returns its inner value.
-    #[inline]
-    pub fn into_inner<T: Storable>(self) -> (T, SharedString) {
-        if let Ok(storage) = self.0.downcast() {
-            return (storage.value.into_inner(), storage.id);
-        }
-
-        wrong_handle_type()
-    }
 }
 
 impl PartialEq for CacheEntry {
@@ -223,15 +213,6 @@ impl UntypedHandle {
         match self.downcast_ref() {
             Some(h) => h,
             None => wrong_handle_type(),
-        }
-    }
-
-    #[inline]
-    fn downcast<T: 'static>(self: Box<Self>) -> Result<Box<Handle<T>>, Box<Self>> {
-        if self.is::<T>() {
-            unsafe { Ok(Box::from_raw(Box::into_raw(self) as *mut Handle<T>)) }
-        } else {
-            Err(self)
         }
     }
 }

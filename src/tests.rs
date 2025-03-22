@@ -169,26 +169,6 @@ mod asset_cache {
 
         assert!(loaded.next().is_none());
     }
-
-    #[test]
-    fn take() {
-        let mut cache = AssetCache::new("assets").unwrap();
-
-        cache.load::<X>("test.cache").unwrap();
-        assert!(cache.contains::<X>("test.cache"));
-        assert_eq!(cache.take("test.cache"), Some(X(42)));
-        assert!(!cache.contains::<X>("test.cache"));
-    }
-
-    #[test]
-    fn remove() {
-        let mut cache = AssetCache::new("assets").unwrap();
-
-        cache.load::<X>("test.cache").unwrap();
-        assert!(cache.contains::<X>("test.cache"));
-        cache.remove::<X>("test.cache");
-        assert!(!cache.contains::<X>("test.cache"));
-    }
 }
 
 mod handle {

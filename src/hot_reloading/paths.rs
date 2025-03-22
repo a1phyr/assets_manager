@@ -58,10 +58,6 @@ impl HotReloadingData {
     pub fn add_asset(&mut self, key: AssetKey, deps: Dependencies) {
         self.deps.insert_asset(key, deps);
     }
-
-    pub fn clear_local_cache(&mut self) {
-        self.to_reload.clear();
-    }
 }
 
 fn run_update(changed: &mut HashSet<OwnedDirEntry>, deps: &mut DepsGraph, cache: &AssetCache) {

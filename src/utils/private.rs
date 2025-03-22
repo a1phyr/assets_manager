@@ -146,11 +146,6 @@ impl<T: ?Sized> RwLock<T> {
     pub fn write(&self) -> RwLockWriteGuard<T> {
         wrap(self.0.write())
     }
-
-    #[inline]
-    pub fn get_mut(&mut self) -> &mut T {
-        wrap(self.0.get_mut())
-    }
 }
 
 #[allow(unused)]
