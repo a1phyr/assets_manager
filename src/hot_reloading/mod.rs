@@ -24,7 +24,7 @@ use std::{
 };
 
 use crate::{
-    SharedString,
+    AssetCache, SharedString,
     key::{AssetKey, Type},
     source::{OwnedDirEntry, Source},
     utils::{Condvar, Mutex},
@@ -35,13 +35,13 @@ pub use watcher::FsWatcherBuilder;
 pub(crate) use records::{BorrowedDependency, Dependencies, Dependency};
 
 enum CacheMessage {
-    Ptr(crate::AnyCache<'static>, usize),
-    Static(crate::AnyCache<'static>),
+    Ptr(&'static AssetCache, usize),
+    Static(&'static AssetCache),
 
     Clear,
     AddAsset(AssetKey, Dependencies),
 }
-unsafe impl Send for CacheMessage where crate::cache::AssetMap: Sync {}
+unsafe impl Send for CacheMessage where AssetCache: Sync {}
 
 /// An error returned when an end of a channel was disconnected.
 #[derive(Debug)]
@@ -187,11 +187,10 @@ impl HotReloader {
         let _ = self.sender.send(CacheMessage::Clear);
     }
 
-    #[allow(clippy::missing_transmute_annotations)]
-    pub(crate) fn reload(&self, cache: crate::AnyCache) {
+    pub(crate) fn reload(&self, cache: &AssetCache) {
         let token = self.answers.get_unique_token();
         // Safety: We are sure the cache will be valid until we send the answer
-        let cache = unsafe { std::mem::transmute(cache) };
+        let cache = unsafe { &*(cache as *const _) };
 
         if self.sender.send(CacheMessage::Ptr(cache, token)).is_ok() {
             // When the hot-reloading thread is done, it sends back our back our token
@@ -199,7 +198,7 @@ impl HotReloader {
         }
     }
 
-    pub(crate) fn send_static(&'static self, cache: crate::AnyCache<'static>) {
+    pub(crate) fn send_static(&'static self, cache: &'static AssetCache) {
         let _ = self.sender.send(CacheMessage::Static(cache));
     }
 }

@@ -1,10 +1,10 @@
-use crate::{AnyCache, key::AssetKey, source::OwnedDirEntry, utils::HashSet};
+use crate::{AssetCache, key::AssetKey, source::OwnedDirEntry, utils::HashSet};
 
 use super::{dependencies::DepsGraph, records::Dependencies};
 
 enum CacheKind {
     Local,
-    Static(AnyCache<'static>),
+    Static(&'static AssetCache),
 }
 
 pub(super) struct HotReloadingData {
@@ -32,7 +32,7 @@ impl HotReloadingData {
         self.update_if_static();
     }
 
-    pub fn update_if_local(&mut self, cache: AnyCache) {
+    pub fn update_if_local(&mut self, cache: &AssetCache) {
         if let CacheKind::Local = self.cache {
             run_update(&mut self.to_reload, &mut self.deps, cache);
         }
@@ -46,7 +46,7 @@ impl HotReloadingData {
 
     /// Drop the local cache and use the static reference we have on the
     /// `AssetCache`.
-    pub fn use_static_ref(&mut self, cache: AnyCache<'static>) {
+    pub fn use_static_ref(&mut self, cache: &'static AssetCache) {
         if let CacheKind::Local = self.cache {
             self.cache = CacheKind::Static(cache);
             log::trace!("Hot-reloading now use a 'static reference");
@@ -64,7 +64,7 @@ impl HotReloadingData {
     }
 }
 
-fn run_update(changed: &mut HashSet<OwnedDirEntry>, deps: &mut DepsGraph, cache: AnyCache) {
+fn run_update(changed: &mut HashSet<OwnedDirEntry>, deps: &mut DepsGraph, cache: &AssetCache) {
     let to_update = deps.topological_sort_from(changed.iter());
     changed.clear();
 

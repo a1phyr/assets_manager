@@ -45,7 +45,7 @@ pub use crate::dirs::DirLoadable;
 
 #[allow(unused)]
 use crate::{
-    AnyCache, AssetCache, BoxedError, Error,
+    AssetCache, BoxedError, Error,
     entry::CacheEntry,
     loader,
     source::Source,
@@ -203,7 +203,7 @@ pub trait Compound: Sized + Send + Sync + 'static {
     ///
     /// This function should not perform any kind of I/O: such concern should be
     /// delegated to [`Asset`]s.
-    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError>;
+    fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError>;
 
     /// If `false`, disable hot-reloading for assets of this type (`true` by
     /// default). This avoids having to lock the asset to read it (ie it makes
@@ -221,7 +221,7 @@ fn is_invalid_id(id: &str) -> bool {
 
 #[inline]
 pub(crate) fn load_and_record(
-    cache: AnyCache,
+    cache: &AssetCache,
     id: SharedString,
     typ: Type,
 ) -> Result<CacheEntry, Error> {
@@ -249,8 +249,8 @@ where
     T: Asset,
 {
     #[inline]
-    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
-        let source = cache.raw_source();
+    fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
+        let source = cache.source();
 
         let load_with_ext = |ext| -> Result<T, ErrorKind> {
             let asset = source
@@ -278,7 +278,7 @@ impl<T> Compound for Arc<T>
 where
     T: Compound,
 {
-    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
+    fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
         let asset = T::load(cache, id)?;
         Ok(Arc::new(asset))
     }

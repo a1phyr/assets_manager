@@ -1,10 +1,10 @@
 //! Definition of the cache
 
 use crate::{
-    AnyCache, Compound, Error, Handle,
-    anycache::{AssetMap as _, Cache, CacheExt},
+    Compound, Error, Handle, SharedString,
     asset::{DirLoadable, Storable},
     entry::{CacheEntry, UntypedHandle},
+    key::Type,
     source::{FileSystem, Source},
     utils::{RandomState, RwLock},
 };
@@ -82,9 +82,7 @@ impl AssetMap {
             shard.0.get_mut().clear();
         }
     }
-}
 
-impl crate::anycache::AssetMap for AssetMap {
     fn get(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
         let hash = self.hash_one((type_id, id));
         let shard = self.get_shard(hash).0.read();
@@ -184,27 +182,6 @@ pub struct AssetCache {
     source: Box<dyn Source + Send + Sync>,
 }
 
-impl crate::anycache::RawCache for AssetCache {
-    type AssetMap = AssetMap;
-    type Source = Box<dyn Source + Send + Sync>;
-
-    #[inline]
-    fn assets(&self) -> &AssetMap {
-        &self.assets
-    }
-
-    #[inline]
-    fn get_source(&self) -> &Self::Source {
-        &self.source
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    #[inline]
-    fn reloader(&self) -> Option<&HotReloader> {
-        self.reloader.as_ref()
-    }
-}
-
 impl AssetCache {
     /// Creates a cache that loads assets from the given directory.
     ///
@@ -244,8 +221,19 @@ impl AssetCache {
 
     /// Returns a reference to the cache's [`Source`].
     #[inline]
-    pub fn raw_source(&self) -> &(dyn Source + Send + Sync + 'static) {
+    pub fn source(&self) -> impl Source + Send + Sync + '_ {
+        #[cfg(feature = "hot-reloading")]
+        return CacheSource { cache: self };
+
+        #[cfg(not(feature = "hot-reloading"))]
         &*self.source
+    }
+
+    /// Returns a reference to the cache's [`Source`].
+    #[inline]
+    #[deprecated = "use `.source()` instead"]
+    pub fn raw_source(&self) -> impl Source + Send + Sync + '_ {
+        self.source()
     }
 
     /// Returns a reference to the cache's [`Source`].
@@ -254,9 +242,22 @@ impl AssetCache {
         self.source.downcast_ref()
     }
 
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    pub(crate) fn reloader(&self) -> Option<&HotReloader> {
+        self.reloader.as_ref()
+    }
+
     /// Temporarily prevent `Compound` dependencies to be recorded.
     ///
-    /// See [`AnyCache::no_record`] for more details.
+    /// This function disables dependencies recording in [`Compound::load`].
+    /// Assets loaded during the given closure will not be recorded as
+    /// dependencies and the currently loading asset will not be reloaded when
+    /// they are.
+    ///
+    /// When hot-reloading is disabled or if the cache's [`Source`] does not
+    /// support hot-reloading, this function only returns the result of the
+    /// closure given as parameter.
     #[inline]
     pub fn no_record<T, F: FnOnce() -> T>(&self, f: F) -> T {
         #[cfg(feature = "hot-reloading")]
@@ -270,50 +271,128 @@ impl AssetCache {
         }
     }
 
+    #[cfg(feature = "hot-reloading")]
+    fn add_record(&self, handle: &UntypedHandle) {
+        if let Some(reloader) = &self.reloader {
+            if let Some(typ) = handle.typ() {
+                let key = crate::key::AssetKey::new(handle.id().clone(), typ);
+                records::add_record(reloader, key);
+            }
+        }
+    }
+
     /// Loads an asset.
     ///
-    /// See [`AnyCache::load`] for more details.
+    /// If the asset is not found in the cache, it is loaded from the source.
+    ///
+    /// # Errors
+    ///
+    /// Errors for `Asset`s can occur in several cases:
+    /// - The source could not be read
+    /// - Loaded data could not be converted properly
+    /// - The asset has no extension
     #[inline]
     pub fn load<T: Compound>(&self, id: &str) -> Result<&Handle<T>, Error> {
-        self._load(id)
+        let handle = self.load_entry(id, Type::of_asset::<T>())?;
+        Ok(handle.downcast_ref_ok())
     }
 
     /// Loads an asset and panic if an error happens.
     ///
-    /// See [`AnyCache::load_expect`] for more details.
+    /// # Panics
+    ///
+    /// Panics if an error happens while loading the asset (see [`load`]).
+    ///
+    /// [`load`]: `Self::load`
     #[inline]
     #[track_caller]
     pub fn load_expect<T: Compound>(&self, id: &str) -> &Handle<T> {
-        self._load_expect(id)
+        #[cold]
+        #[track_caller]
+        fn expect_failed(err: Error) -> ! {
+            panic!(
+                "Failed to load essential asset \"{}\": {}",
+                err.id(),
+                err.reason()
+            )
+        }
+
+        match self.load(id) {
+            Ok(h) => h,
+            Err(err) => expect_failed(err),
+        }
+    }
+
+    fn load_entry(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
+        let result = match self.assets.get(id, typ.type_id) {
+            Some(handle) => Ok(handle),
+            None => self.add_asset(id, typ),
+        };
+
+        #[cfg(feature = "hot-reloading")]
+        if let Ok(handle) = result {
+            self.add_record(handle);
+        }
+
+        result
+    }
+
+    #[cold]
+    fn add_asset(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
+        log::trace!("Loading \"{}\"", id);
+
+        let id = SharedString::from(id);
+        let handle = crate::asset::load_and_record(self, id, typ)?;
+
+        Ok(self.assets.insert(handle))
     }
 
     /// Gets a value from the cache.
     ///
-    /// See [`AnyCache::get_cached`] for more details.
+    /// This function does not attempt to load the value from the source if it
+    /// is not found in the cache.
     #[inline]
     pub fn get_cached<T: Storable>(&self, id: &str) -> Option<&Handle<T>> {
-        self._get_cached(id)
+        let handle = self.get_cached_untyped(id, TypeId::of::<T>())?;
+        Some(handle.downcast_ref_ok())
     }
 
     /// Gets a value with the given type from the cache.
     ///
     /// This is an equivalent of `get_cached` but with a dynamic type.
-    #[inline]
     pub fn get_cached_untyped(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
-        self.get_cached_entry(id, type_id)
+        let result = self.assets.get(id, type_id);
+
+        #[cfg(feature = "hot-reloading")]
+        if let Some(handle) = result {
+            self.add_record(handle);
+        }
+
+        result
     }
 
     /// Gets a value from the cache or inserts one.
     ///
-    /// See [`AnyCache::get_or_insert`] for more details.
+    /// Assets added via this function will *never* be reloaded.
     #[inline]
     pub fn get_or_insert<T: Storable>(&self, id: &str, default: T) -> &Handle<T> {
-        self._get_or_insert(id, default)
+        let handle = match self.get_cached_untyped(id, TypeId::of::<T>()) {
+            Some(handle) => handle,
+            None => self.add_any(id, default),
+        };
+
+        handle.downcast_ref_ok()
+    }
+
+    #[cold]
+    fn add_any<T: Storable>(&self, id: &str, asset: T) -> &UntypedHandle {
+        let id = SharedString::from(id);
+        let handle = CacheEntry::new_any(asset, id, false);
+
+        self.assets.insert(handle)
     }
 
     /// Returns `true` if the cache contains the specified asset.
-    ///
-    /// See [`AnyCache::contains`] for more details.
     #[inline]
     pub fn contains<T: Storable>(&self, id: &str) -> bool {
         self.assets.contains_key(id, TypeId::of::<T>())
@@ -321,7 +400,16 @@ impl AssetCache {
 
     /// Loads a directory.
     ///
-    /// See [`AnyCache::load_dir`] for more details.
+    /// The directory's id is constructed the same way as assets. To specify
+    /// the cache's root, give the empty string (`""`) as id.
+    ///
+    /// Note that this function only gets the ids of assets, and that are not
+    /// actually loaded. The returned handle can be use to iterate over them.
+    ///
+    /// # Errors
+    ///
+    /// An error is returned if the given id does not match a valid readable
+    /// directory.
     #[inline]
     pub fn load_dir<T: DirLoadable>(
         &self,
@@ -330,9 +418,21 @@ impl AssetCache {
         self.load::<crate::Directory<T>>(id)
     }
 
-    /// Loads a directory.
+    /// Loads a directory and its subdirectories.
     ///
-    /// See [`AnyCache::load_dir`] for more details.
+    /// The directory's id is constructed the same way as assets. To specify
+    /// the cache's root, give the empty string (`""`) as id.
+    ///
+    /// Note that this function only gets the ids of assets, and that are not
+    /// actually loaded. The returned handle can be use to iterate over them.
+    ///
+    /// # Errors
+    ///
+    /// An error is returned if the given id does not match a valid readable
+    /// directory.
+    ///
+    /// When loading a directory recursively, directories that can't be read are
+    /// ignored.
     #[inline]
     pub fn load_rec_dir<T: DirLoadable>(
         &self,
@@ -343,16 +443,17 @@ impl AssetCache {
 
     /// Loads an owned version of an asset.
     ///
-    /// See [`AnyCache::load_owned`] for more details.
+    /// Note that the asset will not be fetched from the cache nor will it be
+    /// cached. In addition, hot-reloading does not affect the returned value.
+    ///
+    /// This can be useful if you need ownership on a non-clonable value.
+    ///
+    /// Inside an implementation [`Compound::load`], you should use `T::load`
+    /// directly.
     #[inline]
     pub fn load_owned<T: Compound>(&self, id: &str) -> Result<T, Error> {
-        self._load_owned(id)
-    }
-
-    /// Converts to an `AnyCache`.
-    #[inline]
-    pub fn as_any_cache(&self) -> AnyCache {
-        self._as_any_cache()
+        let id = SharedString::from(id);
+        T::load(self, &id).map_err(|err| Error::new(id, err))
     }
 }
 
@@ -411,7 +512,7 @@ impl AssetCache {
     #[inline]
     pub fn hot_reload(&self) {
         if let Some(reloader) = &self.reloader {
-            reloader.reload(self.as_any_cache());
+            reloader.reload(self);
         }
     }
 
@@ -433,15 +534,55 @@ impl AssetCache {
     #[inline]
     pub fn enhance_hot_reloading(&'static self) {
         if let Some(reloader) = &self.reloader {
-            reloader.send_static(self.as_any_cache());
+            reloader.send_static(self);
         }
     }
-}
 
-impl<'a> crate::AsAnyCache<'a> for &'a AssetCache {
+    #[cfg(feature = "hot-reloading")]
+    pub(crate) fn reload_untyped(
+        &self,
+        id: &SharedString,
+        typ: Type,
+    ) -> Option<records::Dependencies> {
+        let handle = self.get_cached_untyped(id, typ.type_id)?;
+
+        let load_asset = || {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                (typ.inner.load)(self, id.clone())
+            }))
+        };
+        let (entry, deps) = if let Some(reloader) = &self.reloader {
+            records::record(reloader, load_asset)
+        } else {
+            log::warn!("No reloader in hot-reloading context");
+            (load_asset(), records::Dependencies::new())
+        };
+
+        match entry {
+            Ok(Ok(e)) => {
+                handle.write(e);
+                log::info!("Reloading \"{id}\"");
+                Some(deps)
+            }
+            Ok(Err(err)) => {
+                log::warn!("Error reloading \"{id}\": {}", err.reason());
+                None
+            }
+            Err(_) => {
+                log::warn!("Panic while reloading \"{id}\"");
+                None
+            }
+        }
+    }
+
+    /// Returns `true` if values stored in this cache may be hot-reloaded.
     #[inline]
-    fn as_any_cache(&self) -> AnyCache<'a> {
-        (*self).as_any_cache()
+    pub fn is_hot_reloaded(&self) -> bool {
+        #[cfg(feature = "hot-reloading")]
+        return self.reloader.is_some();
+
+        #[cfg(not(feature = "hot-reloading"))]
+        false
     }
 }
 
@@ -450,5 +591,31 @@ impl fmt::Debug for AssetCache {
         f.debug_struct("AssetCache")
             .field("assets", &self.assets)
             .finish()
+    }
+}
+
+#[cfg(feature = "hot-reloading")]
+struct CacheSource<'a> {
+    cache: &'a AssetCache,
+}
+
+#[cfg(feature = "hot-reloading")]
+impl Source for CacheSource<'_> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<crate::source::FileContent> {
+        if let Some(reloader) = &self.cache.reloader {
+            records::add_file_record(reloader, id, ext);
+        }
+        self.cache.source.read(id, ext)
+    }
+
+    fn read_dir(&self, id: &str, f: &mut dyn FnMut(crate::source::DirEntry)) -> io::Result<()> {
+        if let Some(reloader) = &self.cache.reloader {
+            records::add_dir_record(reloader, id);
+        }
+        self.cache.source.read_dir(id, f)
+    }
+
+    fn exists(&self, entry: crate::source::DirEntry) -> bool {
+        self.cache.source.exists(entry)
     }
 }
