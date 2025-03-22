@@ -293,6 +293,24 @@ impl<T> DerefMut for HashSet<T> {
 }
 
 #[cfg(feature = "hot-reloading")]
+impl<T> Default for HashSet<T> {
+    fn default() -> Self {
+        Self(hashbrown::HashSet::default())
+    }
+}
+
+#[cfg(feature = "hot-reloading")]
+impl<T> IntoIterator for HashSet<T> {
+    type Item = T;
+    type IntoIter = hashbrown::hash_set::IntoIter<T>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+#[cfg(feature = "hot-reloading")]
 impl<T> fmt::Debug for HashSet<T>
 where
     hashbrown::HashSet<T, RandomState>: fmt::Debug,

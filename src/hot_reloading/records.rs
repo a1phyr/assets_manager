@@ -1,5 +1,8 @@
-use crate::{SharedString, key::AssetKey, utils::HashSet};
-use std::{cell::Cell, ptr::NonNull};
+use crate::{
+    key::AssetKey,
+    utils::{HashSet, Mutex, SharedString},
+};
+use std::{cell::Cell, fmt, ptr::NonNull, sync::Arc};
 
 use super::HotReloader;
 
@@ -46,34 +49,43 @@ impl hashbrown::Equivalent<Dependency> for BorrowedDependency<'_> {
 }
 
 struct Record {
-    reloader: *const HotReloader,
+    reloader_addr: usize,
     records: Dependencies,
+    additional: Option<Arc<Mutex<Dependencies>>>,
 }
 
 impl Record {
-    fn new(reloader: &HotReloader) -> Record {
-        Record {
-            reloader,
-            records: Dependencies::new(),
-        }
-    }
-
     fn insert_asset(&mut self, reloader: &HotReloader, key: AssetKey) {
-        if self.reloader == reloader {
+        if self.reloader_addr == reloader.addr() {
             self.records.insert(Dependency::Asset(key));
         }
     }
 
     fn insert_file(&mut self, reloader: &HotReloader, id: SharedString, ext: SharedString) {
-        if self.reloader == reloader {
+        if self.reloader_addr == reloader.addr() {
             self.records.insert(Dependency::File(id, ext));
         }
     }
 
     fn insert_dir(&mut self, reloader: &HotReloader, id: SharedString) {
-        if self.reloader == reloader {
+        if self.reloader_addr == reloader.addr() {
             self.records.insert(Dependency::Directory(id));
         }
+    }
+
+    fn install<T>(&mut self, f: impl FnOnce() -> T) -> T {
+        RECORDING.with(|rec| {
+            let _guard = CellGuard::replace(rec, Some(NonNull::from(self)));
+            f()
+        })
+    }
+
+    fn collect(mut self) -> Dependencies {
+        if let Some(more) = self.additional {
+            self.records.extend(more.lock().drain());
+        }
+
+        self.records
     }
 }
 
@@ -101,12 +113,13 @@ thread_local! {
 }
 
 pub(crate) fn record<F: FnOnce() -> T, T>(reloader: &HotReloader, f: F) -> (T, Dependencies) {
-    RECORDING.with(|rec| {
-        let mut record = Record::new(reloader);
-        let _guard = CellGuard::replace(rec, Some(NonNull::from(&mut record)));
-        let result = f();
-        (result, record.records)
-    })
+    let mut record = Record {
+        reloader_addr: reloader.addr(),
+        records: Dependencies::new(),
+        additional: None,
+    };
+    let res = record.install(f);
+    (res, record.collect())
 }
 
 pub(crate) fn no_record<F: FnOnce() -> T, T>(f: F) -> T {
@@ -141,4 +154,51 @@ pub(crate) fn add_dir_record(reloader: &HotReloader, id: &str) {
             recorder.insert_dir(reloader, id.into());
         }
     });
+}
+
+/// Records dependencies for hot-reloading.
+///
+/// This type is only useful if you do multi-threading within asset loading
+/// (e.g. if you use `rayon` in `Compound::load`).
+#[derive(Clone)]
+pub struct Recorder {
+    reloader_addr: usize,
+    deps: Arc<Mutex<Dependencies>>,
+}
+
+impl Recorder {
+    /// Gets the recorder which is currently installed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no recorder is installed.
+    pub fn current() -> Self {
+        RECORDING.with(|rec| {
+            let mut rec = rec.get().expect("no recorder installed");
+            let recorder = unsafe { rec.as_mut() };
+            let deps = recorder.additional.get_or_insert_default().clone();
+            Recorder {
+                reloader_addr: recorder.reloader_addr,
+                deps,
+            }
+        })
+    }
+
+    /// Runs the given closure with the recorder installed.
+    pub fn install<T>(&self, f: impl FnOnce() -> T) -> T {
+        let mut record = Record {
+            reloader_addr: self.reloader_addr,
+            records: Dependencies::new(),
+            additional: Some(self.deps.clone()),
+        };
+        let res = record.install(f);
+        self.deps.lock().extend(record.records);
+        res
+    }
+}
+
+impl fmt::Debug for Recorder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Recorder { .. }")
+    }
 }

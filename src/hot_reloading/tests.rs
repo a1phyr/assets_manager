@@ -1,9 +1,14 @@
 use crate::{
-    AssetCache, BoxedError,
+    AssetCache, BoxedError, Compound, SharedString,
     source::{DirEntry, FileSystem},
     tests::{X, Y, Z},
 };
-use std::{fs::File, io, io::Write, path::Path, sync::Arc};
+use std::{
+    fs::{self, File},
+    io::{self, Write},
+    path::Path,
+    sync::Arc,
+};
 
 fn sleep() {
     std::thread::sleep(std::time::Duration::from_millis(20));
@@ -181,4 +186,51 @@ fn directory() -> Result<(), BoxedError> {
     assert!(watcher.reloaded());
 
     Ok(())
+}
+
+#[test]
+fn multi_threading() {
+    let _ = env_logger::try_init();
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    struct MyAsset {
+        a: i32,
+        b: i32,
+    }
+
+    impl Compound for MyAsset {
+        fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
+            let recorder = crate::hot_reloading::Recorder::current();
+
+            let (a, b) = std::thread::scope(|s| {
+                let a = s.spawn(|| recorder.install(|| cache.load_expect::<X>(&format!("{id}.a"))));
+                let b = s.spawn(|| cache.load_expect::<X>(&format!("{id}.b")));
+
+                (a.join().unwrap().read().0, b.join().unwrap().read().0)
+            });
+
+            Ok(MyAsset { a, b })
+        }
+    }
+
+    fs::create_dir_all("assets/test/mt/").unwrap();
+    write_i32("assets/test/mt/a.x".as_ref(), 1).unwrap();
+    write_i32("assets/test/mt/b.x".as_ref(), 2).unwrap();
+
+    let cache = AssetCache::new("assets").unwrap();
+    let cache = Box::leak(Box::new(cache));
+    cache.enhance_hot_reloading();
+
+    let asset = cache.load_expect::<MyAsset>("test.mt");
+    assert_eq!(asset.copied(), MyAsset { a: 1, b: 2 });
+
+    write_i32("assets/test/mt/a.x".as_ref(), 3).unwrap();
+    sleep();
+
+    assert_eq!(asset.copied(), MyAsset { a: 3, b: 2 });
+
+    write_i32("assets/test/mt/b.x".as_ref(), 4).unwrap();
+    sleep();
+
+    assert_eq!(asset.copied(), MyAsset { a: 3, b: 2 });
 }
