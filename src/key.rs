@@ -5,11 +5,14 @@ use std::{
     cmp, fmt, hash,
 };
 
-use crate::{AnyCache, Compound, Error, SharedString, asset::Storable, entry::CacheEntry};
+use crate::{AssetCache, Compound, Error, SharedString, asset::Storable, entry::CacheEntry};
 
 impl Inner {
     fn of_asset<T: Compound>() -> &'static Self {
-        fn load_entry<T: Compound>(cache: AnyCache, id: SharedString) -> Result<CacheEntry, Error> {
+        fn load_entry<T: Compound>(
+            cache: &AssetCache,
+            id: SharedString,
+        ) -> Result<CacheEntry, Error> {
             match T::load(cache, &id) {
                 Ok(asset) => Ok(CacheEntry::new(asset, id, || cache.is_hot_reloaded())),
                 Err(err) => Err(Error::new(id, err)),
@@ -24,7 +27,7 @@ impl Inner {
 
     #[allow(clippy::extra_unused_type_parameters)]
     fn of_any<T: Any>() -> &'static Self {
-        fn load(_: AnyCache, _: SharedString) -> Result<CacheEntry, Error> {
+        fn load(_: &AssetCache, _: SharedString) -> Result<CacheEntry, Error> {
             panic!("Attempted to load non-`Compound` type")
         }
 
@@ -37,7 +40,7 @@ impl Inner {
 
 pub(crate) struct Inner {
     hot_reloaded: bool,
-    pub load: fn(AnyCache, id: SharedString) -> Result<CacheEntry, Error>,
+    pub load: fn(&AssetCache, id: SharedString) -> Result<CacheEntry, Error>,
 }
 
 /// A structure to represent the type on an [`Asset`]
