@@ -361,7 +361,6 @@ pub trait Source {
 
 impl dyn Source + Send + Sync {
     #[inline]
-    #[allow(unused)]
     pub(crate) fn downcast_ref<S: Source + 'static>(&self) -> Option<&S> {
         if self.type_id(private::Private) == std::any::TypeId::of::<S>() {
             unsafe { Some(&*(self as *const dyn Source as *const S)) }
