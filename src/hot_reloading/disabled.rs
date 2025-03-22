@@ -43,3 +43,18 @@ impl FsWatcherBuilder {
         match self.0 {}
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct Recorder(());
+
+impl Recorder {
+    #[inline]
+    pub fn current() -> Self {
+        Self(())
+    }
+
+    #[inline]
+    pub fn install<T>(&self, f: impl FnOnce() -> T) -> T {
+        f()
+    }
+}
