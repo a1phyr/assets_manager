@@ -38,7 +38,6 @@ enum CacheMessage {
     Ptr(crate::AnyCache<'static>, usize),
     Static(crate::AnyCache<'static>),
 
-    Clear,
     AddAsset(AssetKey, Dependencies),
 }
 unsafe impl Send for CacheMessage where crate::cache::AssetMap: Sync {}
@@ -183,10 +182,6 @@ impl HotReloader {
         let _ = self.sender.send(CacheMessage::AddAsset(key, deps));
     }
 
-    pub(crate) fn clear(&self) {
-        let _ = self.sender.send(CacheMessage::Clear);
-    }
-
     #[allow(clippy::missing_transmute_annotations)]
     pub(crate) fn reload(&self, cache: crate::AnyCache) {
         let token = self.answers.get_unique_token();
@@ -237,7 +232,6 @@ fn hot_reloading_thread(
                     answers.notify(token);
                 }
                 Ok(CacheMessage::Static(asset_cache)) => cache.use_static_ref(asset_cache),
-                Ok(CacheMessage::Clear) => cache.clear_local_cache(),
                 Ok(CacheMessage::AddAsset(key, deps)) => cache.add_asset(key, deps),
                 Err(_) => break,
             }

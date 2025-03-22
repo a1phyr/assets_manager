@@ -128,6 +128,7 @@ impl<T> RwLock<T> {
     }
 }
 
+#[allow(unused)]
 impl<T: ?Sized> RwLock<T> {
     #[inline]
     pub fn read(&self) -> RwLockReadGuard<T> {
