@@ -15,6 +15,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub fn is_invalid_id(id: &str) -> bool {
+    id.starts_with('.')
+        || id.ends_with('.')
+        || id.contains("..")
+        || id.contains('/')
+        || id.contains('\\')
+}
+
 pub fn path_of_entry(root: &Path, entry: DirEntry) -> PathBuf {
     let (id, ext) = match entry {
         DirEntry::File(id, ext) => (id, Some(ext)),

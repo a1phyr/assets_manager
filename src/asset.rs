@@ -51,7 +51,7 @@ use crate::{
     source::Source,
     utils::{Private, SharedBytes, SharedString},
 };
-use crate::{error::ErrorKind, key::Type, loader::Loader};
+use crate::{error::ErrorKind, loader::Loader};
 
 #[allow(unused)]
 use std::{borrow::Cow, io, sync::Arc};
@@ -209,39 +209,6 @@ pub trait Compound: Sized + Send + Sync + 'static {
     /// default). This avoids having to lock the asset to read it (ie it makes
     /// [`Handle::read`] a noop)
     const HOT_RELOADED: bool = true;
-}
-
-fn is_invalid_id(id: &str) -> bool {
-    id.starts_with('.')
-        || id.ends_with('.')
-        || id.contains("..")
-        || id.contains('/')
-        || id.contains('\\')
-}
-
-#[inline]
-pub(crate) fn load_and_record(
-    cache: &AssetCache,
-    id: SharedString,
-    typ: Type,
-) -> Result<CacheEntry, Error> {
-    if is_invalid_id(&id) {
-        return Err(Error::new(id, ErrorKind::InvalidId.into()));
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    if typ.is_hot_reloaded() {
-        if let Some(reloader) = cache.reloader() {
-            let (entry, deps) =
-                crate::hot_reloading::records::record(reloader, || (typ.inner.load)(cache, id));
-            if let Ok(entry) = &entry {
-                reloader.add_asset(entry.inner().id().clone(), deps, typ);
-            }
-            return entry;
-        }
-    }
-
-    (typ.inner.load)(cache, id)
 }
 
 impl<T> Compound for T

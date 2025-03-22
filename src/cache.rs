@@ -242,12 +242,6 @@ impl AssetCache {
         self.source.downcast_ref()
     }
 
-    #[cfg(feature = "hot-reloading")]
-    #[inline]
-    pub(crate) fn reloader(&self) -> Option<&HotReloader> {
-        self.reloader.as_ref()
-    }
-
     /// Temporarily prevent `Compound` dependencies to be recorded.
     ///
     /// This function disables dependencies recording in [`Compound::load`].
@@ -339,12 +333,33 @@ impl AssetCache {
 
     #[cold]
     fn add_asset(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
-        log::trace!("Loading \"{}\"", id);
+        log::trace!("Loading \"{id}\"");
 
         let id = SharedString::from(id);
-        let handle = crate::asset::load_and_record(self, id, typ)?;
 
-        Ok(self.assets.insert(handle))
+        if crate::utils::is_invalid_id(&id) {
+            return Err(Error::new(id, crate::error::ErrorKind::InvalidId.into()));
+        }
+
+        #[allow(unused_labels)]
+        let entry = 'h: {
+            #[cfg(feature = "hot-reloading")]
+            if typ.is_hot_reloaded() {
+                if let Some(reloader) = &self.reloader {
+                    let (entry, deps) = crate::hot_reloading::records::record(reloader, || {
+                        (typ.inner.load)(self, id)
+                    });
+                    if let Ok(entry) = &entry {
+                        reloader.add_asset(entry.inner().id().clone(), deps, typ);
+                    }
+                    break 'h entry;
+                }
+            }
+
+            (typ.inner.load)(self, id)
+        }?;
+
+        Ok(self.assets.insert(entry))
     }
 
     /// Gets a value from the cache.
