@@ -12,7 +12,7 @@ use crate::{
 #[cfg(doc)]
 use crate::AssetReadGuard;
 
-use std::{any::TypeId, fmt, io, path::Path};
+use std::{any::TypeId, fmt, io, path::Path, sync::Arc};
 
 #[cfg(feature = "hot-reloading")]
 use crate::hot_reloading::{HotReloader, records};
@@ -156,7 +156,12 @@ impl fmt::Debug for AssetMap {
 /// # }}
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
+#[derive(Clone)]
 pub struct AssetCache {
+    inner: Arc<AssetCacheInner>,
+}
+
+pub struct AssetCacheInner {
     #[cfg(feature = "hot-reloading")]
     pub(crate) reloader: Option<HotReloader>,
 
@@ -170,18 +175,18 @@ impl crate::anycache::RawCache for AssetCache {
 
     #[inline]
     fn assets(&self) -> &AssetMap {
-        &self.assets
+        &self.inner.assets
     }
 
     #[inline]
     fn get_source(&self) -> &Self::Source {
-        &self.source
+        &self.inner.source
     }
 
     #[cfg(feature = "hot-reloading")]
     #[inline]
     fn reloader(&self) -> Option<&HotReloader> {
-        self.reloader.as_ref()
+        self.inner.reloader.as_ref()
     }
 }
 
@@ -203,35 +208,39 @@ impl AssetCache {
     /// If hot-reloading fails to start, an error is logged.
     pub fn with_source<S: Source + Send + Sync + 'static>(source: S) -> AssetCache {
         Self {
-            #[cfg(feature = "hot-reloading")]
-            reloader: HotReloader::start(&source),
+            inner: Arc::new(AssetCacheInner {
+                #[cfg(feature = "hot-reloading")]
+                reloader: HotReloader::start(&source),
 
-            assets: AssetMap::new(),
-            source: Box::new(source),
+                assets: AssetMap::new(),
+                source: Box::new(source),
+            }),
         }
     }
 
     /// Creates a cache that loads assets from the given source.
     pub fn without_hot_reloading<S: Source + Send + Sync + 'static>(source: S) -> AssetCache {
         Self {
-            #[cfg(feature = "hot-reloading")]
-            reloader: None,
+            inner: Arc::new(AssetCacheInner {
+                #[cfg(feature = "hot-reloading")]
+                reloader: None,
 
-            assets: AssetMap::new(),
-            source: Box::new(source),
+                assets: AssetMap::new(),
+                source: Box::new(source),
+            }),
         }
     }
 
     /// Returns a reference to the cache's [`Source`].
     #[inline]
     pub fn raw_source(&self) -> &(dyn Source + Send + Sync + 'static) {
-        &*self.source
+        &*self.inner.source
     }
 
     /// Returns a reference to the cache's [`Source`].
     #[inline]
     pub fn downcast_raw_source<S: Source + 'static>(&self) -> Option<&S> {
-        self.source.downcast_ref()
+        self.inner.source.downcast_ref()
     }
 
     /// Temporarily prevent `Compound` dependencies to be recorded.
@@ -296,7 +305,7 @@ impl AssetCache {
     /// See [`AnyCache::contains`] for more details.
     #[inline]
     pub fn contains<T: Storable>(&self, id: &str) -> bool {
-        self.assets.contains_key(id, TypeId::of::<T>())
+        self.inner.assets.contains_key(id, TypeId::of::<T>())
     }
 
     /// Loads a directory.
@@ -356,7 +365,7 @@ impl AssetCache {
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
     #[inline]
     pub fn hot_reload(&self) {
-        if let Some(reloader) = &self.reloader {
+        if let Some(reloader) = &self.inner.reloader {
             reloader.reload(self.as_any_cache());
         }
     }
@@ -378,7 +387,7 @@ impl AssetCache {
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reloading")))]
     #[inline]
     pub fn enhance_hot_reloading(&'static self) {
-        if let Some(reloader) = &self.reloader {
+        if let Some(reloader) = &self.inner.reloader {
             reloader.send_static(self.as_any_cache());
         }
     }
@@ -394,7 +403,7 @@ impl<'a> crate::AsAnyCache<'a> for &'a AssetCache {
 impl fmt::Debug for AssetCache {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AssetCache")
-            .field("assets", &self.assets)
+            .field("assets", &self.inner.assets)
             .finish()
     }
 }
