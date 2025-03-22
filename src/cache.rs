@@ -176,17 +176,17 @@ impl fmt::Debug for AssetMap {
 /// # }}
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub struct AssetCache<S = FileSystem> {
+pub struct AssetCache {
     #[cfg(feature = "hot-reloading")]
     pub(crate) reloader: Option<HotReloader>,
 
     pub(crate) assets: AssetMap,
-    source: S,
+    source: Box<dyn Source + Send + Sync>,
 }
 
-impl<S: Source> crate::anycache::RawCache for AssetCache<S> {
+impl crate::anycache::RawCache for AssetCache {
     type AssetMap = AssetMap;
-    type Source = S;
+    type Source = Box<dyn Source + Send + Sync>;
 
     #[inline]
     fn assets(&self) -> &AssetMap {
@@ -194,7 +194,7 @@ impl<S: Source> crate::anycache::RawCache for AssetCache<S> {
     }
 
     #[inline]
-    fn get_source(&self) -> &S {
+    fn get_source(&self) -> &Self::Source {
         &self.source
     }
 
@@ -205,49 +205,53 @@ impl<S: Source> crate::anycache::RawCache for AssetCache<S> {
     }
 }
 
-impl AssetCache<FileSystem> {
+impl AssetCache {
     /// Creates a cache that loads assets from the given directory.
     ///
     /// # Errors
     ///
     /// An error will be returned if `path` is not valid readable directory.
     #[inline]
-    pub fn new<P: AsRef<Path>>(path: P) -> io::Result<AssetCache<FileSystem>> {
+    pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Self> {
         let source = FileSystem::new(path)?;
         Ok(Self::with_source(source))
     }
-}
 
-impl<S: Source> AssetCache<S> {
     /// Creates a cache that loads assets from the given source and tries to
     /// start hot-reloading (if feature `hot-reloading` is used).
     ///
     /// If hot-reloading fails to start, an error is logged.
-    pub fn with_source(source: S) -> AssetCache<S> {
+    pub fn with_source<S: Source + Send + Sync + 'static>(source: S) -> Self {
         Self {
             #[cfg(feature = "hot-reloading")]
             reloader: HotReloader::start(&source),
 
             assets: AssetMap::new(),
-            source,
+            source: Box::new(source),
         }
     }
 
     /// Creates a cache that loads assets from the given source.
-    pub fn without_hot_reloading(source: S) -> AssetCache<S> {
+    pub fn without_hot_reloading<S: Source + Send + Sync + 'static>(source: S) -> Self {
         Self {
             #[cfg(feature = "hot-reloading")]
             reloader: None,
 
             assets: AssetMap::new(),
-            source,
+            source: Box::new(source),
         }
     }
 
     /// Returns a reference to the cache's [`Source`].
     #[inline]
-    pub fn raw_source(&self) -> &S {
-        &self.source
+    pub fn raw_source(&self) -> &(dyn Source + Send + Sync + 'static) {
+        &*self.source
+    }
+
+    /// Returns a reference to the cache's [`Source`].
+    #[inline]
+    pub fn downcast_raw_source<S: Source + 'static>(&self) -> Option<&S> {
+        self.source.downcast_ref()
     }
 
     /// Temporarily prevent `Compound` dependencies to be recorded.
@@ -352,7 +356,7 @@ impl<S: Source> AssetCache<S> {
     }
 }
 
-impl<S: Source> AssetCache<S> {
+impl AssetCache {
     /// Removes an asset from the cache, and returns whether it was present in
     /// the cache.
     ///
@@ -386,10 +390,7 @@ impl<S: Source> AssetCache<S> {
     }
 }
 
-impl<S> AssetCache<S>
-where
-    S: Source + Sync,
-{
+impl AssetCache {
     /// Reloads changed assets.
     ///
     /// This function is typically called within a loop.
@@ -437,24 +438,14 @@ where
     }
 }
 
-impl<S> Default for AssetCache<S>
-where
-    S: Source + Default,
-{
-    #[inline]
-    fn default() -> Self {
-        Self::with_source(S::default())
-    }
-}
-
-impl<'a, S: Source> crate::AsAnyCache<'a> for &'a AssetCache<S> {
+impl<'a> crate::AsAnyCache<'a> for &'a AssetCache {
     #[inline]
     fn as_any_cache(&self) -> AnyCache<'a> {
         (*self).as_any_cache()
     }
 }
 
-impl<S> fmt::Debug for AssetCache<S> {
+impl fmt::Debug for AssetCache {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AssetCache")
             .field("assets", &self.assets)
