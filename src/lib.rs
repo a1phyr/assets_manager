@@ -200,9 +200,6 @@ pub use error::{BoxedError, Error};
 
 pub mod loader;
 
-mod local_cache;
-pub use local_cache::LocalAssetCache;
-
 mod map;
 
 mod entry;
