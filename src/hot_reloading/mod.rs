@@ -92,6 +92,7 @@ impl EventSender {
 }
 
 /// The hot-reloading handler.
+#[derive(Clone)]
 pub(crate) struct HotReloader {
     sender: Sender<CacheMessage>,
 }

@@ -169,6 +169,24 @@ mod asset_cache {
 
         assert!(loaded.next().is_none());
     }
+
+    #[test]
+    fn parent() {
+        let cache = AssetCache::new("assets").unwrap();
+        let child = cache.make_child();
+
+        let handle = cache.load::<X>("test.cache").unwrap();
+
+        assert_eq!(*handle.read(), X(42));
+        assert_eq!(*child.get_cached::<X>("test.cache").unwrap().read(), X(42));
+
+        assert_eq!(*child.load::<X>("test.b").unwrap().read(), X(-7));
+        assert!(cache.get_cached::<X>("test.b").is_none());
+
+        drop(child);
+
+        assert_eq!(*handle.read(), X(42));
+    }
 }
 
 mod handle {

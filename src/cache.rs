@@ -78,12 +78,21 @@ use crate::hot_reloading::{HotReloader, records};
 #[derive(Clone)]
 pub struct AssetCache(Arc<AssetCacheInner>);
 
+enum CacheKind {
+    Root {
+        source: Box<dyn Source + Send + Sync>,
+    },
+    Child {
+        parent: AssetCache,
+    },
+}
+
 struct AssetCacheInner {
     #[cfg(feature = "hot-reloading")]
     reloader: Option<HotReloader>,
 
     assets: AssetMap,
-    source: Box<dyn Source + Send + Sync>,
+    kind: CacheKind,
 }
 
 impl AssetCache {
@@ -114,7 +123,7 @@ impl AssetCache {
                 reloader: HotReloader::start(weak, &*source),
 
                 assets: AssetMap::new(),
-                source,
+                kind: CacheKind::Root { source },
             }
         }))
     }
@@ -124,7 +133,7 @@ impl AssetCache {
     fn _with_source(source: Box<dyn Source + Send + Sync>) -> Self {
         Self(Arc::new(AssetCacheInner {
             assets: AssetMap::new(),
-            source: Box::new(source),
+            kind: CacheKind::Root { source },
         }))
     }
 
@@ -135,7 +144,22 @@ impl AssetCache {
             reloader: None,
 
             assets: AssetMap::new(),
-            source: Box::new(source),
+            kind: CacheKind::Root {
+                source: Box::new(source),
+            },
+        }))
+    }
+
+    /// Makes a child cache.
+    pub fn make_child(&self) -> Self {
+        Self(Arc::new(AssetCacheInner {
+            #[cfg(feature = "hot-reloading")]
+            reloader: self.0.reloader.clone(),
+
+            assets: AssetMap::new(),
+            kind: CacheKind::Child {
+                parent: self.clone(),
+            },
         }))
     }
 
@@ -143,10 +167,15 @@ impl AssetCache {
     #[inline]
     pub fn source(&self) -> impl Source + Send + Sync + '_ {
         #[cfg(feature = "hot-reloading")]
-        return CacheSource { cache: self };
+        {
+            CacheSource {
+                source: self.get_raw_source(),
+                reloader: self.reloader(),
+            }
+        }
 
         #[cfg(not(feature = "hot-reloading"))]
-        &*self.0.source
+        self.get_raw_source()
     }
 
     /// Returns a reference to the cache's [`Source`].
@@ -159,7 +188,32 @@ impl AssetCache {
     /// Returns a reference to the cache's [`Source`].
     #[inline]
     pub fn downcast_raw_source<S: Source + 'static>(&self) -> Option<&S> {
-        self.0.source.downcast_ref()
+        self.get_raw_source().downcast_ref()
+    }
+
+    fn get_raw_source(&self) -> &(dyn Source + Send + Sync + 'static) {
+        let mut cur = self;
+        loop {
+            match &cur.0.kind {
+                CacheKind::Child { parent } => cur = parent,
+                CacheKind::Root { source } => return &**source,
+            }
+        }
+    }
+
+    #[cfg(feature = "hot-reloading")]
+    #[inline]
+    pub(crate) fn reloader(&self) -> Option<&HotReloader> {
+        self.0.reloader.as_ref()
+    }
+
+    /// Returns a reference to the cache's parent, if any.
+    #[inline]
+    pub fn parent(&self) -> Option<&Self> {
+        match &self.0.kind {
+            CacheKind::Root { .. } => None,
+            CacheKind::Child { parent } => Some(parent),
+        }
     }
 
     /// Temporarily prevent `Compound` dependencies to be recorded.
@@ -207,8 +261,8 @@ impl AssetCache {
     /// - The asset has no extension
     #[inline]
     pub fn load<T: Compound>(&self, id: &str) -> Result<&Handle<T>, Error> {
-        let handle = self.load_entry(id, Type::of_asset::<T>())?;
-        Ok(handle.downcast_ref_ok())
+        let entry = self.load_untyped(id, Type::of_asset::<T>())?;
+        Ok(entry.downcast_ref_ok())
     }
 
     /// Loads an asset and panic if an error happens.
@@ -237,18 +291,11 @@ impl AssetCache {
         }
     }
 
-    fn load_entry(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
-        let result = match self.0.assets.get(id, typ.type_id) {
+    fn load_untyped(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
+        match self.get_cached_untyped(id, typ.type_id) {
             Some(handle) => Ok(handle),
             None => self.add_asset(id, typ),
-        };
-
-        #[cfg(feature = "hot-reloading")]
-        if let Ok(handle) = result {
-            self.add_record(handle);
         }
-
-        result
     }
 
     #[cold]
@@ -279,7 +326,12 @@ impl AssetCache {
             (typ.inner.load)(self, id)
         }?;
 
-        Ok(self.0.assets.insert(entry))
+        let handle = self.0.assets.insert(entry);
+
+        #[cfg(feature = "hot-reloading")]
+        self.add_record(handle);
+
+        Ok(handle)
     }
 
     /// Gets a value from the cache.
@@ -296,20 +348,22 @@ impl AssetCache {
     ///
     /// This is an equivalent of `get_cached` but with a dynamic type.
     pub fn get_cached_untyped(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
-        let result = self.0.assets.get(id, type_id);
+        let mut cur = self;
 
-        #[cfg(feature = "hot-reloading")]
-        if let Some(handle) = result {
-            self.add_record(handle);
+        loop {
+            if let Some(handle) = cur.0.assets.get(id, type_id) {
+                #[cfg(feature = "hot-reloading")]
+                self.add_record(handle);
+
+                return Some(handle);
+            }
+            cur = cur.parent()?;
         }
-
-        result
     }
 
     /// Gets a value from the cache or inserts one.
     ///
     /// Assets added via this function will *never* be reloaded.
-    #[inline]
     pub fn get_or_insert<T: Storable>(&self, id: &str, default: T) -> &Handle<T> {
         let handle = match self.get_cached_untyped(id, TypeId::of::<T>()) {
             Some(handle) => handle,
@@ -440,7 +494,7 @@ impl AssetCache {
     #[inline]
     pub fn is_hot_reloaded(&self) -> bool {
         #[cfg(feature = "hot-reloading")]
-        return self.0.reloader.is_some();
+        return self.reloader().is_some();
 
         #[cfg(not(feature = "hot-reloading"))]
         false
@@ -457,27 +511,28 @@ impl fmt::Debug for AssetCache {
 
 #[cfg(feature = "hot-reloading")]
 struct CacheSource<'a> {
-    cache: &'a AssetCache,
+    reloader: Option<&'a HotReloader>,
+    source: &'a (dyn Source + Send + Sync),
 }
 
 #[cfg(feature = "hot-reloading")]
 impl Source for CacheSource<'_> {
     fn read(&self, id: &str, ext: &str) -> io::Result<crate::source::FileContent> {
-        if let Some(reloader) = &self.cache.0.reloader {
+        if let Some(reloader) = self.reloader {
             records::add_file_record(reloader, id, ext);
         }
-        self.cache.0.source.read(id, ext)
+        self.source.read(id, ext)
     }
 
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(crate::source::DirEntry)) -> io::Result<()> {
-        if let Some(reloader) = &self.cache.0.reloader {
+        if let Some(reloader) = self.reloader {
             records::add_dir_record(reloader, id);
         }
-        self.cache.0.source.read_dir(id, f)
+        self.source.read_dir(id, f)
     }
 
     fn exists(&self, entry: crate::source::DirEntry) -> bool {
-        self.cache.0.source.exists(entry)
+        self.source.exists(entry)
     }
 }
 
