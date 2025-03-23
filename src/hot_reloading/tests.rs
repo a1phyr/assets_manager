@@ -23,18 +23,8 @@ fn write_i32(path: &Path, n: i32) -> io::Result<()> {
 }
 
 macro_rules! test_scenario {
-    (@leak $cache:ident true) => { let $cache = Box::leak(Box::new($cache)); };
-    (@leak $cache:ident false) => {};
-
-    (@enhance $cache:ident true) => { $cache.enhance_hot_reloading(); };
-    (@enhance $cache:ident false) => {};
-
-    (@reload $cache:ident true) => {};
-    (@reload $cache:ident false) => { $cache.hot_reload(); };
-
     (
         name: $name:ident,
-        is_static: $is_static:tt,
         type: $load:ty,
         id: $id:literal,
         start_value: $n:literal,
@@ -47,25 +37,19 @@ macro_rules! test_scenario {
             let id = concat!("test.hot_asset.", $id);
             let cache = AssetCache::new("assets")?;
 
-            test_scenario!(@leak cache $is_static);
-
             let source = cache.downcast_raw_source::<FileSystem>().unwrap();
             let path = source.path_of(DirEntry::File(id, "x"));
             write_i32(&path, $n)?;
             sleep();
 
-            test_scenario!(@enhance cache $is_static);
-
             let asset = cache.load::<$load>(id)?;
             let mut watcher = asset.reload_watcher();
             assert_eq!(asset.read().0, $n);
-            test_scenario!(@reload cache $is_static);
             assert!(!watcher.reloaded());
 
             let n = rand::random();
             write_i32(&path, n)?;
             sleep();
-            test_scenario!(@reload cache $is_static);
             assert_eq!(asset.read().0, n);
             assert!(watcher.reloaded());
             assert!(!watcher.reloaded());
@@ -73,7 +57,6 @@ macro_rules! test_scenario {
 
             write_i32(&path, $n)?;
             sleep();
-            test_scenario!(@reload cache $is_static);
             assert_eq!(asset.read().0, $n);
             assert!(watcher.reloaded());
             assert!(!watcher.reloaded());
@@ -86,39 +69,20 @@ macro_rules! test_scenario {
 
 test_scenario! {
     name: reload_asset,
-    is_static: false,
     type: X,
     id: "a",
     start_value: 42,
 }
 
 test_scenario! {
-    name: reload_asset_static,
-    is_static: true,
-    type: X,
-    id: "b",
-    start_value: 22,
-}
-
-test_scenario! {
     name: reload_compound,
-    is_static: false,
     type: Y,
     id: "c",
     start_value: -7,
 }
 
 test_scenario! {
-    name: reload_compound_static,
-    is_static: true,
-    type: Y,
-    id: "d",
-    start_value: 0,
-}
-
-test_scenario! {
     name: reload_compound_compound,
-    is_static: false,
     type: Z,
     id: "e",
     start_value: 0,
@@ -126,7 +90,6 @@ test_scenario! {
 
 test_scenario! {
     name: reload_arc_compound,
-    is_static: false,
     type: Arc<Y>,
     id: "f",
     start_value: -5,
@@ -135,7 +98,6 @@ test_scenario! {
 
 test_scenario! {
     name: reload_arc_asset,
-    is_static: true,
     type: Arc<X>,
     id: "g",
     start_value: 57,
@@ -160,12 +122,10 @@ fn directory() -> Result<(), BoxedError> {
 
     write_i32("assets/test/hot_dir/a.x".as_ref(), 1)?;
     sleep();
-    cache.hot_reload();
     assert!(!watcher.reloaded());
 
     write_i32("assets/test/hot_dir/b.x".as_ref(), 1)?;
     sleep();
-    cache.hot_reload();
     assert_eq!(
         dir.read().ids().collect::<Vec<_>>(),
         ["test.hot_dir.a", "test.hot_dir.b"]
@@ -175,13 +135,11 @@ fn directory() -> Result<(), BoxedError> {
 
     std::fs::remove_file("assets/test/hot_dir/b.x")?;
     sleep();
-    cache.hot_reload();
     assert_eq!(dir.read().ids().collect::<Vec<_>>(), ["test.hot_dir.a"]);
     assert!(watcher.reloaded());
 
     std::fs::remove_file("assets/test/hot_dir/a.x")?;
     sleep();
-    cache.hot_reload();
     assert_eq!(dir.read().ids().collect::<Vec<_>>().len(), 0);
     assert!(watcher.reloaded());
 
@@ -218,8 +176,6 @@ fn multi_threading() {
     write_i32("assets/test/mt/b.x".as_ref(), 2).unwrap();
 
     let cache = AssetCache::new("assets").unwrap();
-    let cache = Box::leak(Box::new(cache));
-    cache.enhance_hot_reloading();
 
     let asset = cache.load_expect::<MyAsset>("test.mt");
     assert_eq!(asset.copied(), MyAsset { a: 1, b: 2 });

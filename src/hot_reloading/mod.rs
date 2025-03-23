@@ -4,30 +4,21 @@
 //! need this.
 
 mod dependencies;
-mod paths;
 pub(crate) mod records;
 mod watcher;
 
 #[cfg(test)]
 mod tests;
 
-use paths::HotReloadingData;
-
 use crossbeam_channel::{self as channel, Receiver, Sender};
-use std::{
-    fmt,
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
-    thread,
-};
+use std::thread;
 
 use crate::{
-    AssetCache, SharedString,
+    SharedString,
+    cache::WeakAssetCache,
     key::{AssetKey, Type},
     source::{OwnedDirEntry, Source},
-    utils::{Condvar, Mutex},
+    utils::HashSet,
 };
 
 pub use records::Recorder;
@@ -36,12 +27,8 @@ pub use watcher::FsWatcherBuilder;
 pub(crate) use records::{BorrowedDependency, Dependencies, Dependency};
 
 enum CacheMessage {
-    Ptr(&'static AssetCache, usize),
-    Static(&'static AssetCache),
-
     AddAsset(AssetKey, Dependencies),
 }
-unsafe impl Send for CacheMessage where AssetCache: Sync {}
 
 /// An error returned when an end of a channel was disconnected.
 #[derive(Debug)]
@@ -104,46 +91,14 @@ impl EventSender {
     }
 }
 
-/// Used to make sure any thread calling `AssetCache::hot_reload` continues when
-/// it is answered and not when another thread is. Using a channel would be
-/// vulnerable to race condition, which is fine in that case but not really
-/// future-proof.
-#[derive(Default)]
-struct Answers {
-    next_token: AtomicUsize,
-    current_token: Mutex<Option<usize>>,
-    condvar: Condvar,
-}
-
-impl Answers {
-    fn get_unique_token(&self) -> usize {
-        self.next_token.fetch_add(1, Ordering::Relaxed)
-    }
-
-    fn notify(&self, token: usize) {
-        let guard = self.current_token.lock();
-        // Make sure everyone consumed its answer token
-        let mut guard = self.condvar.wait_while(guard, |t| t.is_some());
-        *guard = Some(token);
-        self.condvar.notify_all();
-    }
-
-    fn wait_for_answer(&self, token: usize) {
-        let guard = self.current_token.lock();
-        let mut token = self.condvar.wait_while(guard, |t| *t != Some(token));
-        *token = None;
-    }
-}
-
 /// The hot-reloading handler.
 pub(crate) struct HotReloader {
     sender: Sender<CacheMessage>,
-    answers: Arc<Answers>,
 }
 
 impl HotReloader {
     /// Starts hot-reloading.
-    pub fn start(source: &dyn Source) -> Option<Self> {
+    pub fn start(cache: WeakAssetCache, source: &dyn Source) -> Option<Self> {
         let (events_tx, events_rx) = channel::unbounded();
 
         if let Err(err) = source.configure_hot_reloading(EventSender(events_tx)) {
@@ -159,18 +114,15 @@ impl HotReloader {
         }
 
         let (cache_msg_tx, cache_msg_rx) = channel::unbounded();
-        let answers = Arc::new(Answers::default());
-        let answers_clone = answers.clone();
 
         thread::Builder::new()
             .name("assets_hot_reload".to_string())
-            .spawn(|| hot_reloading_thread(events_rx, cache_msg_rx, answers_clone))
+            .spawn(|| hot_reloading_thread(events_rx, cache_msg_rx, cache))
             .map_err(|err| log::error!("Failed to start hot-reloading thread: {err}"))
             .ok()?;
 
         Some(Self {
             sender: cache_msg_tx,
-            answers,
         })
     }
 
@@ -186,37 +138,16 @@ impl HotReloader {
         let key = AssetKey::new(id, typ);
         let _ = self.sender.send(CacheMessage::AddAsset(key, deps));
     }
-
-    pub(crate) fn reload(&self, cache: &AssetCache) {
-        let token = self.answers.get_unique_token();
-        // Safety: We are sure the cache will be valid until we send the answer
-        let cache = unsafe { &*(cache as *const _) };
-
-        if self.sender.send(CacheMessage::Ptr(cache, token)).is_ok() {
-            // When the hot-reloading thread is done, it sends back our back our token
-            self.answers.wait_for_answer(token);
-        }
-    }
-
-    pub(crate) fn send_static(&'static self, cache: &'static AssetCache) {
-        let _ = self.sender.send(CacheMessage::Static(cache));
-    }
-}
-
-impl fmt::Debug for HotReloader {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.pad("HotReloader { .. }")
-    }
 }
 
 fn hot_reloading_thread(
     events: Receiver<Events>,
     cache_msg: Receiver<CacheMessage>,
-    answers: Arc<Answers>,
+    asset_cache: WeakAssetCache,
 ) {
     log::info!("Starting hot-reloading");
 
-    let mut cache = HotReloadingData::new();
+    let mut cache = HotReloadingData::new(asset_cache);
 
     let mut select = channel::Select::new();
     select.recv(&cache_msg);
@@ -229,27 +160,69 @@ fn hot_reloading_thread(
 
         loop {
             match cache_msg.try_recv() {
-                Ok(CacheMessage::Ptr(asset_cache, token)) => {
-                    // Safety: The received cache is guaranteed to
-                    // be valid until we reply back
-                    cache.update_if_local(asset_cache);
-                    answers.notify(token);
-                }
-                Ok(CacheMessage::Static(asset_cache)) => cache.use_static_ref(asset_cache),
                 Ok(CacheMessage::AddAsset(key, deps)) => cache.add_asset(key, deps),
-                Err(_) => break,
+                Err(channel::TryRecvError::Empty) => break,
+                Err(channel::TryRecvError::Disconnected) => return,
             }
         }
 
         if ready == 1 {
             match events.try_recv() {
                 Ok(msg) => cache.handle_events(msg),
-                Err(crossbeam_channel::TryRecvError::Empty) => (),
+                Err(channel::TryRecvError::Empty) => (),
                 // We won't receive events anymore, we can stop now
-                Err(crossbeam_channel::TryRecvError::Disconnected) => break,
+                Err(channel::TryRecvError::Disconnected) => break,
             }
         }
     }
 
     log::info!("Stopping hot-reloading");
+}
+
+struct HotReloadingData {
+    // It is important to keep a weak reference here, because we rely on the
+    // fact that dropping the `HotReloader` drop the channel and therefore stop
+    // the hot-reloading thread
+    cache: WeakAssetCache,
+    to_reload: HashSet<OwnedDirEntry>,
+    deps: dependencies::DepsGraph,
+}
+
+impl HotReloadingData {
+    fn new(cache: WeakAssetCache) -> Self {
+        HotReloadingData {
+            to_reload: HashSet::new(),
+            cache,
+            deps: dependencies::DepsGraph::new(),
+        }
+    }
+
+    fn handle_events(&mut self, events: Events) {
+        events.for_each(|entry| {
+            if self.deps.contains(&entry) {
+                log::trace!("New event: {entry:?}");
+                self.to_reload.insert(entry);
+            }
+        });
+        self.run_update();
+    }
+
+    fn run_update(&mut self) {
+        if let Some(asset_cache) = &mut self.cache.upgrade() {
+            let to_update = self.deps.topological_sort_from(self.to_reload.iter());
+            self.to_reload.clear();
+
+            for key in to_update.into_iter() {
+                let new_deps = asset_cache.reload_untyped(&key.id, key.typ);
+
+                if let Some(new_deps) = new_deps {
+                    self.deps.insert_asset(key, new_deps);
+                };
+            }
+        }
+    }
+
+    fn add_asset(&mut self, key: AssetKey, deps: Dependencies) {
+        self.deps.insert_asset(key, deps);
+    }
 }

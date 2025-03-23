@@ -98,9 +98,6 @@ let cache = AssetCache::new("assets")?;
 let handle = cache.load::<Point>("common.position")?;
 
 loop {
-    // Reload all cached files that changed
-    cache.hot_reload();
-
     // Assets are updated without any further work
     println!("Current value: {:?}", handle.read());
 }

@@ -19,8 +19,6 @@ fn main() -> Result<(), BoxedError> {
 
     // Indefinitly reload assets if they changed and print `text`
     loop {
-        cache.hot_reload();
-
         println!("{}", text.read());
 
         sleep(Duration::from_millis(200));
