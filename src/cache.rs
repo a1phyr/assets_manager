@@ -343,7 +343,7 @@ impl AssetCache {
         #[allow(unused_labels)]
         let entry = 'h: {
             #[cfg(feature = "hot-reloading")]
-            if typ.is_hot_reloaded() {
+            if typ.inner.hot_reloaded {
                 if let Some(reloader) = &self.0.reloader {
                     let (entry, deps) = crate::hot_reloading::records::record(reloader, || {
                         (typ.inner.load)(self, id)
