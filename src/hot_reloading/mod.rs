@@ -147,32 +147,29 @@ fn hot_reloading_thread(
 ) {
     log::info!("Starting hot-reloading");
 
-    let mut cache = HotReloadingData::new(asset_cache);
+    let mut data = HotReloadingData::new(asset_cache);
 
-    let mut select = channel::Select::new();
+    let mut select = channel::Select::new_biased();
     select.recv(&cache_msg);
     select.recv(&events);
 
     loop {
-        // We don't use `select` method here as we always want to check
-        // `cache_msg` channel first.
-        let ready = select.ready();
+        let ready = select.select();
 
-        loop {
-            match cache_msg.try_recv() {
-                Ok(CacheMessage::AddAsset(key, deps)) => cache.add_asset(key, deps),
-                Err(channel::TryRecvError::Empty) => break,
-                Err(channel::TryRecvError::Disconnected) => return,
-            }
-        }
+        match ready.index() {
+            0 => match ready.recv(&cache_msg) {
+                Ok(CacheMessage::AddAsset(key, deps)) => data.add_asset(key, deps),
+                // There is no more cache to update
+                Err(channel::RecvError) => return,
+            },
 
-        if ready == 1 {
-            match events.try_recv() {
-                Ok(msg) => cache.handle_events(msg),
-                Err(channel::TryRecvError::Empty) => (),
+            1 => match ready.recv(&events) {
+                Ok(msg) => data.handle_events(msg),
                 // We won't receive events anymore, we can stop now
-                Err(channel::TryRecvError::Disconnected) => break,
-            }
+                Err(channel::RecvError) => break,
+            },
+
+            _ => unreachable!(),
         }
     }
 
