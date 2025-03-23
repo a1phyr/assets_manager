@@ -34,6 +34,8 @@ macro_rules! test_scenario {
         fn $name() -> Res {
             let _ = env_logger::try_init();
 
+            std::fs::create_dir_all("assets/test/hot_asset/")?;
+
             let id = concat!("test.hot_asset.", $id);
             let cache = AssetCache::new("assets")?;
 
