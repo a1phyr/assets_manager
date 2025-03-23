@@ -4,8 +4,6 @@ use crate::{
 };
 use std::{cell::Cell, fmt, ptr::NonNull, sync::Arc};
 
-use super::HotReloader;
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum Dependency {
     File(SharedString, SharedString),
@@ -16,30 +14,11 @@ pub(crate) enum Dependency {
 pub(crate) type Dependencies = HashSet<Dependency>;
 
 struct Record {
-    reloader_addr: usize,
     records: Dependencies,
     additional: Option<Arc<Mutex<Dependencies>>>,
 }
 
 impl Record {
-    fn insert_asset(&mut self, reloader: &HotReloader, key: AssetKey) {
-        if self.reloader_addr == reloader.addr() {
-            self.records.insert(Dependency::Asset(key));
-        }
-    }
-
-    fn insert_file(&mut self, reloader: &HotReloader, id: SharedString, ext: SharedString) {
-        if self.reloader_addr == reloader.addr() {
-            self.records.insert(Dependency::File(id, ext));
-        }
-    }
-
-    fn insert_dir(&mut self, reloader: &HotReloader, id: SharedString) {
-        if self.reloader_addr == reloader.addr() {
-            self.records.insert(Dependency::Directory(id));
-        }
-    }
-
     fn install<T>(&mut self, f: impl FnOnce() -> T) -> T {
         RECORDING.with(|rec| {
             let _guard = CellGuard::replace(rec, Some(NonNull::from(self)));
@@ -79,9 +58,8 @@ thread_local! {
     static RECORDING: Cell<Option<NonNull<Record>>> = const { Cell::new(None) };
 }
 
-pub(crate) fn record<F: FnOnce() -> T, T>(reloader: &HotReloader, f: F) -> (T, Dependencies) {
+pub(crate) fn record<F: FnOnce() -> T, T>(f: F) -> (T, Dependencies) {
     let mut record = Record {
-        reloader_addr: reloader.addr(),
         records: Dependencies::new(),
         additional: None,
     };
@@ -96,29 +74,34 @@ pub(crate) fn no_record<F: FnOnce() -> T, T>(f: F) -> T {
     })
 }
 
-pub(crate) fn add_record(reloader: &HotReloader, key: AssetKey) {
+pub(crate) fn add_record(key: AssetKey) {
     RECORDING.with(|rec| {
         if let Some(mut recorder) = rec.get() {
             let recorder = unsafe { recorder.as_mut() };
-            recorder.insert_asset(reloader, key);
+
+            recorder.records.insert(Dependency::Asset(key));
         }
     });
 }
 
-pub(crate) fn add_file_record(reloader: &HotReloader, id: &str, ext: &str) {
+pub(crate) fn add_file_record(id: &str, ext: &str) {
     RECORDING.with(|rec| {
         if let Some(mut recorder) = rec.get() {
             let recorder = unsafe { recorder.as_mut() };
-            recorder.insert_file(reloader, id.into(), ext.into());
+
+            recorder
+                .records
+                .insert(Dependency::File(id.into(), ext.into()));
         }
     });
 }
 
-pub(crate) fn add_dir_record(reloader: &HotReloader, id: &str) {
+pub(crate) fn add_dir_record(id: &str) {
     RECORDING.with(|rec| {
         if let Some(mut recorder) = rec.get() {
             let recorder = unsafe { recorder.as_mut() };
-            recorder.insert_dir(reloader, id.into());
+
+            recorder.records.insert(Dependency::Directory(id.into()));
         }
     });
 }
@@ -129,7 +112,6 @@ pub(crate) fn add_dir_record(reloader: &HotReloader, id: &str) {
 /// (e.g. if you use `rayon` in `Compound::load`).
 #[derive(Clone)]
 pub struct Recorder {
-    reloader_addr: usize,
     deps: Arc<Mutex<Dependencies>>,
 }
 
@@ -144,17 +126,13 @@ impl Recorder {
             let mut rec = rec.get().expect("no recorder installed");
             let recorder = unsafe { rec.as_mut() };
             let deps = recorder.additional.get_or_insert_default().clone();
-            Recorder {
-                reloader_addr: recorder.reloader_addr,
-                deps,
-            }
+            Recorder { deps }
         })
     }
 
     /// Runs the given closure with the recorder installed.
     pub fn install<T>(&self, f: impl FnOnce() -> T) -> T {
         let mut record = Record {
-            reloader_addr: self.reloader_addr,
             records: Dependencies::new(),
             additional: Some(self.deps.clone()),
         };

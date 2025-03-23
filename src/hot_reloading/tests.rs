@@ -192,3 +192,32 @@ fn multi_threading() {
 
     assert_eq!(asset.copied(), MyAsset { a: 3, b: 2 });
 }
+
+#[test]
+fn fallback() {
+    let _ = env_logger::try_init();
+
+    fs::create_dir_all("assets/test/hot_child/").unwrap();
+    write_i32("assets/test/hot_child/a.x".as_ref(), 1).unwrap();
+    write_i32("assets/test/hot_child/b.x".as_ref(), 2).unwrap();
+
+    let base = AssetCache::new("assets").unwrap();
+    let cache = AssetCache::with_fallback(base.clone());
+
+    base.load_expect::<X>("test.hot_child.a");
+    let a = cache.load_expect::<Y>("test.hot_child.a");
+    let b = cache.load_expect::<X>("test.hot_child.b");
+
+    assert_eq!(a.read().0, 1);
+    assert_eq!(b.read().0, 2);
+
+    write_i32("assets/test/hot_child/b.x".as_ref(), 4).unwrap();
+    sleep();
+
+    assert_eq!(b.read().0, 4);
+
+    write_i32("assets/test/hot_child/a.x".as_ref(), 3).unwrap();
+    sleep();
+
+    assert_eq!(a.read().0, 3);
+}
