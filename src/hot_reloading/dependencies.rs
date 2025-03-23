@@ -1,9 +1,10 @@
 use super::{Dependencies, Dependency};
 use crate::{
+    cache::CacheId,
     key::AssetKey,
     utils::{HashMap, HashSet},
 };
-use hashbrown::hash_map::Entry;
+use hashbrown::{Equivalent, hash_map::Entry};
 
 struct GraphNode {
     /// Reverse dependencies (backward edges)
@@ -110,6 +111,13 @@ impl DepsGraph {
 
     pub fn contains(&self, key: &Dependency) -> bool {
         self.0.contains_key(key)
+    }
+
+    pub fn remove_cache(&mut self, id: CacheId) {
+        self.0.retain(|key, _| match key {
+            Dependency::Asset(AssetKey { cache, .. }) => id.equivalent(cache),
+            _ => false,
+        });
     }
 }
 

@@ -1,6 +1,6 @@
 use std::{any::TypeId, fmt, hash};
 
-use crate::{AssetCache, Compound, Error, SharedString, entry::CacheEntry};
+use crate::{AssetCache, Compound, Error, SharedString, cache::CacheId, entry::CacheEntry};
 
 impl Inner {
     fn of<T: Compound>() -> &'static Self {
@@ -72,13 +72,13 @@ impl fmt::Debug for Type {
 pub(crate) struct AssetKey {
     pub typ: Type,
     pub id: SharedString,
+    pub cache: CacheId,
 }
 
 impl AssetKey {
-    /// Creates a `OwnedKey` with the given type and id.
     #[allow(dead_code)]
     #[inline]
-    pub fn new(id: SharedString, typ: Type) -> Self {
-        Self { id, typ }
+    pub fn new(id: SharedString, typ: Type, cache: CacheId) -> Self {
+        Self { id, typ, cache }
     }
 }

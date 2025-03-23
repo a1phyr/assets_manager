@@ -14,9 +14,7 @@ use crossbeam_channel::{self as channel, Receiver, Sender};
 use std::{thread, time};
 
 use crate::{
-    SharedString,
-    cache::WeakAssetCache,
-    key::{AssetKey, Type},
+    cache::{CacheId, WeakAssetCache},
     source::{OwnedDirEntry, Source},
     utils::HashSet,
 };
@@ -24,9 +22,12 @@ use crate::{
 pub use records::Recorder;
 pub use watcher::FsWatcherBuilder;
 
+pub(crate) use crate::key::AssetKey;
 pub(crate) use records::{Dependencies, Dependency};
 
 enum CacheMessage {
+    AddCache(WeakAssetCache),
+    RemoveCache(CacheId),
     AddAsset(AssetKey, Dependencies),
 }
 
@@ -99,7 +100,7 @@ pub(crate) struct HotReloader {
 
 impl HotReloader {
     /// Starts hot-reloading.
-    pub fn start(cache: WeakAssetCache, source: &dyn Source) -> Option<Self> {
+    pub fn start(source: &dyn Source) -> Option<Self> {
         let (events_tx, events_rx) = channel::unbounded();
 
         if let Err(err) = source.configure_hot_reloading(EventSender(events_tx)) {
@@ -118,7 +119,7 @@ impl HotReloader {
 
         thread::Builder::new()
             .name("assets_hot_reload".to_string())
-            .spawn(|| hot_reloading_thread(events_rx, cache_msg_rx, cache))
+            .spawn(|| hot_reloading_thread(events_rx, cache_msg_rx))
             .map_err(|err| log::error!("Failed to start hot-reloading thread: {err}"))
             .ok()?;
 
@@ -127,28 +128,27 @@ impl HotReloader {
         })
     }
 
-    fn addr(&self) -> usize {
-        (self as *const Self).addr()
-    }
-
     // All theses methods ignore send/recv errors: the program can continue
     // without hot-reloading if it stopped, and an error should have already
     // been logged.
 
-    pub(crate) fn add_asset(&self, id: SharedString, deps: Dependencies, typ: Type) {
-        let key = AssetKey::new(id, typ);
+    pub(crate) fn add_cache(&self, cache: WeakAssetCache) {
+        let _ = self.sender.send(CacheMessage::AddCache(cache));
+    }
+
+    pub(crate) fn remove_cache(&self, cache: CacheId) {
+        let _ = self.sender.send(CacheMessage::RemoveCache(cache));
+    }
+
+    pub(crate) fn add_asset(&self, key: AssetKey, deps: Dependencies) {
         let _ = self.sender.send(CacheMessage::AddAsset(key, deps));
     }
 }
 
-fn hot_reloading_thread(
-    events: Receiver<Events>,
-    cache_msg: Receiver<CacheMessage>,
-    asset_cache: WeakAssetCache,
-) {
+fn hot_reloading_thread(events: Receiver<Events>, cache_msg: Receiver<CacheMessage>) {
     log::info!("Starting hot-reloading");
 
-    let mut data = HotReloadingData::new(asset_cache);
+    let mut data = HotReloadingData::new();
 
     let mut select = channel::Select::new_biased();
     select.recv(&cache_msg);
@@ -172,7 +172,9 @@ fn hot_reloading_thread(
 
         match ready.index() {
             0 => match ready.recv(&cache_msg) {
+                Ok(CacheMessage::AddCache(weak_cache)) => data.add_cache(weak_cache),
                 Ok(CacheMessage::AddAsset(key, deps)) => data.add_asset(key, deps),
+                Ok(CacheMessage::RemoveCache(id)) => data.remove_cache(id),
                 // There is no more cache to update
                 Err(channel::RecvError) => return,
             },
@@ -203,16 +205,16 @@ struct HotReloadingData {
     // It is important to keep a weak reference here, because we rely on the
     // fact that dropping the `HotReloader` drop the channel and therefore stop
     // the hot-reloading thread
-    cache: WeakAssetCache,
+    caches: HashSet<WeakAssetCache>,
     to_reload: HashSet<Dependency>,
     deps: dependencies::DepsGraph,
 }
 
 impl HotReloadingData {
-    fn new(cache: WeakAssetCache) -> Self {
+    fn new() -> Self {
         HotReloadingData {
             to_reload: HashSet::new(),
-            cache,
+            caches: HashSet::new(),
             deps: dependencies::DepsGraph::new(),
         }
     }
@@ -228,18 +230,33 @@ impl HotReloadingData {
     }
 
     fn run_update(&mut self) {
-        if let Some(asset_cache) = &mut self.cache.upgrade() {
-            let to_update = self.deps.topological_sort_from(self.to_reload.iter());
-            self.to_reload.clear();
+        let to_update = self.deps.topological_sort_from(self.to_reload.iter());
+        self.to_reload.clear();
 
-            for key in to_update.into_iter() {
-                let new_deps = asset_cache.reload_untyped(&key.id, key.typ);
+        for key in to_update.into_iter() {
+            let Some(weak) = self.caches.get(&key.cache) else {
+                continue;
+            };
 
-                if let Some(new_deps) = new_deps {
-                    self.deps.insert_asset(key, new_deps);
-                };
-            }
+            let Some(asset_cache) = weak.upgrade() else {
+                continue;
+            };
+
+            let new_deps = asset_cache.reload_untyped(&key.id, key.typ);
+
+            if let Some(new_deps) = new_deps {
+                self.deps.insert_asset(key, new_deps);
+            };
         }
+    }
+
+    fn add_cache(&mut self, cache: WeakAssetCache) {
+        self.caches.insert(cache);
+    }
+
+    fn remove_cache(&mut self, id: CacheId) {
+        self.caches.remove(&id);
+        self.deps.remove_cache(id);
     }
 
     fn add_asset(&mut self, key: AssetKey, deps: Dependencies) {
