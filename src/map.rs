@@ -1,16 +1,19 @@
-use std::{any::TypeId, hash::BuildHasher};
+use std::{any::TypeId, fmt, hash::BuildHasher};
 
-use crate::{UntypedHandle, entry::CacheEntry};
-use hashbrown::HashTable;
+use crate::{
+    UntypedHandle,
+    entry::CacheEntry,
+    utils::{RandomState, RwLock},
+};
 
-pub(crate) struct AssetMap {
-    map: HashTable<CacheEntry>,
+struct EntryMap {
+    map: hashbrown::HashTable<CacheEntry>,
 }
 
-impl AssetMap {
-    pub fn new() -> AssetMap {
-        AssetMap {
-            map: HashTable::new(),
+impl EntryMap {
+    pub fn new() -> EntryMap {
+        EntryMap {
+            map: hashbrown::HashTable::new(),
         }
     }
 
@@ -36,5 +39,84 @@ impl AssetMap {
 
     pub fn iter_for_debug(&self) -> impl Iterator<Item = (&str, &CacheEntry)> + '_ {
         self.map.iter().map(|e| (e.as_key().1, e))
+    }
+}
+
+// Make shards go to different cache lines to reduce contention
+#[repr(align(64))]
+struct Shard(RwLock<EntryMap>);
+
+/// A map to store assets, optimized for concurrency.
+///
+/// This type has several uses:
+/// - Provide a safe wrapper to ensure that no issue with lifetimes happen.
+/// - Make a sharded lock map to reduce contention on the `RwLock` that guard
+///   inner `HashMap`s.
+/// - Provide an interface with the minimum of generics to reduce compile times.
+pub(crate) struct AssetMap {
+    hash_builder: RandomState,
+    shards: Box<[Shard]>,
+}
+
+impl AssetMap {
+    pub fn new() -> AssetMap {
+        let shards = match std::thread::available_parallelism() {
+            Ok(n) => 4 * n.get().next_power_of_two(),
+            Err(err) => {
+                log::error!("Failed to get available parallelism: {err}");
+                32
+            }
+        };
+
+        let hash_builder = RandomState::default();
+        let shards = (0..shards)
+            .map(|_| Shard(RwLock::new(EntryMap::new())))
+            .collect();
+
+        AssetMap {
+            hash_builder,
+            shards,
+        }
+    }
+
+    fn hash_one(&self, key: (TypeId, &str)) -> u64 {
+        std::hash::BuildHasher::hash_one(&self.hash_builder, key)
+    }
+
+    fn get_shard(&self, hash: u64) -> &Shard {
+        let id = (hash as usize) & (self.shards.len() - 1);
+        &self.shards[id]
+    }
+
+    pub fn get(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
+        let hash = self.hash_one((type_id, id));
+        let shard = self.get_shard(hash).0.read();
+        let entry = shard.get(hash, id, type_id)?;
+        unsafe { Some(entry.extend_lifetime()) }
+    }
+
+    pub fn insert(&self, entry: CacheEntry) -> &UntypedHandle {
+        let hash = self.hash_one(entry.as_key());
+        let shard = &mut *self.get_shard(hash).0.write();
+        let entry = shard.insert(hash, entry, &self.hash_builder);
+        unsafe { entry.extend_lifetime() }
+    }
+
+    pub fn contains_key(&self, id: &str, type_id: TypeId) -> bool {
+        let hash = self.hash_one((type_id, id));
+        let shard = self.get_shard(hash).0.read();
+        shard.get(hash, id, type_id).is_some()
+    }
+}
+
+impl fmt::Debug for AssetMap {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut map = f.debug_map();
+
+        for shard in &*self.shards {
+            map.entries(shard.0.read().iter_for_debug());
+        }
+
+        map.finish()
     }
 }
