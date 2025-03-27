@@ -6,8 +6,12 @@ use std::{
     cell::UnsafeCell,
     fmt,
     marker::PhantomData,
+    mem::ManuallyDrop,
     ops::Deref,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::{
+        Arc, Weak,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    },
 };
 
 #[cfg(feature = "hot-reloading")]
@@ -98,22 +102,22 @@ impl UntypedHandle {
     pub(crate) fn write(&self, mut value: CacheEntry) {
         assert!(self.type_id == value.0.type_id);
 
-        if let Some(d) = &self.dynamic {
-            unsafe {
-                let _g = d.lock.write();
-                swap_any(&mut *self.value.get(), value.0.value.get_mut());
-                d.reload.increment();
-                d.reload_global.store(true, Ordering::Release);
-            }
-            return;
-        }
+        let Some(d) = &self.dynamic else {
+            wrong_handle_type();
+        };
+        let storage = Arc::get_mut(&mut value.0).unwrap();
 
-        wrong_handle_type();
+        unsafe {
+            let _g = d.lock.write();
+            swap_any(&mut *self.value.get(), storage.value.get_mut());
+            d.reload.increment();
+            d.reload_global.store(true, Ordering::Release);
+        }
     }
 }
 
 /// An entry in the cache.
-pub(crate) struct CacheEntry(Box<UntypedHandle>);
+pub(crate) struct CacheEntry(Arc<UntypedHandle>);
 
 impl CacheEntry {
     /// Creates a new `CacheEntry` containing an asset of type `T`.
@@ -132,7 +136,7 @@ impl CacheEntry {
             Handle::new_static(id, asset)
         };
 
-        CacheEntry(Box::new(inner))
+        CacheEntry(Arc::new(inner))
     }
 
     /// Creates a new `CacheEntry` containing a value of type `T`.
@@ -140,7 +144,7 @@ impl CacheEntry {
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
     pub fn new_any<T: Storable>(value: T, id: SharedString, _mutable: bool) -> Self {
-        CacheEntry(Box::new(Handle::new_static(id, value)))
+        CacheEntry(Arc::new(Handle::new_static(id, value)))
     }
 
     #[inline]
@@ -272,6 +276,36 @@ impl<T: ?Sized> Handle<T> {
         self
     }
 
+    #[inline]
+    fn as_arc(&self) -> ManuallyDrop<Arc<Handle<T>>> {
+        // Safety: a `Handle<T>` is always in a `Arc`
+        unsafe { ManuallyDrop::new(Arc::from_raw(self)) }
+    }
+
+    /// Make a `ArcHandle` that points to this handle.
+    #[inline]
+    pub fn strong(&self) -> ArcHandle<T> {
+        ArcHandle(Arc::clone(&self.as_arc()))
+    }
+
+    /// Make a `WeakHandle` that points to this handle.
+    #[inline]
+    pub fn weak(&self) -> WeakHandle<T> {
+        WeakHandle(Arc::downgrade(&self.as_arc()))
+    }
+
+    /// Gets the number of strong ([`ArcHandle`]) pointers to this allocation.
+    #[inline]
+    pub fn strong_count(&self) -> usize {
+        Arc::strong_count(&self.as_arc())
+    }
+
+    /// Gets the number of [`WeakHandle`] pointers to this allocation.
+    #[inline]
+    pub fn weak_count(&self) -> usize {
+        Arc::weak_count(&self.as_arc())
+    }
+
     /// Returns a `ReloadWatcher` that can be used to check whether this asset
     /// was reloaded.
     ///
@@ -382,6 +416,123 @@ where
             .finish()
     }
 }
+
+/// Like a `Arc<Handle<T>>`
+pub struct ArcHandle<T: ?Sized>(Arc<Handle<T>>);
+
+impl ArcUntypedHandle {
+    /// Attempt to downcast the handle to a concrete type.
+    #[inline]
+    pub fn downcast<T: 'static>(self) -> Result<ArcHandle<T>, Self> {
+        if self.is::<T>() {
+            unsafe {
+                Ok(ArcHandle(Arc::from_raw(
+                    Arc::into_raw(self.0) as *mut Handle<T>
+                )))
+            }
+        } else {
+            Err(self)
+        }
+    }
+}
+
+impl<T: ?Sized> Clone for ArcHandle<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T: ?Sized> Deref for ArcHandle<T> {
+    type Target = Handle<T>;
+
+    #[inline]
+    fn deref(&self) -> &Handle<T> {
+        &self.0
+    }
+}
+
+impl<T> fmt::Debug for ArcHandle<T>
+where
+    T: fmt::Debug + ?Sized,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ArcHandle")
+            .field("id", self.id())
+            .field("value", &&*self.read())
+            .finish()
+    }
+}
+
+/// Like a `Weak<Handle<T>>`
+pub struct WeakHandle<T: ?Sized>(Weak<Handle<T>>);
+
+impl<T> WeakHandle<T> {
+    /// Constructs a new `WeakHandle<T>`, without allocating any memory.
+    /// Calling [`upgrade`] on the return value always gives [`None`].
+    ///
+    /// [`upgrade`]: WeakHandle::upgrade
+    #[inline]
+    pub const fn new() -> Self {
+        Self(Weak::new())
+    }
+}
+
+impl<T: ?Sized> WeakHandle<T> {
+    /// Attempts to upgrade the `WeakHandle` to an `ArcHandle`.
+    ///
+    /// Returns `None` if the inner value has since been dropped.
+    ///
+    /// This is similar to [`Weak::upgrade`].
+    #[inline]
+    pub fn upgrade(&self) -> Option<ArcHandle<T>> {
+        let arc = self.0.upgrade()?;
+        Some(ArcHandle(arc))
+    }
+
+    /// Gets the number of strong (`Arc`) pointers pointing to this allocation.
+    ///
+    /// If `self` was created using [`WeakHandle::new`], this will return 0.
+    #[inline]
+    pub fn strong_count(&self) -> usize {
+        Weak::strong_count(&self.0)
+    }
+
+    /// Gets an approximation of the number of `Weak` pointers pointing to this
+    /// allocation.
+    ///
+    /// If `self` was created using [`WeakHandle::new`], or if there are no remaining
+    /// strong pointers, this will return 0.
+    #[inline]
+    pub fn weak_count(&self) -> usize {
+        Weak::weak_count(&self.0)
+    }
+}
+
+impl<T> Default for WeakHandle<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: ?Sized> Clone for WeakHandle<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T: ?Sized> fmt::Debug for WeakHandle<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("(WeakHandle)")
+    }
+}
+
+/// Like a `Arc<UntypedHandle>`
+pub type ArcUntypedHandle = ArcHandle<dyn Any + Send + Sync>;
+
+/// Like a `Weak<UntypedHandle>`
+pub type WeakUntypedHandle = WeakHandle<dyn Any + Send + Sync>;
 
 /// RAII guard used to keep a read lock on an asset and release it when dropped.
 ///

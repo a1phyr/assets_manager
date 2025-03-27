@@ -200,7 +200,10 @@ pub mod loader;
 mod map;
 
 mod entry;
-pub use entry::{AssetReadGuard, AtomicReloadId, Handle, ReloadId, ReloadWatcher, UntypedHandle};
+pub use entry::{
+    ArcHandle, ArcUntypedHandle, AssetReadGuard, AtomicReloadId, Handle, ReloadId, ReloadWatcher,
+    UntypedHandle, WeakHandle, WeakUntypedHandle,
+};
 
 mod key;
 
