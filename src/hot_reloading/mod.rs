@@ -11,7 +11,7 @@ mod watcher;
 mod tests;
 
 use crossbeam_channel::{self as channel, Receiver, Sender};
-use std::thread;
+use std::{thread, time};
 
 use crate::{
     SharedString,
@@ -153,8 +153,21 @@ fn hot_reloading_thread(
     select.recv(&cache_msg);
     select.recv(&events);
 
+    // Use a 20ms debouncing time to group reload events and avoid duplicated
+    let mut deadline = None;
+
     loop {
-        let ready = select.select();
+        let ready = match deadline {
+            Some(deadline) => select.select_deadline(deadline),
+            None => Ok(select.select()),
+        };
+
+        // If we reached the deadline, run the update and wait for new events
+        let Ok(ready) = ready else {
+            deadline = None;
+            data.run_update();
+            continue;
+        };
 
         match ready.index() {
             0 => match ready.recv(&cache_msg) {
@@ -164,7 +177,16 @@ fn hot_reloading_thread(
             },
 
             1 => match ready.recv(&events) {
-                Ok(msg) => data.handle_events(msg),
+                Ok(msg) => {
+                    data.handle_events(msg);
+
+                    // If we don't have a deadline yet, set one 20ms in the future
+                    // We don't touch it if we already have one to avoid a continous
+                    // event stream preventing running updates.
+                    if deadline.is_none() {
+                        deadline = Some(time::Instant::now() + time::Duration::from_millis(20));
+                    }
+                }
                 // We won't receive events anymore, we can stop now
                 Err(channel::RecvError) => break,
             },
@@ -202,7 +224,6 @@ impl HotReloadingData {
                 self.to_reload.insert(entry);
             }
         });
-        self.run_update();
     }
 
     fn run_update(&mut self) {

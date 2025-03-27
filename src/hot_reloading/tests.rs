@@ -11,7 +11,7 @@ use std::{
 };
 
 fn sleep() {
-    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::thread::sleep(std::time::Duration::from_millis(50));
 }
 
 type Res = Result<(), Box<dyn std::error::Error>>;
