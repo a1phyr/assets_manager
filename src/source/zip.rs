@@ -42,11 +42,18 @@ impl OwnedEntry {
     }
 }
 
+struct FileInfo {
+    start: u64,
+    compressed_size: u64,
+    decompressed_size: u64,
+    compression_method: zip::CompressionMethod,
+    crc: u32,
+}
+
 /// Register a file of an archive in maps.
 fn register_file(
     file: ZipFile,
-    index: usize,
-    files: &mut HashMap<FileDesc, usize>,
+    files: &mut HashMap<FileDesc, FileInfo>,
     dirs: &mut HashMap<SharedString, Vec<OwnedEntry>>,
     id_builder: &mut IdBuilder,
 ) {
@@ -81,9 +88,22 @@ fn register_file(
 
         // Register the file in the maps.
         let entry = if file.is_file() {
+            if file.encrypted() {
+                log::warn!("Skipping encrypted file: {}", path.display());
+                return None;
+            }
+
             let ext = extension_of(&path)?.into();
             let desc = FileDesc(id, ext);
-            files.insert(desc.clone(), index);
+            let info = FileInfo {
+                start: file.data_start(),
+                compressed_size: file.compressed_size(),
+                decompressed_size: file.size(),
+                compression_method: file.compression(),
+                crc: file.crc32(),
+            };
+
+            files.insert(desc.clone(), info);
             OwnedEntry::File(desc)
         } else {
             if !dirs.contains_key(&id) {
@@ -102,18 +122,19 @@ fn register_file(
     }
 }
 
+type FileReader<R> = for<'a> fn(&'a R, &FileInfo) -> io::Result<super::FileContent<'a>>;
+
 /// A [`Source`] to load assets from a zip archive.
 ///
 /// The archive can be backed by any reader that also implements [`io::Seek`]
 /// and [`Clone`].
-///
-/// **Warning**: This will clone the reader each time it is read, so you should
-/// ensure that is cheap to clone (eg *not* `Vec<u8>`).
 #[cfg_attr(docsrs, doc(cfg(feature = "zip")))]
 pub struct Zip<R = SyncFile> {
-    files: HashMap<FileDesc, usize>,
+    reader: R,
+    read_file: FileReader<R>,
+
+    files: HashMap<FileDesc, FileInfo>,
     dirs: HashMap<SharedString, Vec<OwnedEntry>>,
-    archive: ZipArchive<R>,
     label: Option<String>,
 }
 
@@ -155,7 +176,7 @@ impl<T: AsRef<[u8]>> Zip<io::Cursor<T>> {
     /// Creates a `Zip` archive backed by a byte buffer in memory.
     #[inline]
     pub fn from_bytes(bytes: T) -> io::Result<Self> {
-        Self::from_reader(io::Cursor::new(bytes))
+        Self::create(io::Cursor::new(bytes), read_file_bytes::<T>, None)
     }
 
     /// Creates a `Zip` archive backed by a byte buffer in memory.
@@ -163,43 +184,47 @@ impl<T: AsRef<[u8]>> Zip<io::Cursor<T>> {
     /// An additionnal label that will be used in errors can be added.
     #[inline]
     pub fn from_bytes_with_label(bytes: T, label: String) -> io::Result<Self> {
-        Self::from_reader_with_label(io::Cursor::new(bytes), label)
+        Self::create(io::Cursor::new(bytes), read_file_bytes::<T>, Some(label))
     }
 }
 
 impl<R> Zip<R>
 where
-    R: io::Read + io::Seek,
+    R: io::Read + io::Seek + Clone,
 {
     /// Creates a `Zip` archive backed by a reader that supports seeking.
+    ///
+    /// **Warning**: This will clone the reader each time a file is read, so you
+    /// should ensure that cloning is cheap.
     pub fn from_reader(reader: R) -> io::Result<Zip<R>> {
-        Self::create(reader, None)
+        Self::create(reader, read_file_reader::<R>, None)
     }
 
     /// Creates a `Zip` archive backed by a reader that supports seeking.
     ///
     /// An additionnal label that will be used in errors can be added.
+    ///
+    /// **Warning**: This will clone the reader each time a file is read, so you
+    /// should ensure that cloning is cheap.
     pub fn from_reader_with_label(reader: R, label: String) -> io::Result<Zip<R>> {
-        Self::create(reader, Some(label))
+        Self::create(reader, read_file_reader::<R>, Some(label))
     }
+}
 
-    fn create(reader: R, label: Option<String>) -> io::Result<Zip<R>> {
-        let mut archive = ZipArchive::new(reader)?;
-
-        let len = archive.len();
-        let mut files = HashMap::with_capacity(len);
-        let mut dirs = HashMap::new();
-        let mut id_builder = IdBuilder::default();
-
-        for index in 0..len {
-            let file = archive.by_index_raw(index)?;
-            register_file(file, index, &mut files, &mut dirs, &mut id_builder);
-        }
+impl<R: io::Read + io::Seek> Zip<R> {
+    fn create(
+        mut reader: R,
+        read_file: FileReader<R>,
+        label: Option<String>,
+    ) -> io::Result<Zip<R>> {
+        let (files, dirs) = read_archive(&mut reader)?;
 
         Ok(Zip {
+            reader,
+            read_file,
+
             files,
             dirs,
-            archive,
             label,
         })
     }
@@ -211,24 +236,12 @@ where
     R: io::Read + io::Seek + Clone,
 {
     fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
-        use io::Read;
-
-        // Get the file within the archive
-        let index = *self
+        let info = self
             .files
             .get(&(id, ext))
             .ok_or_else(|| error::find_file(id, &self.label))?;
-        let mut archive = self.archive.clone();
-        let mut file = archive
-            .by_index(index)
-            .map_err(|err| error::open_file(err, id, &self.label))?;
 
-        // Read it in a buffer
-        let mut content = Vec::with_capacity(file.size() as usize);
-        file.read_to_end(&mut content)
-            .map_err(|err| error::read_file(err, id, &self.label))?;
-
-        Ok(super::FileContent::Buffer(content))
+        (self.read_file)(&self.reader, info).map_err(|err| error::read_file(err, id, &self.label))
     }
 
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
@@ -257,9 +270,108 @@ impl<R> fmt::Debug for Zip<R> {
     }
 }
 
+trait ReadSeek: io::Read + io::Seek {}
+impl<R: io::Read + io::Seek> ReadSeek for R {}
+
+#[allow(clippy::type_complexity)]
+fn read_archive(
+    reader: &mut dyn ReadSeek,
+) -> io::Result<(
+    HashMap<FileDesc, FileInfo>,
+    HashMap<SharedString, Vec<OwnedEntry>>,
+)> {
+    let mut archive = ZipArchive::new(reader)?;
+
+    let len = archive.len();
+    let mut files = HashMap::with_capacity(len);
+    let mut dirs = HashMap::new();
+    let mut id_builder = IdBuilder::default();
+
+    for index in 0..len {
+        let file = archive.by_index_raw(index)?;
+        register_file(file, &mut files, &mut dirs, &mut id_builder);
+    }
+
+    Ok((files, dirs))
+}
+
+fn read_file_reader<'a, R: io::Read + io::Seek + Clone>(
+    reader: &'a R,
+    info: &FileInfo,
+) -> io::Result<super::FileContent<'a>> {
+    read_file_bufreader(io::BufReader::new(reader.clone()), info)
+}
+
+fn read_file_bufreader<R: io::BufRead + io::Seek>(
+    mut reader: R,
+    info: &FileInfo,
+) -> io::Result<super::FileContent<'static>> {
+    use io::Read;
+
+    reader.seek(io::SeekFrom::Start(info.start))?;
+    let mut reader = reader.take(info.compressed_size);
+
+    let mut buf = Vec::with_capacity(info.decompressed_size as usize);
+
+    match info.compression_method {
+        zip::CompressionMethod::Stored => reader.read_to_end(&mut buf)?,
+        #[cfg(feature = "zip-deflate")]
+        zip::CompressionMethod::Deflated => {
+            flate2::bufread::DeflateDecoder::new(reader).read_to_end(&mut buf)?
+        }
+        #[cfg(feature = "zip-zstd")]
+        zip::CompressionMethod::Zstd => zstd::Decoder::new(reader)?.read_to_end(&mut buf)?,
+        m => return Err(error::compression_method(m)),
+    };
+
+    if crc32fast::hash(&buf) != info.crc {
+        return Err(error::invalid_crc());
+    }
+
+    Ok(super::FileContent::Buffer(buf))
+}
+
+fn read_file_bytes<'a, T: AsRef<[u8]>>(
+    reader: &'a io::Cursor<T>,
+    info: &FileInfo,
+) -> io::Result<super::FileContent<'a>> {
+    if info.compression_method != zip::CompressionMethod::Stored {
+        let reader = io::Cursor::new(reader.get_ref().as_ref());
+        return read_file_bufreader(reader, info);
+    }
+
+    if info.compressed_size != info.decompressed_size {
+        return Err(io::ErrorKind::InvalidData.into());
+    }
+
+    let start = info.start as usize;
+    let zip = reader.get_ref().as_ref();
+    let file = zip
+        .get(start..start + info.compressed_size as usize)
+        .ok_or(io::ErrorKind::InvalidData)?;
+
+    if crc32fast::hash(file) != info.crc {
+        return Err(error::invalid_crc());
+    }
+
+    Ok(super::FileContent::Slice(file))
+}
+
 mod error {
     use std::{fmt, io};
-    use zip::result::ZipError;
+
+    #[cold]
+    pub fn compression_method(m: zip::CompressionMethod) -> io::Error {
+        io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("unsupported compression method: {m}"),
+        )
+    }
+
+    #[cold]
+    pub fn invalid_crc() -> io::Error {
+        io::Error::new(io::ErrorKind::InvalidData, "invalid crc")
+    }
 
     #[cold]
     pub fn find_file(id: &str, label: &Option<String>) -> io::Error {
@@ -295,41 +407,6 @@ mod error {
         };
 
         io::Error::new(err.kind(), Error { err, msg })
-    }
-
-    #[cold]
-    pub fn open_file(err: ZipError, id: &str, label: &Option<String>) -> io::Error {
-        #[derive(Debug)]
-        struct Error {
-            err: ZipError,
-            msg: String,
-        }
-        impl fmt::Display for Error {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str(&self.msg)
-            }
-        }
-        impl std::error::Error for Error {
-            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-                Some(&self.err)
-            }
-        }
-
-        let msg = match label {
-            Some(lbl) => format!("Could not open \"{id}\" in {lbl}"),
-            None => format!("Could not open \"{id}\" in ZIP"),
-        };
-
-        let kind = match &err {
-            ZipError::Io(err) => err.kind(),
-            ZipError::InvalidArchive(_) => io::ErrorKind::InvalidData,
-            ZipError::UnsupportedArchive(_) => io::ErrorKind::Unsupported,
-            ZipError::FileNotFound => io::ErrorKind::NotFound,
-            ZipError::InvalidPassword => io::ErrorKind::InvalidInput,
-            _ => io::ErrorKind::Other,
-        };
-
-        io::Error::new(kind, Error { err, msg })
     }
 
     #[cold]
