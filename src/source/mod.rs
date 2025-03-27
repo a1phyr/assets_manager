@@ -160,10 +160,10 @@ impl OwnedDirEntry {
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub(crate) fn as_dependency(&self) -> crate::hot_reloading::BorrowedDependency<'_> {
+    pub(crate) fn into_dependency(self) -> crate::hot_reloading::Dependency {
         match self {
-            OwnedDirEntry::File(id, ext) => crate::hot_reloading::BorrowedDependency::File(id, ext),
-            OwnedDirEntry::Directory(id) => crate::hot_reloading::BorrowedDependency::Directory(id),
+            OwnedDirEntry::File(id, ext) => crate::hot_reloading::Dependency::File(id, ext),
+            OwnedDirEntry::Directory(id) => crate::hot_reloading::Dependency::Directory(id),
         }
     }
 }

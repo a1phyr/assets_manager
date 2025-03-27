@@ -24,7 +24,7 @@ use crate::{
 pub use records::Recorder;
 pub use watcher::FsWatcherBuilder;
 
-pub(crate) use records::{BorrowedDependency, Dependencies, Dependency};
+pub(crate) use records::{Dependencies, Dependency};
 
 enum CacheMessage {
     AddAsset(AssetKey, Dependencies),
@@ -181,7 +181,7 @@ struct HotReloadingData {
     // fact that dropping the `HotReloader` drop the channel and therefore stop
     // the hot-reloading thread
     cache: WeakAssetCache,
-    to_reload: HashSet<OwnedDirEntry>,
+    to_reload: HashSet<Dependency>,
     deps: dependencies::DepsGraph,
 }
 
@@ -195,7 +195,8 @@ impl HotReloadingData {
     }
 
     fn handle_events(&mut self, events: Events) {
-        events.for_each(|entry| {
+        events.for_each(|event| {
+            let entry = event.into_dependency();
             if self.deps.contains(&entry) {
                 log::trace!("New event: {entry:?}");
                 self.to_reload.insert(entry);

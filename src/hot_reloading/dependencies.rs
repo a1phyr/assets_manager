@@ -1,7 +1,6 @@
-use super::{BorrowedDependency, Dependencies, Dependency};
+use super::{Dependencies, Dependency};
 use crate::{
     key::AssetKey,
-    source::OwnedDirEntry,
     utils::{HashMap, HashSet},
 };
 use hashbrown::hash_map::Entry;
@@ -75,7 +74,7 @@ impl DepsGraph {
 
     pub fn topological_sort_from<'a>(
         &self,
-        iter: impl IntoIterator<Item = &'a OwnedDirEntry>,
+        iter: impl IntoIterator<Item = &'a Dependency>,
     ) -> TopologicalSort {
         let mut sort_data = TopologicalSortData {
             visited: HashSet::new(),
@@ -83,34 +82,34 @@ impl DepsGraph {
         };
 
         for key in iter {
-            self.visit(&mut sort_data, key.as_dependency());
+            self.visit(&mut sort_data, key);
         }
 
         TopologicalSort(sort_data.list)
     }
 
-    fn visit(&self, sort_data: &mut TopologicalSortData, key: BorrowedDependency) {
-        if sort_data.visited.contains(&key) {
+    fn visit(&self, sort_data: &mut TopologicalSortData, key: &Dependency) {
+        if sort_data.visited.contains(key) {
             return;
         }
 
-        let node = match self.0.get(&key) {
+        let node = match self.0.get(key) {
             Some(deps) => deps,
             None => return,
         };
 
         for rdep in node.rdeps.iter() {
-            self.visit(sort_data, rdep.as_borrowed());
+            self.visit(sort_data, rdep);
         }
 
-        sort_data.visited.insert(key.into_owned());
-        if let BorrowedDependency::Asset(key) = key {
+        sort_data.visited.insert(key.clone());
+        if let Dependency::Asset(key) = key {
             sort_data.list.push(key.clone());
         }
     }
 
-    pub fn contains(&self, key: &OwnedDirEntry) -> bool {
-        self.0.contains_key(&key.as_dependency())
+    pub fn contains(&self, key: &Dependency) -> bool {
+        self.0.contains_key(key)
     }
 }
 

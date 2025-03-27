@@ -13,40 +13,7 @@ pub(crate) enum Dependency {
     Asset(AssetKey),
 }
 
-impl Dependency {
-    pub fn as_borrowed(&self) -> BorrowedDependency<'_> {
-        match self {
-            Dependency::File(id, ext) => BorrowedDependency::File(id, ext),
-            Dependency::Directory(id) => BorrowedDependency::Directory(id),
-            Dependency::Asset(key) => BorrowedDependency::Asset(key),
-        }
-    }
-}
-
 pub(crate) type Dependencies = HashSet<Dependency>;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum BorrowedDependency<'a> {
-    File(&'a SharedString, &'a SharedString),
-    Directory(&'a SharedString),
-    Asset(&'a AssetKey),
-}
-
-impl BorrowedDependency<'_> {
-    pub fn into_owned(self) -> Dependency {
-        match self {
-            BorrowedDependency::File(id, ext) => Dependency::File(id.clone(), ext.clone()),
-            BorrowedDependency::Directory(id) => Dependency::Directory(id.clone()),
-            BorrowedDependency::Asset(key) => Dependency::Asset(key.clone()),
-        }
-    }
-}
-
-impl hashbrown::Equivalent<Dependency> for BorrowedDependency<'_> {
-    fn equivalent(&self, key: &Dependency) -> bool {
-        *self == key.as_borrowed()
-    }
-}
 
 struct Record {
     reloader_addr: usize,
