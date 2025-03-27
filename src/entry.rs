@@ -393,18 +393,6 @@ where
     }
 }
 
-#[cfg(feature = "serde")]
-#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
-impl<T> serde::Serialize for Handle<T>
-where
-    T: serde::Serialize + ?Sized,
-{
-    #[inline]
-    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        self.read().serialize(s)
-    }
-}
-
 impl<T> fmt::Debug for Handle<T>
 where
     T: fmt::Debug + ?Sized,
