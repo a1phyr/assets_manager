@@ -81,7 +81,7 @@ fn register_file(
 
         // Register the file in the maps.
         let entry = if file.is_file() {
-            let ext = extension_of(path)?.into();
+            let ext = extension_of(&path)?.into();
             let desc = FileDesc(id, ext);
             files.insert(desc.clone(), index);
             OwnedEntry::File(desc)
@@ -325,6 +325,8 @@ mod error {
             ZipError::InvalidArchive(_) => io::ErrorKind::InvalidData,
             ZipError::UnsupportedArchive(_) => io::ErrorKind::Unsupported,
             ZipError::FileNotFound => io::ErrorKind::NotFound,
+            ZipError::InvalidPassword => io::ErrorKind::InvalidInput,
+            _ => io::ErrorKind::Other,
         };
 
         io::Error::new(kind, Error { err, msg })
