@@ -30,7 +30,6 @@ utils = ["dep:once_cell"]
 mmap = ["dep:memmap2"]
 
 zip = ["dep:zip", "dep:sync_file"]
-zip-bzip2 = ["zip", "zip/bzip2"]
 zip-deflate = ["zip", "zip/deflate"]
 zip-zstd = ["zip", "zip/zstd"]
 tar = ["dep:tar", "dep:sync_file"]
