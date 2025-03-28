@@ -168,14 +168,14 @@ impl OwnedDirEntry {
     }
 }
 
-/// A handle to an immutable memory mapped buffer.
+/// A clonable handle to an immutable memory mapped buffer.
 #[cfg(feature = "mmap")]
 #[cfg_attr(docsrs, doc(cfg(feature = "mmap")))]
 #[derive(Debug, Clone)]
-pub struct ArcMap(std::sync::Arc<memmap2::Mmap>);
+pub struct Mmap(std::sync::Arc<memmap2::Mmap>);
 
 #[cfg(feature = "mmap")]
-impl ArcMap {
+impl Mmap {
     /// Creates a read-only memory map backed by a file.
     ///
     /// ## Safety
@@ -192,7 +192,7 @@ impl ArcMap {
 }
 
 #[cfg(feature = "mmap")]
-impl AsRef<[u8]> for ArcMap {
+impl AsRef<[u8]> for Mmap {
     #[inline]
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
