@@ -207,7 +207,7 @@ impl AssetCache {
     /// - The asset has no extension
     #[inline]
     pub fn load<T: Compound>(&self, id: &str) -> Result<&Handle<T>, Error> {
-        let handle = self.load_entry(id, Type::of_asset::<T>())?;
+        let handle = self.load_untyped(id, Type::of_asset::<T>())?;
         Ok(handle.downcast_ref_ok())
     }
 
@@ -237,18 +237,11 @@ impl AssetCache {
         }
     }
 
-    fn load_entry(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
-        let result = match self.0.assets.get(id, typ.type_id) {
+    fn load_untyped(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
+        match self.get_cached_untyped(id, typ.type_id) {
             Some(handle) => Ok(handle),
             None => self.add_asset(id, typ),
-        };
-
-        #[cfg(feature = "hot-reloading")]
-        if let Ok(handle) = result {
-            self.add_record(handle);
         }
-
-        result
     }
 
     #[cold]
@@ -261,24 +254,22 @@ impl AssetCache {
             return Err(Error::new(id, crate::error::ErrorKind::InvalidId.into()));
         }
 
-        #[allow(unused_labels)]
-        let entry = 'h: {
-            #[cfg(feature = "hot-reloading")]
-            if typ.inner.hot_reloaded {
-                if let Some(reloader) = &self.0.reloader {
-                    let (entry, deps) = crate::hot_reloading::records::record(reloader, || {
-                        (typ.inner.load)(self, id)
-                    });
-                    if let Ok(entry) = &entry {
-                        reloader.add_asset(entry.inner().id().clone(), deps, typ);
-                    }
-                    break 'h entry;
-                }
+        #[cfg(feature = "hot-reloading")]
+        if typ.inner.hot_reloaded {
+            if let Some(reloader) = &self.0.reloader {
+                let (result, deps) =
+                    crate::hot_reloading::records::record(reloader, || (typ.inner.load)(self, id));
+                let entry = result?;
+
+                reloader.add_asset(entry.inner().id().clone(), deps, typ);
+
+                let handle = self.0.assets.insert(entry);
+                self.add_record(handle);
+                return Ok(handle);
             }
+        }
 
-            (typ.inner.load)(self, id)
-        }?;
-
+        let entry = (typ.inner.load)(self, id)?;
         Ok(self.0.assets.insert(entry))
     }
 
