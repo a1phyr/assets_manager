@@ -1,10 +1,13 @@
-use crate::{Asset, AssetCache, BoxedError, Compound, SharedString, loader, utils};
+use crate::{AssetCache, BoxedError, Compound, FileAsset, SharedString, utils};
 use std::path;
 
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
-impl Asset for gltf::Gltf {
+impl FileAsset for gltf::Gltf {
     const EXTENSIONS: &'static [&'static str] = &["glb", "gltf"];
-    type Loader = loader::GltfLoader;
+
+    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Result<Self, BoxedError> {
+        gltf::Gltf::from_slice(&bytes).map_err(Into::into)
+    }
 }
 
 /// Loads glTF 3D assets.
@@ -54,14 +57,11 @@ impl Gltf {
 #[derive(Clone)]
 struct Bin(Vec<u8>);
 
-impl Asset for Bin {
+impl FileAsset for Bin {
     const EXTENSION: &'static str = "bin";
-    type Loader = loader::LoadFrom<Vec<u8>, loader::BytesLoader>;
-}
 
-impl From<Vec<u8>> for Bin {
-    fn from(bytes: Vec<u8>) -> Self {
-        Self(bytes)
+    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Result<Self, BoxedError> {
+        Ok(Self(bytes.into_owned()))
     }
 }
 

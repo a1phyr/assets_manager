@@ -239,17 +239,6 @@ impl Loader<image::DynamicImage> for ImageLoader {
     }
 }
 
-/// Loads glTF assets.
-pub struct GltfLoader(());
-
-#[cfg(feature = "gltf")]
-#[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
-impl Loader<gltf::Gltf> for GltfLoader {
-    fn load(content: Cow<[u8]>, _: &str) -> Result<gltf::Gltf, BoxedError> {
-        Ok(gltf::Gltf::from_slice(&content)?)
-    }
-}
-
 /// Loads fonts.
 pub struct FontLoader(());
 
