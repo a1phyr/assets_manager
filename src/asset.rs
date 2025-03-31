@@ -179,6 +179,92 @@ pub trait Asset: Sized + Send + Sync + 'static {
     const HOT_RELOADED: bool = true;
 }
 
+/// An asset that can be loaded from a single file.
+pub trait FileAsset: Storable {
+    /// Use this field if your asset only uses one extension.
+    ///
+    /// This value is ignored if you set `EXTENSIONS` too.
+    const EXTENSION: &'static str = "";
+
+    /// This field enables you to specify multiple extension for an asset.
+    ///
+    /// If `EXTENSION` is provided, you don't have to set this constant.
+    ///
+    /// If this array is empty, loading an asset of this type returns an error
+    /// unless a default value is provided with the `default_value` method.
+    const EXTENSIONS: &'static [&'static str] = &[Self::EXTENSION];
+
+    /// Creates a value of this type from raw bytes.
+    fn from_bytes(bytes: Cow<[u8]>) -> Result<Self, BoxedError>;
+
+    /// Specifies a eventual default value to use if an asset fails to load. If
+    /// this method returns `Ok`, the returned value is used as an asset. In
+    /// particular, if this method always returns `Ok`, `AssetCache::load` is
+    /// guaranteed not to fail.
+    ///
+    /// The `id` parameter is given to easily report the error.
+    ///
+    /// By default, this method always returns an error.
+    ///
+    /// # Example
+    ///
+    /// On error, log it and return a default value:
+    ///
+    /// ```no_run
+    /// # cfg_if::cfg_if! { if #[cfg(feature = "json")] {
+    /// use assets_manager::{Asset, BoxedError, SharedString, loader};
+    /// use serde::Deserialize;
+    ///
+    /// #[derive(Deserialize, Default)]
+    /// struct Item {
+    ///     name: String,
+    ///     kind: String,
+    /// }
+    ///
+    /// impl Asset for Item {
+    ///     const EXTENSION: &'static str = "json";
+    ///     type Loader = loader::JsonLoader;
+    ///
+    ///     fn default_value(id: &SharedString, error: BoxedError) -> Result<Item, BoxedError> {
+    ///         eprintln!("Error loading {}: {}. Using default value", id, error);
+    ///         Ok(Item::default())
+    ///     }
+    /// }
+    /// # }}
+    /// ```
+    #[inline]
+    #[allow(unused_variables)]
+    fn default_value(id: &SharedString, error: BoxedError) -> Result<Self, BoxedError> {
+        Err(error)
+    }
+
+    /// If `false`, disable hot-reloading for assets of this type (`true` by
+    /// default). If so, you may want to implement [`NotHotReloaded`] for this
+    /// type to enable additional functions.
+    const HOT_RELOADED: bool = true;
+}
+
+/// Loads [`FileAsset`] types.
+#[non_exhaustive]
+#[allow(missing_debug_implementations)]
+pub struct AssetLoader;
+
+impl<T: FileAsset> loader::Loader<T> for AssetLoader {
+    #[inline]
+    fn load(bytes: Cow<[u8]>, _: &str) -> Result<T, BoxedError> {
+        T::from_bytes(bytes)
+    }
+}
+
+impl<T: FileAsset> Asset for T {
+    const EXTENSION: &'static str = T::EXTENSION;
+    const EXTENSIONS: &'static [&'static str] = T::EXTENSIONS;
+
+    type Loader = AssetLoader;
+
+    const HOT_RELOADED: bool = T::HOT_RELOADED;
+}
+
 /// An asset type that can load other kinds of assets.
 ///
 /// `Compound`s can be loaded and retrieved by an [`AssetCache`].
