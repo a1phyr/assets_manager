@@ -1,3 +1,42 @@
+use crate::*;
+use std::sync::Arc;
+
+#[test]
+fn string_assets_ok() {
+    let cache = AssetCache::new("assets").unwrap();
+
+    let contents = "Hello World!\n";
+
+    std::fs::write("assets/test/string_base.txt", "Hello World!\n").unwrap();
+
+    assert_eq!(
+        &**cache.load_expect::<String>("test.string_base").read(),
+        contents
+    );
+    assert_eq!(
+        &**cache.load_expect::<Box<str>>("test.string_base").read(),
+        contents
+    );
+    assert_eq!(
+        &**cache.load_expect::<SharedString>("test.string_base").read(),
+        contents
+    );
+    assert_eq!(
+        &**cache.load_expect::<Arc<str>>("test.string_base").read(),
+        contents
+    );
+}
+
+#[test]
+fn string_utf8_err() {
+    let cache = AssetCache::new("assets").unwrap();
+
+    std::fs::write("assets/test/invalid.txt", b"e\xa2").unwrap();
+
+    let err = cache.load::<String>("test.invalid").unwrap_err();
+    err.downcast::<std::str::Utf8Error>().unwrap();
+}
+
 #[cfg(feature = "gltf")]
 mod gltf {
     use crate::*;

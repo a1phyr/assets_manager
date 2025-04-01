@@ -346,19 +346,30 @@ pub trait Storable: Sized + Send + Sync + 'static {}
 
 impl<T> Storable for T where T: Send + Sync + 'static {}
 
+#[inline]
+fn cow_bytes_to_str(bytes: Cow<[u8]>) -> Result<Cow<str>, std::str::Utf8Error> {
+    Ok(match bytes {
+        Cow::Borrowed(b) => Cow::Borrowed(std::str::from_utf8(b)?),
+        Cow::Owned(b) => Cow::Owned(String::from_utf8(b).map_err(|e| e.utf8_error())?),
+    })
+}
+
 macro_rules! string_assets {
     ( $( $typ:ty, )* ) => {
         $(
-            impl Asset for $typ {
+            impl FileAsset for $typ {
                 const EXTENSION: &'static str = "txt";
-                type Loader = loader::StringLoader;
+
+                fn from_bytes(bytes: Cow<[u8]>) -> Result<Self, BoxedError> {
+                    Ok(cow_bytes_to_str(bytes)?.into())
+                }
             }
         )*
     }
 }
 
 string_assets! {
-    String, Box<str>, SharedString,
+    String, Box<str>, SharedString, Arc<str>,
 }
 
 macro_rules! serde_assets {
