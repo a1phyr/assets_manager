@@ -179,6 +179,7 @@ mod asset_cache {
 
         assert_eq!(*handle.read(), X(42));
         assert_eq!(*cache.get_cached::<X>("test.cache").unwrap().read(), X(42));
+        assert!(cache.contains::<X>("test.cache"));
 
         assert_eq!(*cache.load::<X>("test.b").unwrap().read(), X(-7));
         assert!(fallback.get_cached::<X>("test.b").is_none());

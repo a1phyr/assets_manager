@@ -380,7 +380,23 @@ impl AssetCache {
     /// Returns `true` if the cache contains the specified asset.
     #[inline]
     pub fn contains<T: Storable>(&self, id: &str) -> bool {
-        self.0.assets.contains_key(id, TypeId::of::<T>())
+        self.contains_untyped(id, TypeId::of::<T>())
+    }
+
+    /// Returns `true` if the cache contains the specified asset.
+    fn contains_untyped(&self, id: &str, type_id: TypeId) -> bool {
+        let mut cur = self;
+
+        loop {
+            if cur.0.assets.contains_key(id, type_id) {
+                return true;
+            }
+
+            match &cur.0.kind {
+                CacheKind::Root { .. } => return false,
+                CacheKind::WithFallback { fallback } => cur = fallback,
+            }
+        }
     }
 
     /// Loads a directory.
