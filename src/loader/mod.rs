@@ -239,9 +239,6 @@ impl Loader<image::DynamicImage> for ImageLoader {
     }
 }
 
-/// Loads fonts.
-pub struct FontLoader(());
-
 macro_rules! serde_loaders {
     (
         $(
