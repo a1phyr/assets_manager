@@ -542,19 +542,13 @@ macro_rules! image_assets {
 
             #[cfg(feature = $feature)]
             #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
-            impl loader::Loader<$name> for loader::ImageLoader {
-                #[inline]
-                fn load(content: Cow<[u8]>, _: &str) -> Result<$name, BoxedError> {
-                    let img = image::load_from_memory_with_format(&content, $format)?;
-                    Ok($name(img))
-                }
-            }
-
-            #[cfg(feature = $feature)]
-            #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
-            impl Asset for $name {
+            impl FileAsset for $name {
                 const EXTENSIONS: &'static [&'static str] = &[$( $ext ),*];
-                type Loader = loader::ImageLoader;
+
+                fn from_bytes(data: Cow<[u8]>) -> Result<Self, BoxedError> {
+                    let img = image::load_from_memory_with_format(&data, $format)?;
+                    Ok(Self(img))
+                }
             }
         )*
     }
