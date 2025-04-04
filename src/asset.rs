@@ -435,8 +435,8 @@ macro_rules! serde_assets {
             #[doc = $doc:literal]
             #[cfg(feature = $feature:literal)]
             struct $name:ident => (
-                $loader:path,
                 [$($ext:literal),*],
+                $load:expr,
             );
         )*
     ) => {
@@ -518,12 +518,15 @@ macro_rules! serde_assets {
 
             #[cfg(feature = $feature)]
             #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
-            impl<T> Asset for $name<T>
+            impl<T> FileAsset for $name<T>
             where
                 T: for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
             {
                 const EXTENSIONS: &'static [&'static str] = &[$( $ext ),*];
-                type Loader = loader::LoadFrom<T, $loader>;
+
+                fn from_bytes(bytes: Cow<[u8]>) -> Result<Self, BoxedError> {
+                    $load(&*bytes).map(Self)
+                }
             }
 
             #[cfg(feature = $feature)]
@@ -552,29 +555,29 @@ serde_assets! {
     /// Loads a value from a RON file.
     #[cfg(feature = "json")]
     struct Json => (
-        loader::JsonLoader,
         ["json"],
+        load_json,
     );
 
     /// Loads a value from a JSON file.
     #[cfg(feature = "ron")]
     struct Ron => (
-        loader::RonLoader,
         ["ron"],
+        load_ron,
     );
 
     /// Loads a value from a TOML file.
     #[cfg(feature = "toml")]
     struct Toml => (
-        loader::TomlLoader,
         ["toml"],
+        load_toml,
     );
 
     /// Loads a value from a YAML file.
     #[cfg(feature = "yaml")]
     struct Yaml => (
-        loader::YamlLoader,
         ["yaml", "yml"],
+        load_yaml,
     );
 }
 
