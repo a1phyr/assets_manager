@@ -52,7 +52,7 @@ struct FileInfo {
 
 /// Register a file of an archive in maps.
 fn register_file(
-    file: ZipFile,
+    file: ZipFile<'_, &mut dyn ReadSeek>,
     files: &mut HashMap<FileDesc, FileInfo>,
     dirs: &mut HashMap<SharedString, Vec<OwnedEntry>>,
     id_builder: &mut IdBuilder,
