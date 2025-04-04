@@ -372,6 +372,63 @@ string_assets! {
     String, Box<str>, SharedString, Arc<str>,
 }
 
+/// Deserializes a value from a bincode-encoded file.
+///
+/// This function uses the standard bincode format, which is the default in bincode 2.0.
+#[cfg(feature = "bincode")]
+#[cfg_attr(docsrs, doc(cfg(feature = "bincode")))]
+pub fn load_bincode<'de, T: serde::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
+    let (res, _) = bincode::serde::borrow_decode_from_slice(bytes, bincode::config::standard())?;
+    Ok(res)
+}
+
+/// Deserializes a value from a bincode-encoded file.
+///
+/// This function uses the legacy bincode format, which was the default in bincode 1.0.
+#[cfg(feature = "bincode")]
+#[cfg_attr(docsrs, doc(cfg(feature = "bincode")))]
+pub fn load_bincode_legacy<'de, T: serde::Deserialize<'de>>(
+    bytes: &'de [u8],
+) -> Result<T, BoxedError> {
+    let (res, _) = bincode::serde::borrow_decode_from_slice(bytes, bincode::config::legacy())?;
+    Ok(res)
+}
+
+/// Deserializes a value from a JSON file.
+#[cfg(feature = "json")]
+#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
+pub fn load_json<'de, T: serde::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
+    serde_json::from_slice(bytes).map_err(Box::from)
+}
+
+/// Deserializes a value from a msgpack-encoded file.
+#[cfg(feature = "msgpack")]
+#[cfg_attr(docsrs, doc(cfg(feature = "msgpack")))]
+pub fn load_msgpack<'de, T: serde::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
+    rmp_serde::from_slice(bytes).map_err(Box::from)
+}
+
+/// Deserializes a value from a RON file.
+#[cfg(feature = "ron")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ron")))]
+pub fn load_ron<'de, T: serde::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
+    ron::de::from_bytes(bytes).map_err(Box::from)
+}
+
+/// Deserializes a value from a TOML file.
+#[cfg(feature = "toml")]
+#[cfg_attr(docsrs, doc(cfg(feature = "toml")))]
+pub fn load_toml<'de, T: serde::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
+    basic_toml::from_slice(bytes).map_err(Box::from)
+}
+
+/// Deserializes a value from a YAML file.
+#[cfg(feature = "yaml")]
+#[cfg_attr(docsrs, doc(cfg(feature = "yaml")))]
+pub fn load_yaml<'de, T: serde::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
+    serde_yaml::from_slice(bytes).map_err(Box::from)
+}
+
 macro_rules! serde_assets {
     (
         $(

@@ -263,7 +263,7 @@ macro_rules! serde_loaders {
             {
                 #[inline]
                 fn load(content: Cow<[u8]>, _: &str) -> Result<T, BoxedError> {
-                    Ok($fun(&*content)?)
+                    $fun(&*content)
                 }
             }
         )*
@@ -273,27 +273,25 @@ macro_rules! serde_loaders {
 serde_loaders! {
     /// Loads assets from Bincode encoded files.
     #[cfg(feature = "bincode")]
-    struct BincodeLoader => |data| {
-        bincode::serde::decode_from_slice(data, bincode::config::legacy()).map(|v| v.0)
-    };
+    struct BincodeLoader => crate::asset::load_bincode_legacy;
 
     /// Loads assets from JSON files.
     #[cfg(feature = "json")]
-    struct JsonLoader => serde_json::from_slice;
+    struct JsonLoader => crate::asset::load_json;
 
     /// Loads assets from MessagePack files.
     #[cfg(feature = "msgpack")]
-    struct MessagePackLoader => rmp_serde::from_slice;
+    struct MessagePackLoader => crate::asset::load_msgpack;
 
     /// Loads assets from RON files.
     #[cfg(feature = "ron")]
-    struct RonLoader => ron::de::from_bytes;
+    struct RonLoader => crate::asset::load_ron;
 
     /// Loads assets from TOML files.
     #[cfg(feature = "toml")]
-    struct TomlLoader => basic_toml::from_slice;
+    struct TomlLoader => crate::asset::load_toml;
 
     /// Loads assets from YAML files.
     #[cfg(feature = "yaml")]
-    struct YamlLoader => serde_yaml::from_slice;
+    struct YamlLoader => crate::asset::load_yaml;
 }
