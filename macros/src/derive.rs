@@ -13,11 +13,11 @@ enum Format {
 impl Format {
     fn path(self) -> TokenStream {
         match self {
-            Format::Json => quote::quote!(::assets_manager::loader::JsonLoader),
-            Format::Ron => quote::quote!(::assets_manager::loader::RonLoader),
-            Format::Toml => quote::quote!(::assets_manager::loader::TomlLoader),
-            Format::Txt => quote::quote!(::assets_manager::loader::ParseLoader),
-            Format::Yaml => quote::quote!(::assets_manager::loader::YamlLoader),
+            Format::Json => quote::quote!(::assets_manager::asset::load_json),
+            Format::Ron => quote::quote!(::assets_manager::asset::load_ron),
+            Format::Toml => quote::quote!(::assets_manager::asset::load_toml),
+            Format::Txt => quote::quote!(::assets_manager::asset::load_text),
+            Format::Yaml => quote::quote!(::assets_manager::asset::load_yaml),
         }
     }
 
@@ -49,9 +49,11 @@ pub fn run(input: syn::DeriveInput) -> syn::Result<TokenStream> {
     add_clauses(&mut where_gen, format);
 
     Ok(quote::quote! {
-        impl #impl_gen ::assets_manager::Asset for #asset #ty_gen #where_gen {
+        impl #impl_gen ::assets_manager::FileAsset for #asset #ty_gen #where_gen {
             const EXTENSIONS: &'static [&'static str] = #ext;
-            type Loader = #loader;
+            fn from_bytes(bytes: ::std::borrow::Cow<[u8]>) -> Result<Self, ::assets_manager::BoxedError> {
+                #loader(&bytes)
+            }
         }
     })
 }
