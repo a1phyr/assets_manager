@@ -1,5 +1,4 @@
 use super::*;
-use crate::tests::X;
 
 fn raw(s: &str) -> Cow<[u8]> {
     s.as_bytes().into()
@@ -57,9 +56,9 @@ fn from_other() {
     let s = &format!("{n}");
     let raw = raw(s);
 
-    let loaded: X = LoadFrom::<i32, ParseLoader>::load(raw, "").unwrap();
+    let loaded: i64 = LoadFrom::<i32, ParseLoader>::load(raw, "").unwrap();
 
-    assert_eq!(loaded, X(n));
+    assert_eq!(loaded, n as i64);
 }
 
 cfg_if::cfg_if! { if #[cfg(feature = "serde")] {

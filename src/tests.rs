@@ -3,29 +3,24 @@ use crate::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct X(pub i32);
 
-impl From<i32> for X {
-    fn from(n: i32) -> X {
-        X(n)
-    }
-}
-
-impl Asset for X {
-    type Loader = loader::LoadFrom<i32, loader::ParseLoader>;
+impl FileAsset for X {
     const EXTENSION: &'static str = "x";
+
+    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Result<Self, BoxedError> {
+        crate::asset::load_text(&bytes).map(X)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct XS(pub i32);
 
-impl From<i32> for XS {
-    fn from(n: i32) -> XS {
-        XS(n)
-    }
-}
-
-impl Asset for XS {
-    type Loader = loader::LoadFrom<i32, loader::ParseLoader>;
+impl FileAsset for XS {
     const EXTENSION: &'static str = "x";
+
+    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Result<Self, BoxedError> {
+        crate::asset::load_text(&bytes).map(XS)
+    }
+
     const HOT_RELOADED: bool = false;
 }
 
