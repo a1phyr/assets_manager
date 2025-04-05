@@ -2,21 +2,14 @@
 //!
 //! The asset is stored in RON, in the file `assets/example/monsters/goblin.ron`.
 
-use assets_manager::{Asset, AssetCache, BoxedError, loader};
+use assets_manager::{AssetCache, BoxedError};
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, assets_manager::Asset)]
+#[asset_format = "ron"]
 struct Monster {
     name: String,
     description: String,
     health: u32,
-}
-
-impl Asset for Monster {
-    // The extension used by our type
-    const EXTENSION: &'static str = "ron";
-
-    // The way we load our data: here we use RON format
-    type Loader = loader::RonLoader;
 }
 
 fn main() -> Result<(), BoxedError> {

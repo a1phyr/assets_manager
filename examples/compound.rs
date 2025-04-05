@@ -1,7 +1,7 @@
 //! This example shows the use of Compound assets: assets able to load other
 //! assets, and their integration with hot-reloading.
 
-use assets_manager::{Asset, AssetCache, BoxedError, Compound, SharedString, loader};
+use assets_manager::{AssetCache, BoxedError, Compound, FileAsset, SharedString};
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -15,9 +15,15 @@ struct Monster {
 }
 
 /// Monsters are stored in RON
-impl Asset for Monster {
+///
+/// We can use the derive macro like in the example in `basic.rs`, but here we
+/// implement the loading logic manually to show how to load to do it.
+impl FileAsset for Monster {
     const EXTENSION: &'static str = "ron";
-    type Loader = loader::RonLoader;
+
+    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Result<Self, BoxedError> {
+        assets_manager::asset::load_ron(&bytes)
+    }
 }
 
 /// The format of a level description.
@@ -30,9 +36,12 @@ struct LevelManifest {
     spawn_table: Vec<(String, u32)>,
 }
 
-impl Asset for LevelManifest {
+impl FileAsset for LevelManifest {
     const EXTENSION: &'static str = "ron";
-    type Loader = loader::RonLoader;
+
+    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Result<Self, BoxedError> {
+        assets_manager::asset::load_ron(&bytes)
+    }
 }
 
 /// The structure we use to store an in-game level

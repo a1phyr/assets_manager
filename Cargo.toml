@@ -95,7 +95,7 @@ env_logger = "0.11"
 
 [[example]]
 name = "basic"
-required-features = ["ron"]
+required-features = ["ron", "macros"]
 
 [[example]]
 name = "hot_reloading"
