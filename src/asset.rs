@@ -429,6 +429,19 @@ pub fn load_yaml<'de, T: serde::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T,
     serde_yaml::from_slice(bytes).map_err(Box::from)
 }
 
+/// Deserializes a value from text.
+///
+/// Leading and trailing whitespaces are trimmed from the input before
+/// processing.
+pub fn load_text<T>(bytes: &[u8]) -> Result<T, BoxedError>
+where
+    T: std::str::FromStr,
+    T::Err: Into<BoxedError>,
+{
+    let str = std::str::from_utf8(bytes)?;
+    str.trim().parse().map_err(Into::into)
+}
+
 macro_rules! serde_assets {
     (
         $(
