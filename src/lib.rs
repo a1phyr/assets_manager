@@ -61,8 +61,9 @@
 //!
 //! ```
 //! # cfg_if::cfg_if! { if #[cfg(feature = "ron")] {
-//! use assets_manager::{Asset, AssetCache, loader};
+//! use assets_manager::{BoxedError, AssetCache, FileAsset};
 //! use serde::Deserialize;
+//! use std::borrow::Cow;
 //!
 //! // The struct you want to load
 //! #[derive(Deserialize)]
@@ -72,12 +73,15 @@
 //! }
 //!
 //! // Specify how you want the structure to be loaded
-//! impl Asset for Point {
+//! impl FileAsset for Point {
 //!     // The extension of the files to look into
 //!     const EXTENSION: &'static str = "ron";
 //!
 //!     // The serialization format
-//!     type Loader = loader::RonLoader;
+//!     // In this specific case, the derive macro could be used.
+//!     fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Result<Self, BoxedError> {
+//!         assets_manager::asset::load_ron(&bytes)
+//!     }
 //! }
 //!
 //!
@@ -235,7 +239,7 @@ pub use utils::{SharedBytes, SharedString};
 ///
 /// ```rust
 /// # cfg_if::cfg_if! { if #[cfg(feature = "ron")] {
-/// # use assets_manager::{Asset, AssetCache, BoxedError};
+/// use assets_manager::{Asset, AssetCache, BoxedError};
 /// // Define a type loaded as ron
 /// #[derive(Asset, serde::Deserialize)]
 /// #[asset_format = "ron"]

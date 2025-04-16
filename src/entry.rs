@@ -313,7 +313,7 @@ impl<T: ?Sized> Handle<T> {
     ///
     /// ```no_run
     /// # cfg_if::cfg_if! { if #[cfg(feature = "hot-reloading")] {
-    /// use assets_manager::{Asset, AssetCache, ReloadWatcher};
+    /// use assets_manager::{AssetCache, ReloadWatcher};
     ///
     /// let cache = AssetCache::new("assets")?;
     /// let asset = cache.load::<String>("common.some_text")?;

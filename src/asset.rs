@@ -91,8 +91,9 @@ use crate::Handle;
 ///
 /// ```no_run
 /// # cfg_if::cfg_if! { if #[cfg(feature = "bincode")] {
-/// use assets_manager::{Asset, loader};
+/// use assets_manager::{BoxedError, FileAsset};
 /// use serde::Deserialize;
+/// use std::borrow::Cow;
 ///
 /// #[derive(Deserialize)]
 /// struct Vector {
@@ -107,9 +108,12 @@ use crate::Handle;
 ///     speed: Vec<Vector>,
 /// }
 ///
-/// impl Asset for World {
+/// impl FileAsset for World {
 ///     const EXTENSION: &'static str = "data";
-///     type Loader = loader::BincodeLoader;
+///
+///     fn from_bytes(bytes: Cow<[u8]>) -> Result<Self, BoxedError> {
+///         assets_manager::asset::load_bincode_standard(&bytes)
+///     }
 /// }
 /// # }}
 /// ```
@@ -212,8 +216,9 @@ pub trait FileAsset: Storable {
     ///
     /// ```no_run
     /// # cfg_if::cfg_if! { if #[cfg(feature = "json")] {
-    /// use assets_manager::{Asset, BoxedError, SharedString, loader};
+    /// use assets_manager::{BoxedError, FileAsset, SharedString};
     /// use serde::Deserialize;
+    /// use std::borrow::Cow;
     ///
     /// #[derive(Deserialize, Default)]
     /// struct Item {
@@ -221,9 +226,12 @@ pub trait FileAsset: Storable {
     ///     kind: String,
     /// }
     ///
-    /// impl Asset for Item {
+    /// impl FileAsset for Item {
     ///     const EXTENSION: &'static str = "json";
-    ///     type Loader = loader::JsonLoader;
+    ///
+    ///     fn from_bytes(bytes: Cow<[u8]>) -> Result<Self, BoxedError> {
+    ///         assets_manager::asset::load_json(&bytes)
+    ///     }
     ///
     ///     fn default_value(id: &SharedString, error: BoxedError) -> Result<Item, BoxedError> {
     ///         eprintln!("Error loading {}: {}. Using default value", id, error);

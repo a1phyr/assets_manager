@@ -21,7 +21,7 @@ use std::{fmt, io, marker::PhantomData};
 /// ```no_run
 /// # cfg_if::cfg_if! { if #[cfg(feature = "json")] {
 /// use assets_manager::{
-///     Asset, AssetCache, Compound, BoxedError, SharedString,
+///     AssetCache, Compound, BoxedError, FileAsset, SharedString,
 ///     asset::{DirLoadable, Json},
 ///     source::{DirEntry, Source},
 /// };
@@ -32,14 +32,11 @@ use std::{fmt, io, marker::PhantomData};
 ///     /* ... */
 /// }
 ///
-/// impl Asset for Music {
+/// impl FileAsset for Music {
 ///     /* ... */
 /// #   const EXTENSION: &'static str = "ogg";
-/// #   type Loader = assets_manager::loader::SoundLoader;
+/// #   fn from_bytes(_: std::borrow::Cow<'_, [u8]>) -> Result<Self, BoxedError> { todo!() }
 /// }
-/// # impl assets_manager::loader::Loader<Music> for assets_manager::loader::SoundLoader {
-/// #   fn load(_: std::borrow::Cow<'_, [u8]>, _: &str) -> Result<Music, assets_manager::BoxedError> { todo!() }
-/// # }
 ///
 /// /// A simple playlist, an ordered list of musics.
 /// struct Playlist {
@@ -67,7 +64,7 @@ use std::{fmt, io, marker::PhantomData};
 ///         let mut ids = Vec::new();
 ///
 ///         // Select all files with "json" extension (manifest files)
-///         cache.raw_source().read_dir(id, &mut |entry| {
+///         cache.source().read_dir(id, &mut |entry| {
 ///             if let DirEntry::File(id, ext) = entry {
 ///                 if ext == "json" {
 ///                     ids.push(id.into());

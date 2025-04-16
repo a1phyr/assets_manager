@@ -37,19 +37,15 @@ pub(crate) struct CacheId(usize);
 /// # Example
 ///
 /// ```
-/// # cfg_if::cfg_if! { if #[cfg(feature = "ron")] {
-/// use assets_manager::{Asset, AssetCache, loader};
+/// # cfg_if::cfg_if! { if #[cfg(all(feature = "ron", feature = "macros"))] {
+/// use assets_manager::{Asset, AssetCache};
 /// use serde::Deserialize;
 ///
-/// #[derive(Debug, Deserialize)]
+/// #[derive(Debug, Deserialize, Asset)]
+/// #[asset_format = "ron"]
 /// struct Point {
 ///     x: i32,
 ///     y: i32,
-/// }
-///
-/// impl Asset for Point {
-///     const EXTENSION: &'static str = "ron";
-///     type Loader = loader::RonLoader;
 /// }
 ///
 /// // Create a cache
@@ -69,8 +65,6 @@ pub(crate) struct CacheId(usize);
 ///
 /// // Use hot-reloading
 /// loop {
-/// #   #[cfg(feature = "hot-reloading")]
-///     cache.hot_reload();
 ///     println!("Position: {:?}", point_handle.read());
 /// #   break;
 /// }
