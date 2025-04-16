@@ -377,7 +377,9 @@ string_assets! {
 /// This function uses the standard bincode format, which is the default in bincode 2.0.
 #[cfg(feature = "bincode")]
 #[cfg_attr(docsrs, doc(cfg(feature = "bincode")))]
-pub fn load_bincode<'de, T: serde::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
+pub fn load_bincode_standard<'de, T: serde::Deserialize<'de>>(
+    bytes: &'de [u8],
+) -> Result<T, BoxedError> {
     let (res, _) = bincode::serde::borrow_decode_from_slice(bytes, bincode::config::standard())?;
     Ok(res)
 }
