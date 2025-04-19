@@ -25,5 +25,5 @@ symphonia-vorbis = ["rodio/symphonia-vorbis"]
 symphonia-wav = ["rodio/symphonia-wav"]
 
 [dependencies]
-assets_manager = { version = "0.12", default-features = false }
+assets_manager = { version = "0.12", default-features = false, path = "../.." }
 rodio = { version = "0.20", default-features = false }

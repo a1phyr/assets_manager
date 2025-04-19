@@ -21,7 +21,7 @@ wav = ["kira/wav"]
 
 
 [dependencies]
-assets_manager = { version = "0.12", default-features = false }
+assets_manager = { version = "0.12", default-features = false, path = "../.." }
 kira = { version = "0.10", default-features = false, features = ["symphonia"] }
 
 [dev-dependencies]
