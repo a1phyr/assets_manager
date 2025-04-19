@@ -1,4 +1,4 @@
-use crate::{AssetCache, BoxedError, Compound, SharedString, Storable, asset::DirLoadable};
+use crate::{Asset, AssetCache, BoxedError, SharedString, Storable, asset::DirLoadable};
 use once_cell::sync::OnceCell;
 use std::{cell::UnsafeCell, fmt, mem::ManuallyDrop};
 
@@ -251,7 +251,7 @@ impl<U, T: fmt::Debug> fmt::Debug for OnceInitCell<U, T> {
     }
 }
 
-impl<U: Compound, T: Storable> Compound for OnceInitCell<U, T> {
+impl<U: Asset, T: Storable> Asset for OnceInitCell<U, T> {
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
         Ok(OnceInitCell::new(U::load(cache, id)?))
     }
@@ -259,7 +259,7 @@ impl<U: Compound, T: Storable> Compound for OnceInitCell<U, T> {
     const HOT_RELOADED: bool = U::HOT_RELOADED;
 }
 
-impl<U: Compound, T: Storable> Compound for OnceInitCell<Option<U>, T> {
+impl<U: Asset, T: Storable> Asset for OnceInitCell<Option<U>, T> {
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
         Ok(OnceInitCell::new(Some(U::load(cache, id)?)))
     }

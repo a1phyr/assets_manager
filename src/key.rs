@@ -1,10 +1,10 @@
 use std::{any::TypeId, fmt, hash};
 
-use crate::{AssetCache, Compound, Error, SharedString, cache::CacheId, entry::CacheEntry};
+use crate::{Asset, AssetCache, Error, SharedString, cache::CacheId, entry::CacheEntry};
 
 impl Inner {
-    fn of<T: Compound>() -> &'static Self {
-        fn load<T: Compound>(cache: &AssetCache, id: SharedString) -> Result<CacheEntry, Error> {
+    fn of<T: Asset>() -> &'static Self {
+        fn load<T: Asset>(cache: &AssetCache, id: SharedString) -> Result<CacheEntry, Error> {
             match T::load(cache, &id) {
                 Ok(asset) => Ok(CacheEntry::new(asset, id, || cache.is_hot_reloaded())),
                 Err(err) => Err(Error::new(id, err)),
@@ -35,7 +35,7 @@ pub(crate) struct Type {
 impl Type {
     /// Creates an `AssetType` for type `T`.
     #[inline]
-    pub(crate) fn of_asset<T: Compound>() -> Self {
+    pub(crate) fn of_asset<T: Asset>() -> Self {
         Self {
             type_id: TypeId::of::<T>(),
             inner: Inner::of::<T>(),

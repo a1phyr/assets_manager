@@ -148,7 +148,7 @@ pub trait FileAsset: Storable {
 /// asset cannot depend on itself, or it may cause deadlocks to happen.
 ///
 /// To opt out of dependencies recording, use [`AssetCache::no_record`].
-pub trait Compound: Sized + Send + Sync + 'static {
+pub trait Asset: Storable {
     /// Loads an asset from the cache.
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError>;
 
@@ -158,6 +158,19 @@ pub trait Compound: Sized + Send + Sync + 'static {
     const HOT_RELOADED: bool = true;
 }
 
+/// Deprecated trait alias for [`Asset`].
+#[deprecated = "Use `Asset` instead"]
+pub trait Compound: Asset {
+    /// Loads an asset from the cache.
+    fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError>;
+
+    /// If `false`, disable hot-reloading for assets of this type (`true` by
+    /// default). This avoids having to lock the asset to read it (ie it makes
+    /// [`Handle::read`] a noop)
+    const HOT_RELOADED: bool = true;
+}
+
+#[allow(deprecated)]
 impl<T> Compound for T
 where
     T: FileAsset,
@@ -188,9 +201,18 @@ where
     const HOT_RELOADED: bool = Self::HOT_RELOADED;
 }
 
-impl<T> Compound for Arc<T>
+#[allow(deprecated)]
+impl<T: Compound> Asset for T {
+    fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
+        <T as Compound>::load(cache, id)
+    }
+
+    const HOT_RELOADED: bool = <T as Compound>::HOT_RELOADED;
+}
+
+impl<T> Asset for Arc<T>
 where
-    T: Compound,
+    T: Asset,
 {
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
         let asset = T::load(cache, id)?;

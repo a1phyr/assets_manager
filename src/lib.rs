@@ -187,7 +187,8 @@
 extern crate self as assets_manager;
 
 pub mod asset;
-pub use asset::{Compound, FileAsset, Storable};
+#[allow(deprecated)]
+pub use asset::{Asset, Compound, FileAsset, Storable};
 
 mod cache;
 pub use cache::AssetCache;

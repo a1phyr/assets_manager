@@ -1,5 +1,5 @@
 use crate::{
-    AssetCache, BoxedError, Compound, Error, FileAsset, Handle, SharedString, Storable,
+    Asset, AssetCache, BoxedError, Error, FileAsset, Handle, SharedString, Storable,
     source::{DirEntry, Source},
 };
 
@@ -11,7 +11,7 @@ use std::{fmt, io, marker::PhantomData};
 /// load all available assets in a directory (eventually recursively).
 ///
 /// This trait is automatically implemented for all types that implement
-/// [`FileAsset`], and you can implement it to extend your own `Compound`s.
+/// [`FileAsset`], and you can implement it to extend your own `Asset`s.
 ///
 /// # Exemple implementation
 ///
@@ -21,7 +21,7 @@ use std::{fmt, io, marker::PhantomData};
 /// ```no_run
 /// # cfg_if::cfg_if! { if #[cfg(feature = "json")] {
 /// use assets_manager::{
-///     AssetCache, Compound, BoxedError, FileAsset, SharedString,
+///     AssetCache, Asset, BoxedError, FileAsset, SharedString,
 ///     asset::{DirLoadable, Json},
 ///     source::{DirEntry, Source},
 /// };
@@ -44,7 +44,7 @@ use std::{fmt, io, marker::PhantomData};
 /// }
 ///
 /// // Specify how to load a playlist
-/// impl Compound for Playlist {
+/// impl Asset for Playlist {
 ///     fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
 ///         // Read the manifest (a list of ids)
 ///         let manifest = cache.load::<Json<Vec<String>>>(id)?.read();
@@ -154,7 +154,7 @@ pub struct RawDirectory<T> {
     _marker: PhantomData<T>,
 }
 
-impl<T> Compound for RawDirectory<T>
+impl<T> Asset for RawDirectory<T>
 where
     T: DirLoadable,
 {
@@ -200,7 +200,7 @@ where
 
 impl<T> RawDirectory<T>
 where
-    T: Compound,
+    T: Asset,
 {
     /// Returns an iterator over the assets in the directory.
     ///
@@ -229,7 +229,7 @@ pub struct RawRecursiveDirectory<T> {
     _marker: PhantomData<T>,
 }
 
-impl<T> Compound for RawRecursiveDirectory<T>
+impl<T> Asset for RawRecursiveDirectory<T>
 where
     T: DirLoadable,
 {
@@ -280,7 +280,7 @@ where
 
 impl<T> RawRecursiveDirectory<T>
 where
-    T: Compound,
+    T: Asset,
 {
     /// Returns an iterator over the assets in the directory.
     ///
@@ -309,9 +309,9 @@ pub struct Directory<T> {
     _marker: PhantomData<T>,
 }
 
-impl<T> Compound for Directory<T>
+impl<T> Asset for Directory<T>
 where
-    T: DirLoadable + Compound,
+    T: DirLoadable + Asset,
 {
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
         let raw = cache.load::<RawDirectory<T>>(id)?;
@@ -359,7 +359,7 @@ where
 
 impl<T> Directory<T>
 where
-    T: Compound,
+    T: Asset,
 {
     /// Returns an iterator over the assets in the directory.
     ///
@@ -386,9 +386,9 @@ pub struct RecursiveDirectory<T> {
     _marker: PhantomData<T>,
 }
 
-impl<T> Compound for RecursiveDirectory<T>
+impl<T> Asset for RecursiveDirectory<T>
 where
-    T: DirLoadable + Compound,
+    T: DirLoadable + Asset,
 {
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
         let raw = cache.load::<RawRecursiveDirectory<T>>(id)?;
@@ -436,7 +436,7 @@ where
 
 impl<T> RecursiveDirectory<T>
 where
-    T: Compound,
+    T: Asset,
 {
     /// Returns an iterator over the assets in the directory.
     ///
