@@ -22,7 +22,7 @@ pub use static_sound::StaticSound;
 pub use streaming::StreamingSound;
 
 mod static_sound {
-    use assets_manager::{Asset, loader};
+    use assets_manager::FileAsset;
     use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
     use std::io::Cursor;
 
@@ -61,19 +61,13 @@ mod static_sound {
         }
     }
 
-    impl loader::Loader<StaticSound> for loader::SoundLoader {
-        fn load(
-            content: std::borrow::Cow<[u8]>,
-            _: &str,
-        ) -> Result<StaticSound, assets_manager::BoxedError> {
-            let sound = StaticSoundData::from_cursor(Cursor::new(content.into_owned()))?;
+    impl FileAsset for StaticSound {
+        const EXTENSIONS: &'static [&'static str] = crate::AVAILABLE_EXTENSIONS;
+
+        fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Result<Self, assets_manager::BoxedError> {
+            let sound = StaticSoundData::from_cursor(Cursor::new(bytes.into_owned()))?;
             Ok(StaticSound(sound))
         }
-    }
-
-    impl Asset for StaticSound {
-        const EXTENSIONS: &'static [&'static str] = crate::AVAILABLE_EXTENSIONS;
-        type Loader = loader::SoundLoader;
     }
 
     impl kira::sound::SoundData for StaticSound {
@@ -103,7 +97,7 @@ mod static_sound {
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg_attr(docsrs, doc(cfg(not(target_arch = "wasm32"))))]
 mod streaming {
-    use assets_manager::{Asset, loader};
+    use assets_manager::FileAsset;
     use kira::sound::{
         FromFileError,
         streaming::{StreamingSoundData, StreamingSoundSettings},
@@ -152,12 +146,11 @@ mod streaming {
         }
     }
 
-    impl loader::Loader<StreamingSound> for loader::SoundLoader {
-        fn load(
-            content: std::borrow::Cow<[u8]>,
-            _: &str,
-        ) -> Result<StreamingSound, assets_manager::BoxedError> {
-            let bytes = assets_manager::SharedBytes::from(content);
+    impl FileAsset for StreamingSound {
+        const EXTENSIONS: &'static [&'static str] = crate::AVAILABLE_EXTENSIONS;
+
+        fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Result<Self, assets_manager::BoxedError> {
+            let bytes = assets_manager::SharedBytes::from(bytes);
             let settings = StreamingSoundSettings::default();
 
             // Check that the audio file is valid.
@@ -165,11 +158,6 @@ mod streaming {
 
             Ok(StreamingSound { settings, bytes })
         }
-    }
-
-    impl Asset for StreamingSound {
-        const EXTENSIONS: &'static [&'static str] = crate::AVAILABLE_EXTENSIONS;
-        type Loader = loader::SoundLoader;
     }
 
     impl kira::sound::SoundData for StreamingSound {
