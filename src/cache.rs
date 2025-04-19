@@ -406,7 +406,7 @@ impl AssetCache {
     /// An error is returned if the given id does not match a valid readable
     /// directory.
     #[inline]
-    pub fn load_dir<T: DirLoadable>(
+    pub fn load_dir<T: DirLoadable + Compound>(
         &self,
         id: &str,
     ) -> Result<&Handle<crate::Directory<T>>, Error> {
@@ -429,7 +429,7 @@ impl AssetCache {
     /// When loading a directory recursively, directories that can't be read are
     /// ignored.
     #[inline]
-    pub fn load_rec_dir<T: DirLoadable>(
+    pub fn load_rec_dir<T: DirLoadable + Compound>(
         &self,
         id: &str,
     ) -> Result<&Handle<crate::RecursiveDirectory<T>>, Error> {

@@ -149,12 +149,12 @@ where
 }
 
 /// Stores ids in a directory containing assets of type `T`
-pub struct Directory<T> {
+pub struct RawDirectory<T> {
     ids: Vec<SharedString>,
     _marker: PhantomData<T>,
 }
 
-impl<T> Compound for Directory<T>
+impl<T> Compound for RawDirectory<T>
 where
     T: DirLoadable,
 {
@@ -165,8 +165,167 @@ where
         ids.sort_unstable();
         ids.dedup();
 
-        Ok(Directory {
+        Ok(RawDirectory {
             ids,
+            _marker: PhantomData,
+        })
+    }
+
+    const HOT_RELOADED: bool = true;
+}
+
+impl<T> RawDirectory<T> {
+    /// Returns an iterator over the ids of the assets in the directory.
+    pub fn ids(&self) -> impl ExactSizeIterator<Item = &SharedString> {
+        self.ids.iter()
+    }
+}
+
+impl<T> RawDirectory<T>
+where
+    T: Storable,
+{
+    /// Returns an iterator over the assets in the directory.
+    ///
+    /// This fonction does not do any I/O and assets that previously failed to
+    /// load are ignored.
+    #[inline]
+    pub fn iter_cached<'h, 'a: 'h>(
+        &'h self,
+        cache: &'a AssetCache,
+    ) -> impl Iterator<Item = &'a Handle<T>> + 'h {
+        self.ids().filter_map(move |id| cache.get_cached(id))
+    }
+}
+
+impl<T> RawDirectory<T>
+where
+    T: Compound,
+{
+    /// Returns an iterator over the assets in the directory.
+    ///
+    /// This function will happily try to load all assets, even if an error
+    /// occured the last time it was tried.
+    #[inline]
+    pub fn iter<'h, 'a: 'h>(
+        &'h self,
+        cache: &'a AssetCache,
+    ) -> impl ExactSizeIterator<Item = Result<&'a Handle<T>, Error>> + 'h {
+        self.ids().map(move |id| cache.load(id))
+    }
+}
+
+impl<T> fmt::Debug for RawDirectory<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RawDirectory")
+            .field("ids", &self.ids)
+            .finish()
+    }
+}
+
+/// Stores ids in a recursive directory containing assets of type `T`
+pub struct RawRecursiveDirectory<T> {
+    ids: Vec<SharedString>,
+    _marker: PhantomData<T>,
+}
+
+impl<T> Compound for RawRecursiveDirectory<T>
+where
+    T: DirLoadable,
+{
+    fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
+        // Load the current directory
+        let this = cache.load::<RawDirectory<T>>(id)?;
+        let mut ids = this.read().ids.clone();
+
+        // Recursively load child directories
+        T::sub_directories(cache, id, |id| {
+            if let Ok(child) = cache.load::<RawRecursiveDirectory<T>>(id) {
+                ids.extend_from_slice(&child.read().ids);
+            }
+        })?;
+
+        Ok(RawRecursiveDirectory {
+            ids,
+            _marker: PhantomData,
+        })
+    }
+
+    const HOT_RELOADED: bool = true;
+}
+
+impl<T> RawRecursiveDirectory<T> {
+    /// Returns an iterator over the ids of the assets in the directory.
+    pub fn ids(&self) -> impl ExactSizeIterator<Item = &SharedString> {
+        self.ids.iter()
+    }
+}
+
+impl<T> RawRecursiveDirectory<T>
+where
+    T: Storable,
+{
+    /// Returns an iterator over the assets in the directory.
+    ///
+    /// This fonction does not do any I/O and assets that previously failed to
+    /// load are ignored.
+    #[inline]
+    pub fn iter_cached<'h, 'a: 'h>(
+        &'h self,
+        cache: &'a AssetCache,
+    ) -> impl Iterator<Item = &'a Handle<T>> + 'h {
+        self.ids().filter_map(move |id| cache.get_cached(id))
+    }
+}
+
+impl<T> RawRecursiveDirectory<T>
+where
+    T: Compound,
+{
+    /// Returns an iterator over the assets in the directory.
+    ///
+    /// This function will happily try to load all assets, even if an error
+    /// occured the last time it was tried.
+    #[inline]
+    pub fn iter<'h, 'a: 'h>(
+        &'h self,
+        cache: &'a AssetCache,
+    ) -> impl ExactSizeIterator<Item = Result<&'a Handle<T>, Error>> + 'h {
+        self.ids().map(move |id| cache.load(id))
+    }
+}
+
+impl<T> fmt::Debug for RawRecursiveDirectory<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RawRecursiveDirectory")
+            .field("ids", &self.ids)
+            .finish()
+    }
+}
+
+/// Stores ids in a directory containing assets of type `T`
+pub struct Directory<T> {
+    ids: Vec<SharedString>,
+    _marker: PhantomData<T>,
+}
+
+impl<T> Compound for Directory<T>
+where
+    T: DirLoadable + Compound,
+{
+    fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
+        let raw = cache.load::<RawDirectory<T>>(id)?;
+
+        let ids = &raw.read().ids;
+
+        cache.no_record(|| {
+            for id in ids {
+                let _ = cache.load::<T>(id);
+            }
+        });
+
+        Ok(Directory {
+            ids: ids.clone(),
             _marker: PhantomData,
         })
     }
@@ -229,22 +388,21 @@ pub struct RecursiveDirectory<T> {
 
 impl<T> Compound for RecursiveDirectory<T>
 where
-    T: DirLoadable,
+    T: DirLoadable + Compound,
 {
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
-        // Load the current directory
-        let this = cache.load::<Directory<T>>(id)?;
-        let mut ids = this.read().ids.clone();
+        let raw = cache.load::<RawRecursiveDirectory<T>>(id)?;
 
-        // Recursively load child directories
-        T::sub_directories(cache, id, |id| {
-            if let Ok(child) = cache.load::<RecursiveDirectory<T>>(id) {
-                ids.extend_from_slice(&child.read().ids);
+        let ids = &raw.read().ids;
+
+        cache.no_record(|| {
+            for id in ids {
+                let _ = cache.load::<T>(id);
             }
-        })?;
+        });
 
         Ok(RecursiveDirectory {
-            ids,
+            ids: ids.clone(),
             _marker: PhantomData,
         })
     }
