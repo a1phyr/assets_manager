@@ -50,25 +50,17 @@ Point(
 Then you can load it this way (with feature `ron` enabled):
 
 ```rust
-use assets_manager::{Asset, AssetCache, loader};
+use assets_manager::{Asset, AssetCache};
 use serde::Deserialize;
 
 // The struct you want to load
-#[derive(Deserialize)]
+// This example uses a derive macro, but assets can be customized at will.
+#[derive(Deserialize, Asset)]
+#[asset_format = "ron"]
 struct Point {
     x: i32,
     y: i32,
 }
-
-// Specify how you want the structure to be loaded
-impl Asset for Point {
-    // The extension of the files to look into
-    const EXTENSION: &'static str = "ron";
-
-    // The serialization format (RON)
-    type Loader = loader::RonLoader;
-}
-
 
 // Create a new cache to load assets under the "./assets" folder
 let cache = AssetCache::new("assets")?;
