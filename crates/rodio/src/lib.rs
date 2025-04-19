@@ -7,7 +7,7 @@
 #![warn(missing_docs, missing_debug_implementations)]
 #![forbid(unsafe_code)]
 
-use assets_manager::{Asset, BoxedError, SharedBytes, loader};
+use assets_manager::{BoxedError, FileAsset, SharedBytes};
 use rodio::decoder::{Decoder, DecoderError};
 use std::{borrow::Cow, io};
 
@@ -45,19 +45,12 @@ macro_rules! sound_assets {
 
             $( #[cfg($($cfg)*)] )?
             $( #[cfg_attr(docsrs, doc(cfg($($cfg)*)))] )?
-            impl loader::Loader<$name> for loader::SoundLoader {
-                #[inline]
-                fn load(content: Cow<[u8]>, _: &str) -> Result<$name, BoxedError> {
-                    let bytes = content.into();
-                    Ok($name::new(bytes)?)
-                }
-            }
-
-            $( #[cfg($($cfg)*)] )?
-            $( #[cfg_attr(docsrs, doc(cfg($($cfg)*)))] )?
-            impl Asset for $name {
+            impl FileAsset for $name {
                 const EXTENSIONS: &'static [&'static str] = $ext;
-                type Loader = loader::SoundLoader;
+
+                fn from_bytes(bytes: Cow<[u8]>) -> Result<Self, BoxedError> {
+                    Ok($name::new(bytes.into())?)
+                }
             }
 
             $( #[cfg($($cfg)*)] )?
