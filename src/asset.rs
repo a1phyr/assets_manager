@@ -7,8 +7,8 @@
 //! the source is handled by `assets_manager`, so you can focus on the rest.
 //!
 //! This crate defines several kinds of assets, that have different use cases:
-//! - The most common, [`Asset`]s, that are loaded from a single file. An
-//!   `Asset` gives a way to get a Rust value from raw bytes. This is nothing
+//! - The most common, [`FileAsset`]s, that are loaded from a single file. A
+//!   `FileAsset` gives a way to get a Rust value from raw bytes. This is nothing
 //!   more than sugar on top of `Compound`.
 //! - [`Compound`] are created by loading other assets and composing them. They
 //!   can also read sources directly.
@@ -47,11 +47,10 @@ pub use crate::dirs::DirLoadable;
 use crate::{
     AssetCache, BoxedError, Error,
     entry::CacheEntry,
-    loader,
+    error::ErrorKind,
     source::Source,
     utils::{Private, SharedBytes, SharedString},
 };
-use crate::{error::ErrorKind, loader::Loader};
 
 #[allow(unused)]
 use std::{borrow::Cow, io, sync::Arc};
@@ -61,127 +60,6 @@ pub use self::gltf::Gltf;
 
 #[cfg(doc)]
 use crate::Handle;
-
-/// An asset is a type loadable from raw bytes.
-///
-/// `Asset`s can be loaded and retrieved by an [`AssetCache`].
-///
-/// This trait should only perform a conversion from raw bytes to the concrete
-/// type. If you need to load other assets, please use the [`Compound`] trait.
-///
-/// # Extension
-///
-/// You can provide several extensions that will be used to search and load
-/// assets. When loaded, each extension is tried in order until a file is
-/// correctly loaded or no extension remains. The empty string `""` means a file
-/// without extension. You cannot use character `.`.
-///
-/// The `EXTENSION` field is a convenient shortcut if your asset uses only one
-/// extension. If you set a value for `EXTENSIONS` too, this field is ignored.
-///
-/// If neither `EXTENSION` nor `EXTENSIONS` is set, the default is no extension.
-///
-/// If you use hot-reloading, the asset will be reloaded each time one of the
-/// file with the given extension is touched.
-///
-/// # Example
-///
-/// Suppose you make a physics simulation, and you store positions and speeds
-/// in a Bincode-encoded file, with extension ".data".
-///
-/// ```no_run
-/// # cfg_if::cfg_if! { if #[cfg(feature = "bincode")] {
-/// use assets_manager::{BoxedError, FileAsset};
-/// use serde::Deserialize;
-/// use std::borrow::Cow;
-///
-/// #[derive(Deserialize)]
-/// struct Vector {
-///     x: f32,
-///     y: f32,
-///     z: f32,
-/// }
-///
-/// #[derive(Deserialize)]
-/// struct World {
-///     pos: Vec<Vector>,
-///     speed: Vec<Vector>,
-/// }
-///
-/// impl FileAsset for World {
-///     const EXTENSION: &'static str = "data";
-///
-///     fn from_bytes(bytes: Cow<[u8]>) -> Result<Self, BoxedError> {
-///         assets_manager::asset::load_bincode_standard(&bytes)
-///     }
-/// }
-/// # }}
-/// ```
-pub trait Asset: Sized + Send + Sync + 'static {
-    /// Use this field if your asset only uses one extension.
-    ///
-    /// This value is ignored if you set `EXTENSIONS` too.
-    const EXTENSION: &'static str = "";
-
-    /// This field enables you to specify multiple extension for an asset.
-    ///
-    /// If `EXTENSION` is provided, you don't have to set this constant.
-    ///
-    /// If this array is empty, loading an asset of this type returns an error
-    /// unless a default value is provided with the `default_value` method.
-    const EXTENSIONS: &'static [&'static str] = &[Self::EXTENSION];
-
-    /// Specifies a way to convert raw bytes into the asset.
-    ///
-    /// See module [`loader`] for implementations of common conversions.
-    type Loader: Loader<Self>;
-
-    /// Specifies a eventual default value to use if an asset fails to load. If
-    /// this method returns `Ok`, the returned value is used as an asset. In
-    /// particular, if this method always returns `Ok`, `AssetCache::load` is
-    /// guaranteed not to fail.
-    ///
-    /// The `id` parameter is given to easily report the error.
-    ///
-    /// By default, this method always returns an error.
-    ///
-    /// # Example
-    ///
-    /// On error, log it and return a default value:
-    ///
-    /// ```no_run
-    /// # cfg_if::cfg_if! { if #[cfg(feature = "json")] {
-    /// use assets_manager::{Asset, BoxedError, SharedString, loader};
-    /// use serde::Deserialize;
-    ///
-    /// #[derive(Deserialize, Default)]
-    /// struct Item {
-    ///     name: String,
-    ///     kind: String,
-    /// }
-    ///
-    /// impl Asset for Item {
-    ///     const EXTENSION: &'static str = "json";
-    ///     type Loader = loader::JsonLoader;
-    ///
-    ///     fn default_value(id: &SharedString, error: BoxedError) -> Result<Item, BoxedError> {
-    ///         eprintln!("Error loading {}: {}. Using default value", id, error);
-    ///         Ok(Item::default())
-    ///     }
-    /// }
-    /// # }}
-    /// ```
-    #[inline]
-    #[allow(unused_variables)]
-    fn default_value(id: &SharedString, error: BoxedError) -> Result<Self, BoxedError> {
-        Err(error)
-    }
-
-    /// If `false`, disable hot-reloading for assets of this type (`true` by
-    /// default). This avoids having to lock the asset to read it (ie it makes
-    /// [`Handle::read`] a noop)
-    const HOT_RELOADED: bool = true;
-}
 
 /// An asset that can be loaded from a single file.
 pub trait FileAsset: Storable {
@@ -247,30 +125,8 @@ pub trait FileAsset: Storable {
     }
 
     /// If `false`, disable hot-reloading for assets of this type (`true` by
-    /// default). If so, you may want to implement [`NotHotReloaded`] for this
-    /// type to enable additional functions.
+    /// default).
     const HOT_RELOADED: bool = true;
-}
-
-/// Loads [`FileAsset`] types.
-#[non_exhaustive]
-#[allow(missing_debug_implementations)]
-pub struct AssetLoader;
-
-impl<T: FileAsset> loader::Loader<T> for AssetLoader {
-    #[inline]
-    fn load(bytes: Cow<[u8]>, _: &str) -> Result<T, BoxedError> {
-        T::from_bytes(bytes)
-    }
-}
-
-impl<T: FileAsset> Asset for T {
-    const EXTENSION: &'static str = T::EXTENSION;
-    const EXTENSIONS: &'static [&'static str] = T::EXTENSIONS;
-
-    type Loader = AssetLoader;
-
-    const HOT_RELOADED: bool = T::HOT_RELOADED;
 }
 
 /// An asset type that can load other kinds of assets.
@@ -283,7 +139,7 @@ impl<T: FileAsset> Asset for T {
 ///
 /// [top-level documentation]: crate#getting-owned-data
 ///
-/// Note that all [`Asset`]s implement `Compound`.
+/// Note that all [`FileAsset`]s implement `Compound`.
 ///
 /// # Hot-reloading
 ///
@@ -294,9 +150,6 @@ impl<T: FileAsset> Asset for T {
 /// To opt out of dependencies recording, use [`AssetCache::no_record`].
 pub trait Compound: Sized + Send + Sync + 'static {
     /// Loads an asset from the cache.
-    ///
-    /// This function should not perform any kind of I/O: such concern should be
-    /// delegated to [`Asset`]s.
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError>;
 
     /// If `false`, disable hot-reloading for assets of this type (`true` by
@@ -307,7 +160,7 @@ pub trait Compound: Sized + Send + Sync + 'static {
 
 impl<T> Compound for T
 where
-    T: Asset,
+    T: FileAsset,
 {
     #[inline]
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
@@ -316,7 +169,7 @@ where
         let load_with_ext = |ext| -> Result<T, ErrorKind> {
             let asset = source
                 .read(id, ext)?
-                .with_cow(|content| T::Loader::load(content, ext))?;
+                .with_cow(|content| T::from_bytes(content))?;
             Ok(asset)
         };
 
@@ -466,7 +319,7 @@ macro_rules! serde_assets {
         $(
             #[doc = $doc]
             ///
-            /// This type can directly be used as an [`Asset`] to load values
+            /// This type can directly be used as a [`FileAsset`] to load values
             /// from an [`AssetCache`]. This is useful to load assets external
             /// types without a newtype wrapper (eg [`Vec`]).
             #[cfg(feature = $feature)]

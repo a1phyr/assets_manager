@@ -1,5 +1,5 @@
 use crate::{
-    Asset, AssetCache, BoxedError, Compound, Error, Handle, SharedString, Storable,
+    AssetCache, BoxedError, Compound, Error, FileAsset, Handle, SharedString, Storable,
     source::{DirEntry, Source},
 };
 
@@ -11,7 +11,7 @@ use std::{fmt, io, marker::PhantomData};
 /// load all available assets in a directory (eventually recursively).
 ///
 /// This trait is automatically implemented for all types that implement
-/// [`Asset`], and you can implement it to extend your own `Compound`s.
+/// [`FileAsset`], and you can implement it to extend your own `Compound`s.
 ///
 /// # Exemple implementation
 ///
@@ -102,7 +102,7 @@ pub trait DirLoadable: Storable {
 
 impl<T> DirLoadable for T
 where
-    T: Asset,
+    T: FileAsset,
 {
     #[inline]
     fn select_ids(cache: &AssetCache, id: &SharedString) -> io::Result<Vec<SharedString>> {

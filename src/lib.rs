@@ -187,7 +187,7 @@
 extern crate self as assets_manager;
 
 pub mod asset;
-pub use asset::{Asset, Compound, FileAsset, Storable};
+pub use asset::{Compound, FileAsset, Storable};
 
 mod cache;
 pub use cache::AssetCache;
@@ -197,8 +197,6 @@ pub use dirs::{Directory, RawDirectory, RawRecursiveDirectory, RecursiveDirector
 
 mod error;
 pub use error::{BoxedError, Error};
-
-pub mod loader;
 
 mod map;
 
