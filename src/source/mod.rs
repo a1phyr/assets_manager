@@ -171,8 +171,8 @@ impl OwnedDirEntry {
 /// A clonable handle to an immutable memory mapped buffer.
 #[cfg(feature = "mmap")]
 #[cfg_attr(docsrs, doc(cfg(feature = "mmap")))]
-#[derive(Debug, Clone)]
-pub struct Mmap(std::sync::Arc<memmap2::Mmap>);
+#[derive(Debug)]
+pub struct Mmap(memmap2::Mmap);
 
 #[cfg(feature = "mmap")]
 impl Mmap {
@@ -187,7 +187,7 @@ impl Mmap {
     /// files exist but are platform specific and limited.
     pub unsafe fn map(file: &std::fs::File) -> io::Result<Self> {
         let map = unsafe { memmap2::Mmap::map(file)? };
-        Ok(Self(std::sync::Arc::new(map)))
+        Ok(Self(map))
     }
 }
 
