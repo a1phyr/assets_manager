@@ -111,34 +111,37 @@ pub(crate) fn add_dir_record(id: &str) {
 /// This type is only useful if you do multi-threading within asset loading
 /// (e.g. if you use `rayon` in `Compound::load`).
 #[derive(Clone)]
-pub struct Recorder {
-    deps: Arc<Mutex<Dependencies>>,
-}
+pub struct Recorder(Option<Arc<Mutex<Dependencies>>>);
 
 impl Recorder {
     /// Gets the recorder which is currently installed.
     ///
-    /// # Panics
-    ///
-    /// Panics if no recorder is installed.
+    /// If no recorder is currently install, this returns a recorder that does
+    /// nothing when installed.
     pub fn current() -> Self {
-        RECORDING.with(|rec| {
-            let mut rec = rec.get().expect("no recorder installed");
+        let deps = RECORDING.with(|rec| {
+            let mut rec = rec.get()?;
             let recorder = unsafe { rec.as_mut() };
             let deps = recorder.additional.get_or_insert_default().clone();
-            Recorder { deps }
-        })
+            Some(deps)
+        });
+        Self(deps)
     }
 
     /// Runs the given closure with the recorder installed.
     pub fn install<T>(&self, f: impl FnOnce() -> T) -> T {
-        let mut record = Record {
-            records: Dependencies::new(),
-            additional: Some(self.deps.clone()),
-        };
-        let res = record.install(f);
-        self.deps.lock().extend(record.records);
-        res
+        match &self.0 {
+            Some(deps) => {
+                let mut record = Record {
+                    records: Dependencies::new(),
+                    additional: Some(deps.clone()),
+                };
+                let res = record.install(f);
+                deps.lock().extend(record.records);
+                res
+            }
+            None => f(),
+        }
     }
 }
 
