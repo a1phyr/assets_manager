@@ -444,11 +444,9 @@ impl<T> fmt::Debug for ArcHandle<T>
 where
     T: fmt::Debug + ?Sized,
 {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ArcHandle")
-            .field("id", self.id())
-            .field("value", &&*self.read())
-            .finish()
+        (**self).fmt(f)
     }
 }
 
