@@ -245,8 +245,8 @@ where
 impl<U, T: fmt::Debug> fmt::Debug for OnceInitCell<U, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.get() {
-            Some(data) => f.debug_tuple("MyCell").field(data).finish(),
-            None => f.write_str("MyCell(<uninit>)"),
+            Some(data) => f.debug_tuple("OnceInitCell").field(data).finish(),
+            None => f.write_str("OnceInitCell(<uninit>)"),
         }
     }
 }
