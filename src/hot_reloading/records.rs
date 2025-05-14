@@ -1,5 +1,6 @@
 use crate::{
-    key::AssetKey,
+    cache::CacheId,
+    key::{AssetKey, Type},
     utils::{HashSet, Mutex, SharedString},
 };
 use std::{cell::Cell, fmt, ptr::NonNull, sync::Arc};
@@ -74,12 +75,14 @@ pub(crate) fn no_record<F: FnOnce() -> T, T>(f: F) -> T {
     })
 }
 
-pub(crate) fn add_record(key: AssetKey) {
+pub(crate) fn add_record(id: &SharedString, typ: Type, cache: CacheId) {
     RECORDING.with(|rec| {
         if let Some(mut recorder) = rec.get() {
             let recorder = unsafe { recorder.as_mut() };
 
-            recorder.records.insert(Dependency::Asset(key));
+            recorder
+                .records
+                .insert(Dependency::Asset(AssetKey::new(id.clone(), typ, cache)));
         }
     });
 }

@@ -239,7 +239,7 @@ impl AssetCache {
     fn add_record(&self, handle: &UntypedHandle) {
         if self.0.reloader.is_some() {
             if let Some(typ) = handle.typ() {
-                records::add_record(AssetKey::new(handle.id().clone(), typ, self.id()));
+                records::add_record(handle.id(), typ, self.id());
             }
         }
     }
