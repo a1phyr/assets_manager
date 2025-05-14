@@ -80,19 +80,19 @@ mod asset_cache {
     }
 
     #[test]
-    fn get_cached() {
+    fn get() {
         let cache = AssetCache::new("assets").unwrap();
 
-        assert!(cache.get_cached::<X>("test.cache").is_none());
+        assert!(cache.get::<X>("test.cache").is_none());
         cache.load::<X>("test.cache").unwrap();
-        assert_eq!(*cache.get_cached::<X>("test.cache").unwrap().read(), X(42));
+        assert_eq!(*cache.get::<X>("test.cache").unwrap().read(), X(42));
     }
 
     #[test]
     fn get_or_insert() {
         let cache = AssetCache::new("assets").unwrap();
 
-        assert!(cache.get_cached::<i32>("test.xxx").is_none());
+        assert!(cache.get::<i32>("test.xxx").is_none());
         let handle = cache.get_or_insert::<i32>("test.xxx", 5);
         assert_eq!(*handle.read(), 5);
     }
@@ -173,11 +173,11 @@ mod asset_cache {
         let handle = fallback.load::<X>("test.cache").unwrap();
 
         assert_eq!(*handle.read(), X(42));
-        assert_eq!(*cache.get_cached::<X>("test.cache").unwrap().read(), X(42));
+        assert_eq!(*cache.get::<X>("test.cache").unwrap().read(), X(42));
         assert!(cache.contains::<X>("test.cache"));
 
         assert_eq!(*cache.load::<X>("test.b").unwrap().read(), X(-7));
-        assert!(fallback.get_cached::<X>("test.b").is_none());
+        assert!(fallback.get::<X>("test.b").is_none());
 
         drop(cache);
 

@@ -194,7 +194,7 @@ where
         &'h self,
         cache: &'a AssetCache,
     ) -> impl Iterator<Item = &'a Handle<T>> + 'h {
-        self.ids().filter_map(move |id| cache.get_cached(id))
+        self.ids().filter_map(move |id| cache.get(id))
     }
 }
 
@@ -274,7 +274,7 @@ where
         &'h self,
         cache: &'a AssetCache,
     ) -> impl Iterator<Item = &'a Handle<T>> + 'h {
-        self.ids().filter_map(move |id| cache.get_cached(id))
+        self.ids().filter_map(move |id| cache.get(id))
     }
 }
 
@@ -353,7 +353,7 @@ where
         &'h self,
         cache: &'a AssetCache,
     ) -> impl Iterator<Item = &'a Handle<T>> + 'h {
-        self.ids().filter_map(move |id| cache.get_cached(id))
+        self.ids().filter_map(move |id| cache.get(id))
     }
 }
 
@@ -430,7 +430,7 @@ where
         &'h self,
         cache: &'a AssetCache,
     ) -> impl Iterator<Item = &'a Handle<T>> + 'h {
-        self.ids().filter_map(move |id| cache.get_cached(id))
+        self.ids().filter_map(move |id| cache.get(id))
     }
 }
 

@@ -287,7 +287,7 @@ impl AssetCache {
     }
 
     fn load_untyped(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
-        match self.get_cached_untyped(id, typ.type_id) {
+        match self.get_untyped(id, typ.type_id) {
             Some(handle) => Ok(handle),
             None => self.add_asset(id, typ),
         }
@@ -328,15 +328,22 @@ impl AssetCache {
     /// This function does not attempt to load the value from the source if it
     /// is not found in the cache.
     #[inline]
-    pub fn get_cached<T: Storable>(&self, id: &str) -> Option<&Handle<T>> {
-        let handle = self.get_cached_untyped(id, TypeId::of::<T>())?;
+    pub fn get<T: Storable>(&self, id: &str) -> Option<&Handle<T>> {
+        let handle = self.get_untyped(id, TypeId::of::<T>())?;
         Some(handle.downcast_ref_ok())
+    }
+
+    /// Deprecated name of `get`.
+    #[inline]
+    #[deprecated = "Use `get` instead"]
+    pub fn get_cached<T: Storable>(&self, id: &str) -> Option<&Handle<T>> {
+        self.get(id)
     }
 
     /// Gets a value with the given type from the cache.
     ///
-    /// This is an equivalent of `get_cached` but with a dynamic type.
-    pub fn get_cached_untyped(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
+    /// This is an equivalent of `get` but with a dynamic type.
+    pub fn get_untyped(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
         let mut cur = self;
 
         loop {
@@ -350,12 +357,18 @@ impl AssetCache {
         }
     }
 
+    /// Deprecated name of `get_untyped`.
+    #[deprecated = "Use `get` instead"]
+    pub fn get_cached_untyped(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
+        self.get_untyped(id, type_id)
+    }
+
     /// Gets a value from the cache or inserts one.
     ///
     /// Assets added via this function will *never* be reloaded.
     #[inline]
     pub fn get_or_insert<T: Storable>(&self, id: &str, default: T) -> &Handle<T> {
-        let handle = match self.get_cached_untyped(id, TypeId::of::<T>()) {
+        let handle = match self.get_untyped(id, TypeId::of::<T>()) {
             Some(handle) => handle,
             None => self.add_any(id, default),
         };
@@ -465,7 +478,7 @@ impl AssetCache {
         id: &SharedString,
         typ: Type,
     ) -> Option<records::Dependencies> {
-        let handle = self.get_cached_untyped(id, typ.type_id)?;
+        let handle = self.get_untyped(id, typ.type_id)?;
 
         let (entry, deps) = records::record(|| {
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
