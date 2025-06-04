@@ -79,8 +79,8 @@ enum CacheKind {
     Root {
         source: Box<dyn Source + Send + Sync>,
     },
-    WithFallback {
-        fallback: AssetCache,
+    Node {
+        parent: AssetCache,
     },
 }
 
@@ -142,14 +142,16 @@ impl AssetCache {
         }))
     }
 
-    /// Makes a new cache with the given fallback.
-    pub fn with_fallback(fallback: Self) -> Self {
+    /// Makes a new cache with `self` as parent.
+    pub fn make_child(&self) -> Self {
         let cache = Self(Arc::new(AssetCacheInner {
             #[cfg(feature = "hot-reloading")]
-            reloader: fallback.0.reloader.clone(),
+            reloader: self.0.reloader.clone(),
 
             assets: AssetMap::new(),
-            kind: CacheKind::WithFallback { fallback },
+            kind: CacheKind::Node {
+                parent: self.clone(),
+            },
         }));
 
         #[cfg(feature = "hot-reloading")]
@@ -187,7 +189,7 @@ impl AssetCache {
         let mut cur = self;
         loop {
             match &cur.0.kind {
-                CacheKind::WithFallback { fallback } => cur = fallback,
+                CacheKind::Node { parent } => cur = parent,
                 CacheKind::Root { source } => return &**source,
             }
         }
@@ -198,12 +200,12 @@ impl AssetCache {
         CacheId(Arc::as_ptr(&self.0).addr())
     }
 
-    /// Returns a reference to the cache's fallback, if any.
+    /// Returns a reference to the cache's parent, if any.
     #[inline]
-    pub fn fallback(&self) -> Option<&Self> {
+    pub fn parent(&self) -> Option<&Self> {
         match &self.0.kind {
             CacheKind::Root { .. } => None,
-            CacheKind::WithFallback { fallback } => Some(fallback),
+            CacheKind::Node { parent } => Some(parent),
         }
     }
 
@@ -353,7 +355,7 @@ impl AssetCache {
 
                 return Some(handle);
             }
-            cur = cur.fallback()?;
+            cur = cur.parent()?;
         }
     }
 
@@ -401,7 +403,7 @@ impl AssetCache {
 
             match &cur.0.kind {
                 CacheKind::Root { .. } => return false,
-                CacheKind::WithFallback { fallback } => cur = fallback,
+                CacheKind::Node { parent } => cur = parent,
             }
         }
     }

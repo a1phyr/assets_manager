@@ -166,20 +166,20 @@ mod asset_cache {
     }
 
     #[test]
-    fn fallback() {
-        let fallback = AssetCache::new("assets").unwrap();
-        let cache = AssetCache::with_fallback(fallback.clone());
+    fn parent() {
+        let parent = AssetCache::new("assets").unwrap();
+        let child = parent.make_child();
 
-        let handle = fallback.load::<X>("test.cache").unwrap();
+        let handle = parent.load::<X>("test.cache").unwrap();
 
         assert_eq!(*handle.read(), X(42));
-        assert_eq!(*cache.get::<X>("test.cache").unwrap().read(), X(42));
-        assert!(cache.contains::<X>("test.cache"));
+        assert_eq!(*child.get::<X>("test.cache").unwrap().read(), X(42));
+        assert!(child.contains::<X>("test.cache"));
 
-        assert_eq!(*cache.load::<X>("test.b").unwrap().read(), X(-7));
-        assert!(fallback.get::<X>("test.b").is_none());
+        assert_eq!(*child.load::<X>("test.b").unwrap().read(), X(-7));
+        assert!(parent.get::<X>("test.b").is_none());
 
-        drop(cache);
+        drop(child);
 
         assert_eq!(*handle.read(), X(42));
     }
