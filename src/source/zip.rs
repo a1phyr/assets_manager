@@ -127,7 +127,8 @@ type FileReader<R> = for<'a> fn(&'a R, &FileInfo) -> io::Result<super::FileConte
 /// A [`Source`] to load assets from a zip archive.
 ///
 /// The archive can be backed by any reader that also implements [`io::Seek`]
-/// and [`Clone`].
+/// and [`Clone`] or by a byte slice. In the second case, reading files will
+/// not involve copying uncompressed data.
 #[cfg_attr(docsrs, doc(cfg(feature = "zip")))]
 pub struct Zip<R = SyncFile> {
     reader: R,
@@ -233,7 +234,7 @@ impl<R: io::Read + io::Seek> Zip<R> {
 #[cfg_attr(docsrs, doc(cfg(feature = "zip")))]
 impl<R> Source for Zip<R>
 where
-    R: io::Read + io::Seek + Clone,
+    R: io::Read + io::Seek,
 {
     fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
         let info = self
