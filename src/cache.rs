@@ -540,7 +540,7 @@ struct CacheSource<'a> {
 }
 
 impl Source for CacheSource<'_> {
-    fn read(&self, id: &str, ext: &str) -> io::Result<crate::source::FileContent> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<crate::source::FileContent<'_>> {
         #[cfg(feature = "hot-reloading")]
         if self.is_hot_reloaded {
             records::add_file_record(id, ext);

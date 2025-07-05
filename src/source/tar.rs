@@ -1,6 +1,6 @@
-use super::DirEntry;
 #[cfg(feature = "mmap")]
 use super::Mmap;
+use super::{DirEntry, FileContent};
 use crate::{
     SharedString,
     utils::{HashMap, IdBuilder},
@@ -37,7 +37,7 @@ enum OwnedEntry {
 }
 
 impl OwnedEntry {
-    fn as_dir_entry(&self) -> DirEntry {
+    fn as_dir_entry(&self) -> DirEntry<'_> {
         match self {
             OwnedEntry::File(FileDesc(id, ext)) => DirEntry::File(id, ext),
             OwnedEntry::Dir(id) => DirEntry::Directory(id),
@@ -119,7 +119,7 @@ fn register_file(
     }
 }
 
-type FileReader<R> = fn(&Tar<R>, start: u64, size: usize) -> io::Result<super::FileContent<'_>>;
+type FileReader<R> = fn(&Tar<R>, start: u64, size: usize) -> io::Result<FileContent<'_>>;
 
 /// A [`Source`] to load assets from a tar archive.
 ///
@@ -231,7 +231,7 @@ impl<R: io::Read + io::Seek> Tar<R> {
 
 #[cfg_attr(docsrs, doc(cfg(feature = "tar")))]
 impl<R: io::Read + io::Seek> super::Source for Tar<R> {
-    fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent<'_>> {
         let &(start, size) = self
             .files
             .get(&(id, ext))
@@ -294,27 +294,27 @@ fn read_file_reader<R: io::Read + io::Seek + Clone>(
     tar: &Tar<R>,
     start: u64,
     size: usize,
-) -> io::Result<super::FileContent<'_>> {
+) -> io::Result<FileContent<'_>> {
     let mut reader = tar.reader.clone();
 
     let mut buf = vec![0; size];
     reader.seek(io::SeekFrom::Start(start))?;
     reader.read_exact(&mut buf)?;
 
-    Ok(super::FileContent::Buffer(buf))
+    Ok(FileContent::Buffer(buf))
 }
 
 fn read_file_bytes<B: AsRef<[u8]>>(
     tar: &Tar<io::Cursor<B>>,
     start: u64,
     size: usize,
-) -> io::Result<super::FileContent<'_>> {
+) -> io::Result<FileContent<'_>> {
     let start = start as usize;
     let tar = tar.reader.get_ref().as_ref();
     let file = tar
         .get(start..start + size)
         .ok_or(io::ErrorKind::InvalidData)?;
-    Ok(super::FileContent::Slice(file))
+    Ok(FileContent::Slice(file))
 }
 
 mod error {

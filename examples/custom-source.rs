@@ -44,7 +44,7 @@ impl FsWithOverride {
 }
 
 impl Source for FsWithOverride {
-    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent<'_>> {
         // Try override path
         if let Some(dir) = &self.override_dir {
             match dir.read(id, ext) {

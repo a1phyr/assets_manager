@@ -65,7 +65,7 @@ impl FileSystem {
 }
 
 impl Source for FileSystem {
-    fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent<'_>> {
         let path = self.path_of(DirEntry::File(id, ext));
         match fs::read(&path) {
             Ok(buf) => Ok(super::FileContent::Buffer(buf)),

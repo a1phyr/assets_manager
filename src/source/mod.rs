@@ -286,7 +286,7 @@ pub trait Source {
     /// done for you by an [`AssetCache`] when you load [`Asset`]s.
     ///
     /// [`Asset`]: crate::Asset
-    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent>;
+    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent<'_>>;
 
     /// Reads the content of a directory.
     ///
@@ -375,7 +375,7 @@ where
     S: Source + ?Sized,
 {
     #[inline]
-    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent<'_>> {
         self.as_ref().read(id, ext)
     }
 
@@ -400,7 +400,7 @@ where
     S: Source + ?Sized,
 {
     #[inline]
-    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent<'_>> {
         (**self).read(id, ext)
     }
 
@@ -425,7 +425,7 @@ where
     S: Source + ?Sized,
 {
     #[inline]
-    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent<'_>> {
         self.as_ref().read(id, ext)
     }
 
@@ -453,7 +453,7 @@ pub struct Empty;
 
 impl Source for Empty {
     #[inline]
-    fn read(&self, _id: &str, _ext: &str) -> io::Result<FileContent> {
+    fn read(&self, _id: &str, _ext: &str) -> io::Result<FileContent<'_>> {
         Err(io::Error::from(io::ErrorKind::NotFound))
     }
 

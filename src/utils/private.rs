@@ -138,12 +138,12 @@ impl<T> RwLock<T> {
 
 impl<T: ?Sized> RwLock<T> {
     #[inline]
-    pub fn read(&self) -> RwLockReadGuard<T> {
+    pub fn read(&self) -> RwLockReadGuard<'_, T> {
         wrap(self.0.read())
     }
 
     #[inline]
-    pub fn write(&self) -> RwLockWriteGuard<T> {
+    pub fn write(&self) -> RwLockWriteGuard<'_, T> {
         wrap(self.0.write())
     }
 }
@@ -163,7 +163,7 @@ impl<T> Mutex<T> {
 #[allow(unused)]
 impl<T: ?Sized> Mutex<T> {
     #[inline]
-    pub fn lock(&self) -> sync::MutexGuard<T> {
+    pub fn lock(&self) -> sync::MutexGuard<'_, T> {
         wrap(self.0.lock())
     }
 }

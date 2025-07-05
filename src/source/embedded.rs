@@ -66,7 +66,7 @@ impl<'a> From<RawEmbedded<'a>> for Embedded<'a> {
 
 #[cfg_attr(docsrs, doc(cfg(feature = "embedded")))]
 impl Source for Embedded<'_> {
-    fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent<'_>> {
         match self.files.get(&(id, ext)) {
             Some(content) => Ok(super::FileContent::Slice(content)),
             None => Err(io::ErrorKind::NotFound.into()),

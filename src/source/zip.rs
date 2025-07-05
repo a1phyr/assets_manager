@@ -1,6 +1,6 @@
 #[cfg(feature = "mmap")]
 use super::Mmap;
-use super::{DirEntry, Source};
+use super::{DirEntry, FileContent, Source};
 use crate::{
     SharedString,
     utils::{HashMap, IdBuilder, extension_of},
@@ -34,7 +34,7 @@ impl fmt::Debug for OwnedEntry {
 }
 
 impl OwnedEntry {
-    fn as_dir_entry(&self) -> DirEntry {
+    fn as_dir_entry(&self) -> DirEntry<'_> {
         match self {
             OwnedEntry::File(FileDesc(id, ext)) => DirEntry::File(id, ext),
             OwnedEntry::Dir(id) => DirEntry::Directory(id),
@@ -122,7 +122,7 @@ fn register_file(
     }
 }
 
-type FileReader<R> = for<'a> fn(&'a R, &FileInfo) -> io::Result<super::FileContent<'a>>;
+type FileReader<R> = for<'a> fn(&'a R, &FileInfo) -> io::Result<FileContent<'a>>;
 
 /// A [`Source`] to load assets from a zip archive.
 ///
@@ -236,7 +236,7 @@ impl<R> Source for Zip<R>
 where
     R: io::Read + io::Seek,
 {
-    fn read(&self, id: &str, ext: &str) -> io::Result<super::FileContent> {
+    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent<'_>> {
         let info = self
             .files
             .get(&(id, ext))
@@ -299,14 +299,14 @@ fn read_archive(
 fn read_file_reader<'a, R: io::Read + io::Seek + Clone>(
     reader: &'a R,
     info: &FileInfo,
-) -> io::Result<super::FileContent<'a>> {
+) -> io::Result<FileContent<'a>> {
     read_file_bufreader(io::BufReader::new(reader.clone()), info)
 }
 
 fn read_file_bufreader<R: io::BufRead + io::Seek>(
     mut reader: R,
     info: &FileInfo,
-) -> io::Result<super::FileContent<'static>> {
+) -> io::Result<FileContent<'static>> {
     use io::Read;
 
     reader.seek(io::SeekFrom::Start(info.start))?;
@@ -329,13 +329,13 @@ fn read_file_bufreader<R: io::BufRead + io::Seek>(
         return Err(error::invalid_crc());
     }
 
-    Ok(super::FileContent::Buffer(buf))
+    Ok(FileContent::Buffer(buf))
 }
 
 fn read_file_bytes<'a, T: AsRef<[u8]>>(
     reader: &'a io::Cursor<T>,
     info: &FileInfo,
-) -> io::Result<super::FileContent<'a>> {
+) -> io::Result<FileContent<'a>> {
     if info.compression_method != zip::CompressionMethod::Stored {
         let reader = io::Cursor::new(reader.get_ref().as_ref());
         return read_file_bufreader(reader, info);
@@ -355,7 +355,7 @@ fn read_file_bytes<'a, T: AsRef<[u8]>>(
         return Err(error::invalid_crc());
     }
 
-    Ok(super::FileContent::Slice(file))
+    Ok(FileContent::Slice(file))
 }
 
 mod error {
