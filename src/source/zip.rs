@@ -274,7 +274,7 @@ impl<R> fmt::Debug for Zip<R> {
 trait ReadSeek: io::Read + io::Seek {}
 impl<R: io::Read + io::Seek> ReadSeek for R {}
 
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 fn read_archive(
     reader: &mut dyn ReadSeek,
 ) -> io::Result<(

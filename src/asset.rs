@@ -43,17 +43,8 @@ mod tests;
 
 pub use crate::dirs::DirLoadable;
 
-#[allow(unused)]
-use crate::{
-    AssetCache, BoxedError, Error,
-    entry::CacheEntry,
-    error::ErrorKind,
-    source::Source,
-    utils::{Private, SharedBytes, SharedString},
-};
-
-#[allow(unused)]
-use std::{borrow::Cow, io, sync::Arc};
+use crate::{AssetCache, BoxedError, error::ErrorKind, source::Source, utils::SharedString};
+use std::{borrow::Cow, sync::Arc};
 
 #[cfg(feature = "gltf")]
 pub use self::gltf::Gltf;
@@ -119,7 +110,7 @@ pub trait FileAsset: Storable {
     /// # }}
     /// ```
     #[inline]
-    #[allow(unused_variables)]
+    #[expect(unused_variables)]
     fn default_value(id: &SharedString, error: BoxedError) -> Result<Self, BoxedError> {
         Err(error)
     }
@@ -170,7 +161,7 @@ pub trait Compound: Asset {
     const HOT_RELOADED: bool = true;
 }
 
-#[allow(deprecated)]
+#[expect(deprecated)]
 impl<T> Compound for T
 where
     T: FileAsset,
@@ -201,7 +192,7 @@ where
     const HOT_RELOADED: bool = Self::HOT_RELOADED;
 }
 
-#[allow(deprecated)]
+#[expect(deprecated)]
 impl<T: Compound> Asset for T {
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
         <T as Compound>::load(cache, id)

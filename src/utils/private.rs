@@ -8,7 +8,6 @@
 
 #[allow(unused_imports)]
 use crate::{SharedString, source::DirEntry};
-
 use std::{
     fmt,
     ops::{Deref, DerefMut},
@@ -210,10 +209,6 @@ impl Condvar {
         }
     }
 }
-
-/// Fake public structure for internal APIs
-#[derive(Debug)]
-pub struct Private;
 
 #[cfg(feature = "faster-hash")]
 pub(crate) use foldhash::fast::RandomState;
