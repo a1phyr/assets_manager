@@ -295,7 +295,7 @@ pub fn load_ron<'de, T: serde::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, 
 #[cfg(feature = "toml")]
 #[cfg_attr(docsrs, doc(cfg(feature = "toml")))]
 pub fn load_toml<'de, T: serde::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
-    basic_toml::from_slice(bytes).map_err(Box::from)
+    toml::from_slice(bytes).map_err(Box::from)
 }
 
 /// Deserializes a value from a YAML file.
