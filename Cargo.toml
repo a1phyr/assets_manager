@@ -1,6 +1,6 @@
 [package]
 name = "assets_manager"
-version = "0.12.4"
+version = "0.13.0-migration"
 authors = ["Benoît du Garreau"]
 edition = "2024"
 rust-version = "1.85"
@@ -55,7 +55,7 @@ log = { version = "0.4" }
 once_cell = { version = "1.16", optional = true }
 memmap2 = { version = "0.9.4", optional = true }
 
-assets_manager_macros = { path = "macros", version = "0.2.4", optional = true }
+assets_manager_macros = { path = "macros", version = "0.3", optional = true }
 
 foldhash = { version = "0.1.4", optional = true }
 parking_lot = { version = "0.12", optional = true }
