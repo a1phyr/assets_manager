@@ -1,6 +1,6 @@
 [package]
 name = "assets_manager-rodio"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -25,5 +25,5 @@ symphonia-vorbis = ["rodio/symphonia-vorbis"]
 symphonia-wav = ["rodio/symphonia-wav"]
 
 [dependencies]
-assets_manager = { version = "0.12", default-features = false, path = "../.." }
+assets_manager = { version = "0.13", default-features = false, path = "../.." }
 rodio = { version = "0.20", default-features = false }
