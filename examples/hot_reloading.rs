@@ -17,7 +17,8 @@ fn main() -> Result<(), BoxedError> {
     // The asset reference is obtained outside the loop
     let text = cache.load::<String>("example.hello")?;
 
-    // Indefinitly reload assets if they changed and print `text`
+    // Indefinitely print the content of the file. Hot-reloading is performed in
+    // the background.
     loop {
         println!("{}", text.read());
 

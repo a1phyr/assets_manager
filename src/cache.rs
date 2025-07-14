@@ -20,7 +20,7 @@ use crate::hot_reloading::{AssetKey, HotReloader, records};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct CacheId(usize);
 
-/// The main structure of this crate, used to cache assets.
+/// The main structure of this crate, used to load and store assets.
 ///
 /// It uses interior mutability, so assets can be added in the cache without
 /// requiring a mutable reference, but one is required to remove an asset.
@@ -29,10 +29,6 @@ pub(crate) struct CacheId(usize);
 /// string is constructed from the asset path, replacing `/` by `.` and removing
 /// the extension. Given that, you cannot use `.` in your file names except for
 /// the extension.
-///
-/// **Note**: Using symbolic or hard links within the cached directory can lead
-/// to surprising behavior (especially with hot-reloading), and thus should be
-/// avoided.
 ///
 /// # Example
 ///
@@ -249,13 +245,6 @@ impl AssetCache {
     /// Loads an asset.
     ///
     /// If the asset is not found in the cache, it is loaded from the source.
-    ///
-    /// # Errors
-    ///
-    /// Errors for `Asset`s can occur in several cases:
-    /// - The source could not be read
-    /// - Loaded data could not be converted properly
-    /// - The asset has no extension
     #[inline]
     pub fn load<T: Asset>(&self, id: &str) -> Result<&Handle<T>, Error> {
         let handle = self.load_untyped(id, Type::of_asset::<T>())?;
@@ -266,9 +255,7 @@ impl AssetCache {
     ///
     /// # Panics
     ///
-    /// Panics if an error happens while loading the asset (see [`load`]).
-    ///
-    /// [`load`]: `Self::load`
+    /// Panics if an error happens while loading the asset.
     #[inline]
     #[track_caller]
     pub fn load_expect<T: Asset>(&self, id: &str) -> &Handle<T> {

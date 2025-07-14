@@ -1,5 +1,5 @@
-//! This example shows the use of Compound assets: assets able to load other
-//! assets, and their integration with hot-reloading.
+//! This example shows the use of assets loading other assets, and their
+//! integration with hot-reloading.
 
 use assets_manager::{Asset, AssetCache, BoxedError, FileAsset, SharedString};
 use serde::Deserialize;
@@ -27,9 +27,6 @@ impl FileAsset for Monster {
 }
 
 /// The format of a level description.
-///
-/// Compound assets should not do filesytem operations, so we do this with
-/// another asset.
 #[derive(Deserialize, Debug)]
 struct LevelManifest {
     name: String,
@@ -59,8 +56,7 @@ struct Level {
 ///
 /// It will load the the corresponding manifest, and the necessary monsters.
 /// Note that when hot-reloading is enabled, `assets_manager` records the assets
-/// a Compound depends on. When a dependency is reloading, the Coumpound is also
-/// reloaded. You don't have to write hot-reloading-specific code.
+/// an asset depends on. When a dependency is modified, the asset is reloaded.
 impl Asset for Level {
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
         // Load the manifest

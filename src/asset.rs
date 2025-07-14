@@ -1,30 +1,32 @@
 //! Values loadable from a cache.
 //!
-//! # Asset kinds
+//! Assets are data that are used in a program. They are usually loaded from the
+//! filesystem or from an archive.
 //!
-//! In `assets_manager`, assets are stored in an [`AssetCache`], and are usually
-//! loaded from a [`Source`], a file system abstraction. Most of the I/O with
-//! the source is handled by `assets_manager`, so you can focus on the rest.
+//! In `assets_manager`, assets are types that implement the [`Asset`] trait.
+//! This trait specifies how to load an asset from an [`AssetCache`] given its
+//! ID. The `AssetCache` gives access to other assets (eg your render pipeline
+//! may want to get some shaders) and to a [`Source`] (to give you access to the
+//! filesystem, a ZIP archive, or wherever you store your assets).
 //!
-//! This crate defines several kinds of assets, that have different use cases:
-//! - The most common, [`FileAsset`]s, that are loaded from a single file. A
-//!   `FileAsset` gives a way to get a Rust value from raw bytes. This is nothing
-//!   more than sugar on top of `Compound`.
-//! - [`Compound`] are created by loading other assets and composing them. They
-//!   can also read sources directly.
-//! - [`Storable`] is the widest category: everything `'static` type can fit in
-//!   it. Values of types that implement `Storable` can be inserted in a cache,
-//!   but provide no way to construct them.
+//! Asset IDs are strings that represent paths using dots as separators (e.g.,
+//! `"example.common.name"`). Unlike filesystem paths, they always use dots
+//! regardless of the platform. File extensions are handled separately.
 //!
-//! Additionnally, [`DirLoadable`] assets can be loaded by directory, eventually
-//! recursively. All `Asset` types implement this trait out of the box, but it
-//! can be extended to work with any `Compound`, though it requires a custom
-//! definition.
+//! The [`FileAsset`] trait provides an easy way to implement the `Asset` trait
+//! for assets that can be loaded from a single file (eg an image, a sound,
+//! etc). This module provides utilities to easily implement `FileAsset` for
+//! common formats, such as JSON, TOML or RON.
+//!
+//! Additionally, [`DirLoadable`] assets can be loaded by directory. All types
+//! implementing `FileAsset` also get this trait out of the box. It can be
+//! implemented for any `Asset`, but it requires a manual implementation.
 //!
 //! # Hot-reloading
 //!
-//! Each asset is reloading when any file or directory it reads is modified, or
-//! when a asset it depends on is reloaded itself.
+//! If the `Source` supports hot-reloading, each asset is automatically reloaded
+//! when any file, directory or asset it depends on is modified. Dependencies of
+//! assets are automatically recorded when they are (re)loaded.
 //!
 //! Additionally, one can explicitly disable hot-reloading for a type.
 //!
@@ -53,6 +55,8 @@ pub use self::gltf::Gltf;
 use crate::Handle;
 
 /// An asset that can be loaded from a single file.
+///
+/// Implementing this trait provides an implementation of [`Asset`].
 pub trait FileAsset: Storable {
     /// Use this field if your asset only uses one extension.
     ///
@@ -86,10 +90,9 @@ pub trait FileAsset: Storable {
     /// ```no_run
     /// # cfg_if::cfg_if! { if #[cfg(feature = "json")] {
     /// use assets_manager::{BoxedError, FileAsset, SharedString};
-    /// use serde::Deserialize;
     /// use std::borrow::Cow;
     ///
-    /// #[derive(Deserialize, Default)]
+    /// #[derive(serde::Deserialize, Default)]
     /// struct Item {
     ///     name: String,
     ///     kind: String,
@@ -103,7 +106,7 @@ pub trait FileAsset: Storable {
     ///     }
     ///
     ///     fn default_value(id: &SharedString, error: BoxedError) -> Result<Item, BoxedError> {
-    ///         eprintln!("Error loading {}: {}. Using default value", id, error);
+    ///         log::warn!("Error loading {}: {}. Using default value", id, error);
     ///         Ok(Item::default())
     ///     }
     /// }
@@ -115,32 +118,33 @@ pub trait FileAsset: Storable {
         Err(error)
     }
 
-    /// If `false`, disable hot-reloading for assets of this type (`true` by
+    /// If `false`, disables hot-reloading of assets of this type (`true` by
     /// default).
     const HOT_RELOADED: bool = true;
 }
 
 /// An asset type that can load other kinds of assets.
 ///
-/// `Compound`s can be loaded and retrieved by an [`AssetCache`].
+/// `Asset`s can be loaded and retrieved by an [`AssetCache`].
 ///
-/// A `Compound` often needs to reference other assets, but `Compound` requires
-/// `'static` and a `Handle` is borrowed. See [top-level documentation] for
-/// workarounds.
-///
-/// [top-level documentation]: crate#getting-owned-data
-///
-/// Note that all [`FileAsset`]s implement `Compound`.
-///
-/// # Hot-reloading
-///
-/// Any asset loaded from the given cache is registered as a dependency of the
-/// Compound. When the former is reloaded, the latter will be reloaded too. An
-/// asset cannot depend on itself, or it may cause deadlocks to happen.
-///
-/// To opt out of dependencies recording, use [`AssetCache::no_record`].
+/// Note that all [`FileAsset`]s implement `Asset`.
 pub trait Asset: Storable {
     /// Loads an asset from the cache.
+    ///
+    /// The cache gives access to its underlying [`Source`].
+    ///
+    /// # Hot-reloading
+    ///
+    /// Any file, directory or asset loaded from `cache` is registered as a
+    /// dependency. When a dependency is modified (through direct modification
+    /// or hot-reloading), the asset will be reloaded.
+    ///
+    /// If you don't use threads in this method, you don't need to write
+    /// hot-reloading-specific code.
+    ///
+    /// An asset cannot depend on itself.
+    ///
+    /// To opt out of dependencies recording, use [`AssetCache::no_record`].
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError>;
 
     /// If `false`, disable hot-reloading for assets of this type (`true` by

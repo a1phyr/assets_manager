@@ -3,7 +3,8 @@
 //! This crate aims at providing a filesystem abstraction to easily load external resources.
 //! It was originally thought for games, but can, of course, be used in other contexts.
 //!
-//! The structure [`AssetCache`] is the entry point of the crate.
+//! The structure [`AssetCache`] is the entry point of the crate. See [`Asset`] documentation
+//! to see how to define custom asset types.
 //!
 //! # Cargo features
 //!
@@ -12,25 +13,22 @@
 //!
 //! ### Additional sources
 //!
-//! These features enable to read assets from other sources than the file
-//! system. They are defined in the [`source`] module.
+//! Enable reading assets from sources other than the filesystem.
+//! These sources are defined in the [`source`] module:
 //!
-//! - `embedded`: Embed assets files directly in your binary.
-//! - `zip`: Read asset from zip archives. Note that no decompression method is
-//!   enabled by default, but you can do so with the following features:
-//!   - `zip-bzip2`: Enable `bzip2` decompression.
-//!   - `zip-deflate`: Enable `flate2` decompression.
-//! - `tar`: Read assets from TAR archives.
+//! - `embedded`: Embeds asset files directly in your binary at compile time
+//! - `zip`: Reads assets from ZIP archives
+//!   - Optional compression: `zip-deflate`, `zip-zstd`
+//! - `tar`: Reads assets from TAR archives
 //!
 //! ### Additional formats
 //!
-//! These features add support for asset formats. There is one feature per
-//! format.
+//! These features add support for various asset formats:
 //!
-//! - Serialisation formats (with [`serde`] crate): `bincode`, `json`,
+//! - Serialisation formats (using [`serde`]): `bincode`, `json`,
 //!   `msgpack`, `ron`, `toml`, `yaml`.
-//! - Image formats (with [`image`] crate): `bmp`, `jpeg`, `png` `webp`.
-//! - 3D formats (with [`gltf`] crate): `gltf`.
+//! - Image formats (using [`image`]): `bmp`, `jpeg`, `png` `webp`.
+//! - GlTF format (using [`gltf`]): `gltf`.
 //!
 //! ## External crates support
 //!
@@ -41,14 +39,14 @@
 //!
 //! ### Internal features
 //!
-//! These features change inner data structures implementations.
+//! These features change internal data structures implementations.
 //!
 //! - [`parking_lot`]: Use `parking_lot`'s synchronization primitives.
-//! - [`ahash`]: Use a faster hashing algorithm (enabled by default).
+//! - `faster-hash`: Use a faster hashing algorithm (enabled by default).
 //!
 //! # Basic example
 //!
-//! If the file `assets/common/position.ron` contains this:
+//! Given a file `assets/common/position.ron` which contains this:
 //!
 //! ```text
 //! Point(
@@ -57,7 +55,7 @@
 //! )
 //! ```
 //!
-//! Then you can load it this way (with feature `ron` enabled):
+//! You can load and use it as follows:
 //!
 //! ```
 //! # cfg_if::cfg_if! { if #[cfg(feature = "ron")] {
@@ -78,12 +76,13 @@
 //!     const EXTENSION: &'static str = "ron";
 //!
 //!     // The serialization format
-//!     // In this specific case, the derive macro could be used.
+//!     //
+//!     // In this specific case, the derive macro could be used but we use the
+//!     // full version as a demo.
 //!     fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Result<Self, BoxedError> {
 //!         assets_manager::asset::load_ron(&bytes)
 //!     }
 //! }
-//!
 //!
 //! // Create a new cache to load assets under the "./assets" folder
 //! let cache = AssetCache::new("assets")?;
@@ -111,75 +110,12 @@
 //! # Hot-reloading
 //!
 //! Hot-reloading is a major feature of `assets_manager`: when a file is added,
-//! modified or deleted, the values of all loaded assets that depend on this
-//! file are automatically and transparently updated.
-//!
-//! To use hot-reloading, see [`AssetCache::hot_reload`].
+//! modified or deleted, the values of all assets that depend on this file are
+//! automatically and transparently updated. It is managed automatically in the
+//! background.
 //!
 //! See the [`asset`] module for a precise description of how assets interact
 //! with hot-reloading.
-//!
-//! # Ownership model
-//!
-//! You will notice that you cannot get owned [`Handle`]s, only references whose
-//! lifetime are tied to that of the [`AssetCache`] from which there was loaded.
-//! This may be seen as a weakness, as `'static` data is generally easier to
-//! work with, but it is actually a clever use of Rust ownership system.
-//!
-//! As when you borrow an `&str` from a `String`, an `&Handle` guarantees
-//! that the underlying asset is stored in the cache. This is especially useful
-//! with hot-reloading: all `&Handle` are guaranteed to be reloaded when
-//! possible, so two handles on the same asset always have the same value. This
-//! would not be possible if `Handle`s were always `'static`.
-//!
-//! Note that this also means that you need a mutable reference to a cache to
-//! remove assets from it.
-//!
-//! ## Getting owned data
-//!
-//! Working with owned data is far easier: you don't have to care about
-//! lifetimes, it can easily be sent to other threads, etc. This section gives
-//! a few techniques to work with the fact that caches give references to their
-//! assets.
-//!
-//! Note that none of these proposals is compulsory to use this crate: you can
-//! work with non-`'static` data, or invent your own techniques.
-//!
-//! ### Getting a `&'static AssetCache`
-//!
-//! Because the lifetime of a `Handle` reference is tied to that of the `&AssetCache`,
-//! this makes possible to get `&'static Handle`s. Moreover, it enables you to
-//! call [`AssetCache::enhance_hot_reloading`], which is easier to work with
-//! than the default solution.
-//!
-//! You get easily get a `&'static AssetCache`, with the `once_cell` crate or
-//! [`std::sync::OnceLock`], but you can also do it by [leaking a `Box`](Box::leak).
-//!
-//! Note that using this technique prevents you from removing assets from the
-//! cache, so you have to keep them in memory for the duration of the program.
-//! This also creates global state, which you might want to avoid.
-//!
-//! ### Cloning assets
-//!
-//! Assets being `'static` themselves, cloning them is a good way to opt out of
-//! the lifetime of the cache. If cloning the asset itself is too expensive, you
-//! can take advantage of the fact that `Arc<T>` is an asset if `T` is too and
-//! that cloning an `Arc` is a rather cheap operation.
-//!
-//! Not that this usually does not work wery well with hot-reloading.
-//!
-//! ### Storing `String`s
-//!
-//! Strings are `'static` and easy to work with, and you can use them to load
-//! an asset from the cache, which is a cheap operation if the asset is already
-//! stored in it. If you want to ensure that no heavy operation is used, you
-//! can do so with [`AssetCache::get`].
-//!
-//! If you have to clone them a lot, you may consider changing your `String`
-//! into an `Arc<str>` or a `SharedString` which is cheaper to clone.
-//!
-//! This is the technique internally used by `assets_manager` to store
-//! directories.
 
 #![warn(missing_docs, missing_debug_implementations)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -227,11 +163,11 @@ pub use utils::{SharedBytes, SharedString};
 ///
 /// # Supported formats
 ///
-/// - `"json"`: Use [`loader::JsonLoader`] and extension `.json`
-/// - `"ron"`: Use [`loader::RonLoader`] and extension `.ron`
-/// - `"toml"`: Use [`loader::TomlLoader`] and extension `.toml`
-/// - `"txt"`: Use [`loader::ParseLoader`] and extension `.txt`
-/// - `"yaml"` or `"yml"`: Use [`loader::YamlLoader`] and extensions `.yaml` and `.yml`
+/// - `"json"`: Use [`asset::load_json`] and extension `.json`
+/// - `"ron"`: Use [`asset::load_ron`] and extension `.ron`
+/// - `"toml"`: Use [`asset::load_toml`] and extension `.toml`
+/// - `"txt"`: Use [`asset::load_text`] and extension `.txt`
+/// - `"yaml"` or `"yml"`: Use [`asset::load_yaml`] and extensions `.yaml` and `.yml`
 ///
 /// # Example
 ///

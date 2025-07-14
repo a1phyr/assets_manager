@@ -46,17 +46,22 @@ pub(crate) struct Dynamic {
 
 /// A handle on an asset.
 ///
-/// Such a handle can be used to get access to an asset of type `T`. It is
-/// generally obtained by call `AssetCache::load` and its variants.
+/// It can be obtained through an [`AssetCache`].
 ///
-/// If feature `hot-reloading` is used, this structure wraps a RwLock, so
+/// If feature `hot-reloading` is used, this structure may wrap a `RwLock`, so
 /// assets can be written to be reloaded. As such, any number of read guard can
-/// exist at the same time, but none can exist while reloading an asset (when
-/// calling `AssetCache::hot_reload`).
+/// exist at the same time, but none can exist while reloading an asset.
 ///
-/// You can use thus structure to store a reference to an asset.
-/// However it is generally easier to work with `'static` data. For more
-/// information, see [top-level documentation](crate#getting-owned-data).
+/// You can use this structure to reference an asset directly. However you can
+/// only get *references* to this type, never own it. If you don't want to deal
+/// with lifetimes, you can:
+/// - Get a `&'static AssetCache` (eg with a `static` `LazyLock`), to get a
+///   `'static` `Handle` refernce.
+/// - Store the id of the asset and get it from the cache as needed.
+/// - Get a [`ArcHandle`] through [`strong`] method.
+///
+/// [`AssetCache`]: `crate::AssetCache`
+/// [`strong`]: `Self::strong`
 pub struct Handle<T: ?Sized> {
     id: SharedString,
     type_id: TypeId,
@@ -405,7 +410,10 @@ where
     }
 }
 
-/// Like a `Arc<Handle<T>>`
+/// A strong pointer to a handle.
+///
+/// Like a [`Arc`]`<`[`Handle`]`<T>>`, it deref to [`Handle`]`<T>`, can be
+/// cloned and can be downgraded to [`WeakHandle`]`<T>`.
 pub struct ArcHandle<T: ?Sized>(Arc<Handle<T>>);
 
 impl ArcUntypedHandle {
@@ -450,12 +458,15 @@ where
     }
 }
 
-/// Like a `Weak<Handle<T>>`
+/// A weak pointer to a handle.
+///
+/// Like a [`Weak`]`<`[`Handle`]`<T>>`, it can be upgraded to an
+/// [`ArcHandle`]`<T>`.
 pub struct WeakHandle<T: ?Sized>(Weak<Handle<T>>);
 
 impl<T> WeakHandle<T> {
     /// Constructs a new `WeakHandle<T>`, without allocating any memory.
-    /// Calling [`upgrade`] on the return value always gives [`None`].
+    /// Calling [`upgrade`] on the return value always gives `None`.
     ///
     /// [`upgrade`]: WeakHandle::upgrade
     #[inline]
@@ -514,10 +525,9 @@ impl<T: ?Sized> fmt::Debug for WeakHandle<T> {
     }
 }
 
-/// Like a `Arc<UntypedHandle>`
+/// An untyped version of [`ArcHandle`].
 pub type ArcUntypedHandle = ArcHandle<dyn Any + Send + Sync>;
-
-/// Like a `Weak<UntypedHandle>`
+/// An untyped version of [`WeakHandle`].
 pub type WeakUntypedHandle = WeakHandle<dyn Any + Send + Sync>;
 
 /// RAII guard used to keep a read lock on an asset and release it when dropped.

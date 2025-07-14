@@ -1,22 +1,26 @@
 //! Bytes sources to load assets from.
 //!
-//! This module contains the trait [`Source`], which allows to specify how the
-//! files containing the assets are loaded. The main usage usage of this trait
-//! is with an [`AssetCache`].
+//! This module contains the [`Source`] trait, which defines how files are read.
+//! The primary use of this trait is with [`AssetCache`] to provide flexible
+//! asset loading from different storage backends.
 //!
-//! This module also contains three built-in sources: [`FileSystem`], [`Zip`]
-//! and [`Embedded`].
+//! Built-in sources include:
+//! - [`FileSystem`]: Load from local filesystem
+//! - [`Zip`]: Load from ZIP archives
+//! - [`Tar`]: Load from TAR archives
+//! - [`Embedded`]: Load from assets embedded in the binary
 //!
 //! # Hot-reloading
 //!
-//! Hot-reloading enable assets to be reloaded automatically when the source it
-//! was loaded from was modified. It requires the `Source` to support it. The
-//! built-in [`FileSystem`] source supports it out of the box.
+//! Hot-reloading enables assets to be automatically reloaded when their source files
+//! are modified. This functionality requires the `Source` implementation to support it.
+//! The built-in [`FileSystem`] source provides hot-reloading support out of the box.
 //!
-//! # Using a different source depending on the target platform
+//! # Platform-specific source selection
 //!
-//! There is no file system on WebAssembly, so you can for example choose to
-//! embed your assets on this platform:
+//! Since WebAssembly doesn't have filesystem access, you can conditionally use different
+//! sources based on the target platform. For example, use filesystem on native platforms
+//! and embedded assets on WASM:
 //!
 //! ```no_run
 //! use assets_manager::{AssetCache, source};
@@ -34,7 +38,7 @@
 use std::{borrow::Cow, fmt, io};
 
 #[cfg(doc)]
-use crate::{AssetCache, asset::DirLoadable};
+use crate::{Asset, AssetCache, asset::DirLoadable};
 use crate::{BoxedError, SharedString, hot_reloading::EventSender};
 
 mod filesystem;
@@ -168,7 +172,7 @@ impl OwnedDirEntry {
     }
 }
 
-/// A clonable handle to an immutable memory mapped buffer.
+/// A handle to an immutable memory mapped buffer.
 #[cfg(feature = "mmap")]
 #[cfg_attr(docsrs, doc(cfg(feature = "mmap")))]
 #[derive(Debug)]
@@ -269,13 +273,13 @@ mod private {
 
 /// Bytes sources to load assets from.
 ///
-/// This trait provides an abstraction over a basic filesystem, which is used to
-/// load assets independantly from the actual storage kind.
+/// This trait provides an abstraction over filesystem operations, allowing assets to be
+/// loaded independently of their storage backend (filesystem, archive, embedded, etc.).
 ///
-/// As a consumer of this library, you generally don't need to use this trait,
-/// exept when implementing [`DirLoadable`].
+/// As a consumer of this library, you typically only need to use this trait
+/// directly when implementing [`Asset`] or [`DirLoadable`].
 ///
-/// See [module-level documentation](super::source) for more informations.
+/// See [module-level documentation](super::source) for more information.
 pub trait Source {
     /// Try reading the source given an id and an extension.
     ///

@@ -112,7 +112,7 @@ pub(crate) fn add_dir_record(id: &str) {
 /// Records dependencies for hot-reloading.
 ///
 /// This type is only useful if you do multi-threading within asset loading
-/// (e.g. if you use `rayon` in `Compound::load`).
+/// (e.g. if you use `rayon` in `Asset::load`).
 #[derive(Clone)]
 pub struct Recorder(Option<Arc<Mutex<Dependencies>>>);
 
