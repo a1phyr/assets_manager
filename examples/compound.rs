@@ -1,7 +1,7 @@
 //! This example shows the use of assets loading other assets, and their
 //! integration with hot-reloading.
 
-use assets_manager::{Asset, AssetCache, BoxedError, FileAsset, SharedString};
+use assets_manager::{AssetCache, BoxedError, Compound, FileAsset, SharedString};
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -57,7 +57,7 @@ struct Level {
 /// It will load the the corresponding manifest, and the necessary monsters.
 /// Note that when hot-reloading is enabled, `assets_manager` records the assets
 /// an asset depends on. When a dependency is modified, the asset is reloaded.
-impl Asset for Level {
+impl Compound for Level {
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
         // Load the manifest
         let raw_level = cache.load::<LevelManifest>(id)?.read();

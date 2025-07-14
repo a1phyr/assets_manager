@@ -27,7 +27,7 @@ impl FileAsset for XS {
 #[derive(Debug)]
 pub struct Y(pub i32);
 
-impl Asset for Y {
+impl Compound for Y {
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Y, BoxedError> {
         Ok(Y(cache.load::<X>(id)?.read().0))
     }
@@ -35,7 +35,7 @@ impl Asset for Y {
 
 pub struct Z(pub i32);
 
-impl Asset for Z {
+impl Compound for Z {
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Z, BoxedError> {
         Ok(Z(cache.load::<Y>(id)?.read().0))
     }

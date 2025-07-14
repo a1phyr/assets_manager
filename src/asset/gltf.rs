@@ -1,4 +1,4 @@
-use crate::{Asset, AssetCache, BoxedError, FileAsset, SharedString, utils};
+use crate::{AssetCache, BoxedError, Compound, FileAsset, SharedString, utils};
 use std::path;
 
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
@@ -192,7 +192,7 @@ fn load_image(
 }
 
 #[cfg_attr(docsrs, doc(cfg(feature = "gltf")))]
-impl Asset for Gltf {
+impl Compound for Gltf {
     fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
         let gltf::Gltf { document, mut blob } = cache.load::<gltf::Gltf>(id)?.cloned();
 

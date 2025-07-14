@@ -1,5 +1,5 @@
 use crate::{
-    Asset, AssetCache, BoxedError, SharedString,
+    AssetCache, BoxedError, Compound, SharedString,
     source::{DirEntry, FileSystem},
     tests::{X, Y, Z},
 };
@@ -158,7 +158,7 @@ fn multi_threading() {
         b: i32,
     }
 
-    impl Asset for MyAsset {
+    impl Compound for MyAsset {
         fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
             let recorder = crate::hot_reloading::Recorder::current();
 

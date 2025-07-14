@@ -1,6 +1,6 @@
 //! Definitions of cache entries
 
-use crate::{Asset, SharedString, asset::Storable, key::Type, utils::RwLock};
+use crate::{Compound, SharedString, asset::Storable, key::Type, utils::RwLock};
 use std::{
     any::{Any, TypeId},
     cell::UnsafeCell,
@@ -86,7 +86,7 @@ impl<T: Storable> Handle<T> {
     #[cfg(feature = "hot-reloading")]
     fn new_dynamic(id: SharedString, value: T) -> Self
     where
-        T: Asset,
+        T: Compound,
     {
         Self {
             id,
@@ -129,7 +129,7 @@ impl CacheEntry {
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new<T: Asset>(asset: T, id: SharedString, _mutable: impl FnOnce() -> bool) -> Self {
+    pub fn new<T: Compound>(asset: T, id: SharedString, _mutable: impl FnOnce() -> bool) -> Self {
         #[cfg(not(feature = "hot-reloading"))]
         let inner = Handle::new_static(id, asset);
 

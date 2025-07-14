@@ -117,13 +117,13 @@
 //! See the [`asset`] module for a precise description of how assets interact
 //! with hot-reloading.
 
+#![allow(deprecated)]
 #![warn(missing_docs, missing_debug_implementations)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 extern crate self as assets_manager;
 
 pub mod asset;
-#[allow(deprecated)]
 pub use asset::{Asset, Compound, FileAsset, Storable};
 
 mod cache;
@@ -134,6 +134,8 @@ pub use dirs::{Directory, RawDirectory, RawRecursiveDirectory, RecursiveDirector
 
 mod error;
 pub use error::{BoxedError, Error};
+
+pub mod loader;
 
 mod map;
 

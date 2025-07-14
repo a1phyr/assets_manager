@@ -1,7 +1,7 @@
 //! Definition of the cache
 
 use crate::{
-    Asset, Error, Handle, SharedString,
+    Compound, Error, Handle, SharedString,
     asset::{DirLoadable, Storable},
     entry::{CacheEntry, UntypedHandle},
     key::Type,
@@ -210,9 +210,9 @@ impl AssetCache {
         WeakAssetCache(Arc::downgrade(&self.0))
     }
 
-    /// Temporarily prevent `Asset` dependencies to be recorded.
+    /// Temporarily prevent `Compound` dependencies to be recorded.
     ///
-    /// This function disables dependencies recording in [`Asset::load`].
+    /// This function disables dependencies recording in [`Compound::load`].
     /// Assets loaded during the given closure will not be recorded as
     /// dependencies and the currently loading asset will not be reloaded when
     /// they are.
@@ -246,7 +246,7 @@ impl AssetCache {
     ///
     /// If the asset is not found in the cache, it is loaded from the source.
     #[inline]
-    pub fn load<T: Asset>(&self, id: &str) -> Result<&Handle<T>, Error> {
+    pub fn load<T: Compound>(&self, id: &str) -> Result<&Handle<T>, Error> {
         let handle = self.load_untyped(id, Type::of_asset::<T>())?;
         Ok(handle.downcast_ref_ok())
     }
@@ -258,7 +258,7 @@ impl AssetCache {
     /// Panics if an error happens while loading the asset.
     #[inline]
     #[track_caller]
-    pub fn load_expect<T: Asset>(&self, id: &str) -> &Handle<T> {
+    pub fn load_expect<T: Compound>(&self, id: &str) -> &Handle<T> {
         #[cold]
         #[track_caller]
         fn expect_failed(err: Error) -> ! {
@@ -408,7 +408,7 @@ impl AssetCache {
     /// An error is returned if the given id does not match a valid readable
     /// directory.
     #[inline]
-    pub fn load_dir<T: DirLoadable + Asset>(
+    pub fn load_dir<T: DirLoadable + Compound>(
         &self,
         id: &str,
     ) -> Result<&Handle<crate::Directory<T>>, Error> {
@@ -431,7 +431,7 @@ impl AssetCache {
     /// When loading a directory recursively, directories that can't be read are
     /// ignored.
     #[inline]
-    pub fn load_rec_dir<T: DirLoadable + Asset>(
+    pub fn load_rec_dir<T: DirLoadable + Compound>(
         &self,
         id: &str,
     ) -> Result<&Handle<crate::RecursiveDirectory<T>>, Error> {
@@ -445,10 +445,10 @@ impl AssetCache {
     ///
     /// This can be useful if you need ownership on a non-clonable value.
     ///
-    /// Inside an implementation [`Asset::load`], you should use `T::load`
+    /// Inside an implementation [`Compound::load`], you should use `T::load`
     /// directly.
     #[inline]
-    pub fn load_owned<T: Asset>(&self, id: &str) -> Result<T, Error> {
+    pub fn load_owned<T: Compound>(&self, id: &str) -> Result<T, Error> {
         let id = SharedString::from(id);
         T::load(self, &id).map_err(|err| Error::new(id, err))
     }
