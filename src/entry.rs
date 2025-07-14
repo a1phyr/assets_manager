@@ -328,15 +328,9 @@ impl<T: ?Sized> Handle<T> {
     /// assert!(!watcher.reloaded());
     ///
     /// loop {
-    ///     cache.hot_reload();
-    ///
     ///     if watcher.reloaded() {
     ///         println!("The asset was reloaded !")
     ///     }
-    ///
-    ///     // Calling `reloaded` once more returns false: the asset has not
-    ///     // been reloaded since last call to `reloaded`
-    ///     assert!(!watcher.reloaded());
     /// }
     ///
     /// # }}

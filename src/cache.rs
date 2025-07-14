@@ -170,13 +170,6 @@ impl AssetCache {
 
     /// Returns a reference to the cache's [`Source`].
     #[inline]
-    #[deprecated = "use `.source()` instead"]
-    pub fn raw_source(&self) -> impl Source + Send + Sync + '_ {
-        self.source()
-    }
-
-    /// Returns a reference to the cache's [`Source`].
-    #[inline]
     pub fn downcast_raw_source<S: Source + 'static>(&self) -> Option<&S> {
         self.get_raw_source().downcast_ref()
     }
@@ -452,14 +445,6 @@ impl AssetCache {
         let id = SharedString::from(id);
         T::load(self, &id).map_err(|err| Error::new(id, err))
     }
-
-    #[deprecated = "This function does not need to be called anymore"]
-    #[doc(hidden)]
-    pub fn hot_reload(&self) {}
-
-    #[deprecated = "This function does not need to be called anymore"]
-    #[doc(hidden)]
-    pub fn enhance_hot_reloading(&'static self) {}
 
     #[cfg(feature = "hot-reloading")]
     pub(crate) fn reload_untyped(

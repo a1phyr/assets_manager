@@ -212,9 +212,5 @@ pub use utils::{SharedBytes, SharedString};
 #[cfg(feature = "macros")]
 pub use assets_manager_macros::Asset;
 
-#[deprecated = "Use `AssetCache` instead"]
-/// Type alias to `AssetCache` to ease migration.
-pub type AnyCache<'a> = &'a AssetCache;
-
 #[cfg(test)]
 mod tests;
