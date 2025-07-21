@@ -15,13 +15,13 @@ use std::{borrow::Cow, io};
 mod tests;
 
 const AVAILABLE_EXTENSIONS: &[&str] = &[
-    #[cfg(any(feature = "vorbis", feature = "symphonia-vorbis"))]
+    #[cfg(any(feature = "vorbis", feature = "lewton"))]
     "ogg",
-    #[cfg(any(feature = "minimp3", feature = "symphonia-mp3"))]
+    #[cfg(any(feature = "mp3", feature = "minimp3"))]
     "mp3",
-    #[cfg(any(feature = "flac", feature = "symphonia-flac"))]
+    #[cfg(any(feature = "flac", feature = "claxon"))]
     "flac",
-    #[cfg(any(feature = "wav", feature = "symphonia-wav"))]
+    #[cfg(any(feature = "wav", feature = "hound"))]
     "wav",
 ];
 
@@ -97,28 +97,28 @@ macro_rules! sound_assets {
 
 sound_assets! {
     /// Loads FLAC sounds
-    #[cfg(any(feature = "flac", feature = "symphonia-flac"))]
+    #[cfg(any(feature = "flac", feature = "claxon"))]
     struct Flac => (
         Decoder::new_flac,
         &["flac"],
     );
 
     /// Loads MP3 sounds
-    #[cfg(any(feature = "minimp3", feature = "symphonia-mp3"))]
+    #[cfg(any(feature = "mp3", feature = "minimp3"))]
     struct Mp3 => (
         Decoder::new_mp3,
         &["mp3"],
     );
 
     /// Loads Vorbis sounds
-    #[cfg(any(feature = "vorbis", feature = "symphonia-vorbis"))]
+    #[cfg(any(feature = "vorbis", feature = "lewton"))]
     struct Vorbis => (
         Decoder::new_vorbis,
         &["ogg"],
     );
 
     /// Loads WAV sounds
-    #[cfg(any(feature = "wav", feature = "symphonia-wav"))]
+    #[cfg(any(feature = "wav", feature = "hound"))]
     struct Wav => (
         Decoder::new_wav,
         &["wav"],

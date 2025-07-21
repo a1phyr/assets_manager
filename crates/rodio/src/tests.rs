@@ -17,16 +17,15 @@ macro_rules! sound_test {
 }
 
 sound_test! {
-    #[cfg(any(feature = "flac", feature = "symphonia-flac"))]
+    #[cfg(any(feature = "flac", feature = "claxon"))]
     test_flac => crate::Flac,
 
-    // Disabled for feature "minimp3" because of soundness issues
-    #[cfg(feature = "symphonia-mp3")]
+    #[cfg(any(feature = "mp3", feature = "minimp3"))]
     test_mp3 => crate::Mp3,
 
-    #[cfg(any(feature = "vorbis", feature = "symphonia-vorbis"))]
+    #[cfg(any(feature = "vorbis", feature = "lewton"))]
     test_vorbis => crate::Vorbis,
 
-    #[cfg(any(feature = "wav", feature = "symphonia-wav"))]
+    #[cfg(any(feature = "wav", feature = "hound"))]
     test_wav => crate::Wav,
 }
