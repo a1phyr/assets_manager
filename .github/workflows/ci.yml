@@ -23,11 +23,6 @@ jobs:
       - name: Install toolchain
         run: rustup toolchain add ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
 
-      - name: Downgrade dependencies to MSRV
-        if: ${{ matrix.rust == '1.85' }}
-        run: |
-          true
-
       - run: cargo test
       - run: cargo test --all-features
 

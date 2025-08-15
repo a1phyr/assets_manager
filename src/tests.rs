@@ -11,19 +11,6 @@ impl FileAsset for X {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct XS(pub i32);
-
-impl FileAsset for XS {
-    const EXTENSION: &'static str = "x";
-
-    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Result<Self, BoxedError> {
-        crate::asset::load_text(&bytes).map(XS)
-    }
-
-    const HOT_RELOADED: bool = false;
-}
-
 #[derive(Debug)]
 pub struct Y(pub i32);
 
