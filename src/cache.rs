@@ -377,7 +377,7 @@ impl AssetCache {
         let mut cur = self;
 
         loop {
-            if cur.0.assets.contains_key(id, type_id) {
+            if cur.0.assets.get(id, type_id).is_some() {
                 return true;
             }
 

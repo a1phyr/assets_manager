@@ -101,12 +101,6 @@ impl AssetMap {
         let entry = shard.insert(hash, entry, &self.hash_builder);
         unsafe { entry.extend_lifetime() }
     }
-
-    pub fn contains_key(&self, id: &str, type_id: TypeId) -> bool {
-        let hash = self.hash_one((type_id, id));
-        let shard = self.get_shard(hash).0.read();
-        shard.get(hash, id, type_id).is_some()
-    }
 }
 
 impl fmt::Debug for AssetMap {
