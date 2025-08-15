@@ -3,7 +3,7 @@ use super::Mmap;
 use super::{DirEntry, FileContent, Source};
 use crate::{
     SharedString,
-    utils::{HashMap, IdBuilder, extension_of},
+    utils::{HashMap, IdBuilder, split_file_name},
 };
 use std::{fmt, io, path};
 use sync_file::SyncFile;
@@ -81,9 +81,11 @@ fn register_file(
             }
         }
 
+        let (name, ext) = split_file_name(&path)?;
+
         // Build the ids of the file and its parent.
         let parent_id = id_builder.join();
-        id_builder.push(path.file_stem()?.to_str()?)?;
+        id_builder.push(name)?;
         let id = id_builder.join();
 
         // Register the file in the maps.
@@ -93,8 +95,7 @@ fn register_file(
                 return None;
             }
 
-            let ext = extension_of(&path)?.into();
-            let desc = FileDesc(id, ext);
+            let desc = FileDesc(id, ext.into());
             let info = FileInfo {
                 start: file.data_start(),
                 compressed_size: file.compressed_size(),
@@ -106,9 +107,7 @@ fn register_file(
             files.insert(desc.clone(), info);
             OwnedEntry::File(desc)
         } else {
-            if !dirs.contains_key(&id) {
-                dirs.insert(id.clone(), Vec::new());
-            }
+            dirs.entry(id.clone()).or_default();
             OwnedEntry::Dir(id)
         };
         dirs.entry(parent_id).or_default().push(entry);

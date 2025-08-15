@@ -1,7 +1,6 @@
 use crate::{
     BoxedError,
     hot_reloading::{EventSender, FsWatcherBuilder},
-    utils::extension_of,
 };
 
 #[cfg(doc)]
@@ -83,9 +82,8 @@ impl Source for FileSystem {
         for entry in entries.flatten() {
             let path = entry.path();
 
-            let name = match path.file_stem().and_then(|n| n.to_str()) {
-                Some(name) => name,
-                None => continue,
+            let Some((name, ext)) = crate::utils::split_file_name(&path) else {
+                continue;
             };
 
             let this_id: &str = if !id.is_empty() {
@@ -97,9 +95,7 @@ impl Source for FileSystem {
             };
 
             if path.is_file() {
-                if let Some(ext) = extension_of(&path) {
-                    f(DirEntry::File(this_id, ext));
-                }
+                f(DirEntry::File(this_id, ext));
             } else if path.is_dir() {
                 f(DirEntry::Directory(this_id));
             }

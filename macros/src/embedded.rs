@@ -36,10 +36,12 @@ impl Input {
     }
 }
 
-fn extension_of(path: &Path) -> Option<&str> {
-    match path.extension() {
-        Some(ext) => ext.to_str(),
-        None => Some(""),
+pub(crate) fn split_file_name(path: &Path) -> Option<(&str, &str)> {
+    let name = path.file_name()?.to_str()?;
+    match name.split_once('.') {
+        Some(("", _)) => None,
+        Some(res) => Some(res),
+        None => Some((name, "")),
     }
 }
 
@@ -65,23 +67,22 @@ fn read_dir(path: &Path, content: &mut Content, id: Id, errors: &mut Vec<syn::Er
             }
         };
 
-        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-            let this_id = id.clone().push(stem);
+        let Some((name, ext)) = split_file_name(&path) else {
+            continue;
+        };
 
-            let Ok(meta) = path.metadata() else {
-                continue;
-            };
+        let this_id = id.clone().push(name);
 
-            if meta.is_dir() {
-                content.push_dir(Some(&id), this_id.clone());
-                read_dir(&path, content, this_id, errors);
-            } else if meta.is_file() {
-                if let Some(ext) = extension_of(&path) {
-                    let ext = ext.to_owned();
-                    let desc = FileDesc(this_id, ext, path);
-                    content.push_file(desc, &id);
-                }
-            }
+        let Ok(meta) = path.metadata() else {
+            continue;
+        };
+
+        if meta.is_dir() {
+            content.push_dir(Some(&id), this_id.clone());
+            read_dir(&path, content, this_id, errors);
+        } else if meta.is_file() {
+            let desc = FileDesc(this_id, ext.to_owned(), path);
+            content.push_file(desc, &id);
         }
     }
 }

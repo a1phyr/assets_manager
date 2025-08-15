@@ -40,11 +40,12 @@ pub fn path_of_entry(root: &Path, entry: DirEntry) -> PathBuf {
     path
 }
 
-#[inline]
-pub(crate) fn extension_of(path: &Path) -> Option<&str> {
-    match path.extension() {
-        Some(ext) => ext.to_str(),
-        None => Some(""),
+pub(crate) fn split_file_name(path: &Path) -> Option<(&str, &str)> {
+    let name = path.file_name()?.to_str()?;
+    match name.split_once('.') {
+        Some(("", _)) => None,
+        Some(res) => Some(res),
+        None => Some((name, "")),
     }
 }
 

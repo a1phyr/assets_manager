@@ -100,7 +100,7 @@ impl<'a> UriContent<'a> {
             Ok(Self::Bin { mime_type, content })
         } else {
             let path = path::Path::new(uri);
-            let ext = utils::extension_of(path).unwrap();
+            let (name, ext) = utils::split_file_name(path).unwrap();
 
             let capacity = base_id.len() + uri.len();
             let mut id = String::with_capacity(capacity);
@@ -114,10 +114,10 @@ impl<'a> UriContent<'a> {
                 match comp {
                     path::Component::Normal(comp) => {
                         let comp = match components.peek() {
-                            Some(_) => comp,
-                            None => path::Path::new(comp).file_stem().unwrap_or(comp),
+                            Some(_) => comp.to_str().unwrap(),
+                            None => name,
                         };
-                        id.push_str(comp.to_str().unwrap());
+                        id.push_str(comp);
                     }
                     path::Component::CurDir => (),
                     _ => return Err(format!("unsupported path component: {comp:?}").into()),

@@ -70,15 +70,16 @@ fn id_of_path(id_builder: &mut IdBuilder, root: &Path, path: &Path) -> Option<Ow
         }
     }
 
+    let (name, ext) = crate::utils::split_file_name(path)?;
+
     // Build the id of the file.
-    id_builder.push(path.file_stem()?.to_str()?)?;
+    id_builder.push(name)?;
     let id = id_builder.join();
 
     let entry = if path.is_dir() {
         OwnedDirEntry::Directory(id)
     } else {
-        let ext = crate::utils::extension_of(path)?.into();
-        OwnedDirEntry::File(id, ext)
+        OwnedDirEntry::File(id, ext.into())
     };
 
     Some(entry)

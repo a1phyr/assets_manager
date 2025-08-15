@@ -3,7 +3,7 @@ use super::Mmap;
 use super::{DirEntry, FileContent};
 use crate::{
     SharedString,
-    utils::{HashMap, IdBuilder},
+    utils::{HashMap, IdBuilder, split_file_name},
 };
 use std::{fmt, io, path};
 use sync_file::SyncFile;
@@ -87,15 +87,16 @@ fn register_file(
             }
         }
 
+        let (name, ext) = split_file_name(&path)?;
+
         // Build the ids of the file and its parent.
         let parent_id = id_builder.join();
-        id_builder.push(path.file_stem()?.to_str()?)?;
+        id_builder.push(name)?;
         let id = id_builder.join();
 
         // Register the file in the maps.
         let entry = if file.header().entry_type().is_file() {
-            let ext = crate::utils::extension_of(&path)?.into();
-            let desc = FileDesc(id, ext);
+            let desc = FileDesc(id, ext.into());
 
             let start = file.raw_file_position();
             let size = file.size();

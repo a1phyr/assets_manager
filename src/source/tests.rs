@@ -56,7 +56,33 @@ macro_rules! test_source {
             dir.sort();
             assert_eq!(dir, ["common", "example", "test"]);
         }
+
+        #[test]
+        fn multi_ext() {
+            let source = $source;
+
+            source
+                .read_dir("test.multi-ext", &mut |d| {
+                    assert_eq!(d, DirEntry::File("test.multi-ext.hello", "test.txt"))
+                })
+                .unwrap();
+
+            let cache = crate::AssetCache::with_source(source);
+            let t = cache.load_expect::<MultiExt>("test.multi-ext.hello");
+            assert_eq!(t.read().0, "hello!\n");
+        }
     };
+}
+
+#[derive(Debug)]
+struct MultiExt(String);
+
+impl crate::FileAsset for MultiExt {
+    const EXTENSION: &'static str = "test.txt";
+
+    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Result<Self, BoxedError> {
+        String::from_bytes(bytes).map(Self)
+    }
 }
 
 mod filesystem {
