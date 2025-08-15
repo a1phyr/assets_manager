@@ -38,6 +38,11 @@ impl FsWatcherBuilder {
 
     /// Starts the watcher.
     pub fn build(self, events: super::EventSender) {
+        // Stop everything now if no path is beeing watched.
+        if self.roots.is_empty() {
+            return;
+        }
+
         let event_handler = NotifyEventHandler {
             roots: self.roots,
             events,
