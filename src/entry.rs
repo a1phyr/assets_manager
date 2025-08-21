@@ -200,6 +200,12 @@ impl UntypedHandle {
         unsafe { &*(self as *const Self) }
     }
 
+    /// Gets the `TypeId` of the underlying type.
+    #[inline]
+    pub fn type_id(&self) -> TypeId {
+        self.type_id
+    }
+
     /// Returns `true` if the inner type is the same as T.
     #[inline]
     pub fn is<T: 'static>(&self) -> bool {
