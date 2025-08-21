@@ -19,8 +19,8 @@ use super::{DirEntry, Source};
 ///
 /// ## Hot-reloading
 ///
-/// This source supports hot-reloading: when a file is edited, the corresponding
-/// assets are reloaded when [`AssetCache::hot_reload`] is called.
+/// This source supports hot-reloading: when a file is edited, the assets that
+/// use it are reloaded.
 ///
 /// ## WebAssembly
 ///
