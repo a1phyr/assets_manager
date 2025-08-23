@@ -198,6 +198,33 @@ impl AssetCache {
         }
     }
 
+    /// Returns an iterator over `self` and its ancestors.
+    ///
+    /// ```
+    /// let cache = assets_manager::AssetCache::new("assets")?;
+    /// let child = cache.make_child();
+    /// let grandchild = child.make_child();
+    ///
+    /// let mut ancestors = grandchild.ancestors();
+    ///
+    /// assert!(ancestors.next().is_some()); // `grandchild`
+    /// assert!(ancestors.next().is_some()); // `child`
+    /// assert!(ancestors.next().is_some()); // `cache`
+    /// assert!(ancestors.next().is_none());
+    ///
+    /// # Ok::<_, assets_manager::BoxedError>(())
+    /// ```
+    #[inline]
+    pub fn ancestors(&self) -> impl Iterator<Item = &AssetCache> {
+        let mut next = Some(self);
+
+        std::iter::from_fn(move || {
+            let cur = next?;
+            next = cur.parent();
+            Some(cur)
+        })
+    }
+
     #[cfg(feature = "hot-reloading")]
     pub(crate) fn downgrade(&self) -> WeakAssetCache {
         WeakAssetCache(Arc::downgrade(&self.0))
