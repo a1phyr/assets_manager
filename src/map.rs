@@ -3,7 +3,7 @@ use std::{any::TypeId, fmt, hash::BuildHasher};
 use crate::{
     UntypedHandle,
     entry::CacheEntry,
-    utils::{RandomState, RwLock},
+    utils::{RandomState, RwLock, RwLockReadGuard},
 };
 
 struct EntryMap {
@@ -101,6 +101,10 @@ impl AssetMap {
         let entry = shard.insert(hash, entry, &self.hash_builder);
         unsafe { entry.extend_lifetime() }
     }
+
+    pub fn iter_shards(&self) -> impl Iterator<Item = LockedShard<'_>> {
+        self.shards.iter().map(|s| LockedShard(s.0.read()))
+    }
 }
 
 impl fmt::Debug for AssetMap {
@@ -112,5 +116,13 @@ impl fmt::Debug for AssetMap {
         }
 
         map.finish()
+    }
+}
+
+pub(crate) struct LockedShard<'a>(RwLockReadGuard<'a, EntryMap>);
+
+impl LockedShard<'_> {
+    pub fn iter(&self) -> impl Iterator<Item = &UntypedHandle> {
+        self.0.map.iter().map(|e| e.inner())
     }
 }

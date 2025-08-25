@@ -170,6 +170,28 @@ mod asset_cache {
 
         assert_eq!(*handle.read(), X(42));
     }
+
+    #[test]
+    fn get_all() {
+        let cache = AssetCache::new("assets").unwrap();
+
+        cache.load_expect::<String>("test.string_base");
+        cache.load_expect::<X>("test.cache");
+
+        let mut all: Vec<_> = cache
+            .iter()
+            .map(|h| (h.id().as_str(), h.type_id()))
+            .collect();
+        all.sort();
+
+        assert_eq!(
+            all,
+            &[
+                ("test.cache", std::any::TypeId::of::<X>()),
+                ("test.string_base", std::any::TypeId::of::<String>()),
+            ]
+        )
+    }
 }
 
 mod handle {

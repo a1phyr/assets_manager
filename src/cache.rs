@@ -513,6 +513,45 @@ impl AssetCache {
         #[cfg(not(feature = "hot-reloading"))]
         false
     }
+
+    /// Iterate on all assets in this cache and its ancestors.
+    ///
+    /// # Deadlocks
+    ///
+    /// Using this function will cause deadlock if trying to insert asset in
+    /// this cache or its ancestors in the current thread while the iterator is
+    /// alive. You can work around that by collecting the iterator to a `Vec`
+    /// first.
+    pub fn iter(&self) -> impl Iterator<Item = &UntypedHandle> {
+        let all_shards: Vec<_> = self
+            .ancestors()
+            .flat_map(|c| c.0.assets.iter_shards())
+            .collect();
+
+        // We are building a self-referential struct here so we extend the
+        // lifetime of the borrowed slice so the borrow-checker don't annoy us.
+        #[allow(clippy::deref_addrof)]
+        let slice = unsafe { &*(&raw const *all_shards) };
+
+        slice.iter().flat_map(move |s| {
+            // HACK: we need this variable to be moved in the iterator because
+            // it holds the locks guards.
+            let _shards = &all_shards;
+            s.iter()
+        })
+    }
+
+    /// Iterate on all assets of a given type in this cache and its ancestors.
+    ///
+    /// # Deadlocks
+    ///
+    /// Using this function will cause deadlock if trying to insert asset in
+    /// this cache or its ancestors in the current thread while the iterator is
+    /// alive. You can work around that by collecting the iterator to a `Vec`
+    /// first.
+    pub fn iter_by_type<T: Storable>(&self) -> impl Iterator<Item = &Handle<T>> {
+        self.iter().filter_map(|h| h.downcast_ref())
+    }
 }
 
 #[cfg(feature = "hot-reloading")]
