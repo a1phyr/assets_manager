@@ -54,6 +54,11 @@ impl Events {
 pub struct EventSender(Sender<Events>);
 
 impl EventSender {
+    #[inline]
+    pub(crate) fn is_disconnected(&self) -> bool {
+        self.0.send(Events::Multiple(Vec::new())).is_err()
+    }
+
     /// Sends an event.
     ///
     /// A matching asset in the cache will be reloaded, and with it compounds
@@ -181,12 +186,12 @@ fn hot_reloading_thread(events: Receiver<Events>, cache_msg: Receiver<CacheMessa
 
             1 => match ready.recv(&events) {
                 Ok(msg) => {
-                    data.handle_events(msg);
+                    let had_events = data.handle_events(msg);
 
                     // If we don't have a deadline yet, set one 20ms in the future
                     // We don't touch it if we already have one to avoid a continous
                     // event stream preventing running updates.
-                    if deadline.is_none() {
+                    if had_events && deadline.is_none() {
                         deadline = Some(time::Instant::now() + time::Duration::from_millis(20));
                     }
                 }
@@ -219,14 +224,17 @@ impl HotReloadingData {
         }
     }
 
-    fn handle_events(&mut self, events: Events) {
+    fn handle_events(&mut self, events: Events) -> bool {
+        let mut has_events = false;
         events.for_each(|event| {
             let entry = event.into_dependency();
             if self.deps.contains(&entry) {
                 log::trace!("New event: {entry:?}");
+                has_events = true;
                 self.to_reload.insert(entry);
             }
         });
+        has_events
     }
 
     fn run_update(&mut self) {

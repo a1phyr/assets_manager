@@ -140,7 +140,7 @@ impl notify::EventHandler for NotifyEventHandler {
                             Some(parent) => vec![parent],
                             None => vec![],
                         },
-                        notify::EventKind::Access(_) | notify::EventKind::Other => return,
+                        notify::EventKind::Access(_) | notify::EventKind::Other => break,
                     };
                     let ids = paths
                         .into_iter()
@@ -149,10 +149,15 @@ impl notify::EventHandler for NotifyEventHandler {
 
                     if self.events.send_multiple(ids).is_err() {
                         drop(self.watcher.take());
+                        return;
                     }
                 }
             }
             Err(err) => log::warn!("Error from notify: {err}"),
+        }
+
+        if self.events.is_disconnected() {
+            drop(self.watcher.take());
         }
     }
 }
