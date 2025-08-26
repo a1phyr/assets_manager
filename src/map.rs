@@ -31,7 +31,7 @@ impl EntryMap {
         let key = entry.as_key();
         let entry = self
             .map
-            .entry(hash, |e| e.as_key() == key, |e| hasher.hash_one(e))
+            .entry(hash, |e| e.as_key() == key, |e| hasher.hash_one(e.as_key()))
             .or_insert(entry);
 
         entry.into_mut().inner()

@@ -164,22 +164,6 @@ impl CacheEntry {
     }
 }
 
-impl PartialEq for CacheEntry {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        self.as_key() == other.as_key()
-    }
-}
-
-impl Eq for CacheEntry {}
-
-impl std::hash::Hash for CacheEntry {
-    #[inline]
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.as_key().hash(state)
-    }
-}
-
 impl fmt::Debug for CacheEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CacheEntry")
