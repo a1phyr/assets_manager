@@ -1,50 +1,14 @@
-use std::{any::TypeId, fmt, hash::BuildHasher};
-
 use crate::{
     UntypedHandle,
     entry::CacheEntry,
     utils::{RandomState, RwLock, RwLockReadGuard},
 };
-
-struct EntryMap {
-    map: hashbrown::HashTable<CacheEntry>,
-}
-
-impl EntryMap {
-    pub fn new() -> EntryMap {
-        EntryMap {
-            map: hashbrown::HashTable::new(),
-        }
-    }
-
-    pub fn get(&self, hash: u64, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
-        let entry = self.map.find(hash, |e| e.as_key() == (type_id, id))?;
-        Some(entry.inner())
-    }
-
-    pub fn insert(
-        &mut self,
-        hash: u64,
-        entry: CacheEntry,
-        hasher: &impl BuildHasher,
-    ) -> &UntypedHandle {
-        let key = entry.as_key();
-        let entry = self
-            .map
-            .entry(hash, |e| e.as_key() == key, |e| hasher.hash_one(e.as_key()))
-            .or_insert(entry);
-
-        entry.into_mut().inner()
-    }
-
-    pub fn iter_for_debug(&self) -> impl Iterator<Item = (&str, &CacheEntry)> + '_ {
-        self.map.iter().map(|e| (e.as_key().1, e))
-    }
-}
+use hashbrown::HashTable;
+use std::{any::TypeId, fmt};
 
 // Make shards go to different cache lines to reduce contention
 #[repr(align(64))]
-struct Shard(RwLock<EntryMap>);
+struct Shard(RwLock<HashTable<CacheEntry>>);
 
 /// A map to store assets, optimized for concurrency.
 ///
@@ -70,7 +34,7 @@ impl AssetMap {
 
         let hash_builder = RandomState::default();
         let shards = (0..shards)
-            .map(|_| Shard(RwLock::new(EntryMap::new())))
+            .map(|_| Shard(RwLock::new(HashTable::new())))
             .collect();
 
         AssetMap {
@@ -91,15 +55,23 @@ impl AssetMap {
     pub fn get(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
         let hash = self.hash_one((type_id, id));
         let shard = self.get_shard(hash).0.read();
-        let entry = shard.get(hash, id, type_id)?;
-        unsafe { Some(entry.extend_lifetime()) }
+
+        let entry = shard.find(hash, |e| e.as_key() == (type_id, id))?;
+
+        unsafe { Some(entry.inner().extend_lifetime()) }
     }
 
     pub fn insert(&self, entry: CacheEntry) -> &UntypedHandle {
         let hash = self.hash_one(entry.as_key());
         let shard = &mut *self.get_shard(hash).0.write();
-        let entry = shard.insert(hash, entry, &self.hash_builder);
-        unsafe { entry.extend_lifetime() }
+
+        let key = entry.as_key();
+        let entry = shard
+            .entry(hash, |e| e.as_key() == key, |e| self.hash_one(e.as_key()))
+            .or_insert(entry)
+            .into_mut();
+
+        unsafe { entry.inner().extend_lifetime() }
     }
 
     pub fn iter_shards(&self) -> impl Iterator<Item = LockedShard<'_>> {
@@ -109,20 +81,20 @@ impl AssetMap {
 
 impl fmt::Debug for AssetMap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut map = f.debug_map();
+        let mut map = f.debug_list();
 
         for shard in &*self.shards {
-            map.entries(shard.0.read().iter_for_debug());
+            map.entries(shard.0.read().iter());
         }
 
         map.finish()
     }
 }
 
-pub(crate) struct LockedShard<'a>(RwLockReadGuard<'a, EntryMap>);
+pub(crate) struct LockedShard<'a>(RwLockReadGuard<'a, HashTable<CacheEntry>>);
 
 impl LockedShard<'_> {
     pub fn iter(&self) -> impl Iterator<Item = &UntypedHandle> {
-        self.0.map.iter().map(|e| e.inner())
+        self.0.iter().map(|e| e.inner())
     }
 }

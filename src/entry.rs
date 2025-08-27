@@ -167,6 +167,7 @@ impl CacheEntry {
 impl fmt::Debug for CacheEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CacheEntry")
+            .field("id", &self.0.id)
             .field("type_id", &self.0.type_id)
             .finish()
     }
