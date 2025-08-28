@@ -250,7 +250,7 @@ impl HotReloadingData {
                 continue;
             };
 
-            let new_deps = asset_cache.reload_untyped(&key.id, key.typ);
+            let new_deps = asset_cache.reload_untyped(&key);
 
             if let Some(new_deps) = new_deps {
                 self.deps.insert_asset(key, new_deps);

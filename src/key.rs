@@ -70,7 +70,7 @@ impl fmt::Debug for Type {
 /// The key used to identify assets
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct AssetKey {
-    pub typ: Type,
+    pub type_id: TypeId,
     pub id: SharedString,
     pub cache: CacheId,
 }
@@ -78,7 +78,7 @@ pub(crate) struct AssetKey {
 impl AssetKey {
     #[allow(dead_code)]
     #[inline]
-    pub fn new(id: SharedString, typ: Type, cache: CacheId) -> Self {
-        Self { id, typ, cache }
+    pub fn new(id: SharedString, type_id: TypeId, cache: CacheId) -> Self {
+        Self { id, type_id, cache }
     }
 }

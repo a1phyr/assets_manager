@@ -255,10 +255,8 @@ impl AssetCache {
 
     #[cfg(feature = "hot-reloading")]
     fn add_record(&self, handle: &UntypedHandle) {
-        if self.0.reloader.is_some() {
-            if let Some(typ) = handle.typ() {
-                records::add_record(handle.id(), typ, self.id());
-            }
+        if self.0.reloader.is_some() && handle.typ().is_some() {
+            records::add_record(handle.id(), handle.type_id(), self.id());
         }
     }
 
@@ -319,7 +317,7 @@ impl AssetCache {
                     crate::hot_reloading::records::record(|| (typ.inner.load)(self, id));
                 let entry = result?;
 
-                let key = AssetKey::new(entry.inner().id().clone(), typ, self.id());
+                let key = AssetKey::new(entry.inner().id().clone(), typ.type_id, self.id());
                 reloader.add_asset(key, deps);
 
                 let handle = self.0.assets.insert(entry);
@@ -474,12 +472,11 @@ impl AssetCache {
     }
 
     #[cfg(feature = "hot-reloading")]
-    pub(crate) fn reload_untyped(
-        &self,
-        id: &SharedString,
-        typ: Type,
-    ) -> Option<records::Dependencies> {
-        let handle = self.get_untyped(id, typ.type_id)?;
+    pub(crate) fn reload_untyped(&self, key: &AssetKey) -> Option<records::Dependencies> {
+        let handle = self.get_untyped(&key.id, key.type_id)?;
+
+        let id = handle.id();
+        let typ = handle.typ()?;
 
         let (entry, deps) = records::record(|| {
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
