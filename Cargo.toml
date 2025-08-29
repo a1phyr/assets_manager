@@ -59,7 +59,7 @@ assets_manager_macros = { path = "macros", version = "0.3.1", optional = true }
 
 foldhash = { version = "0.2.0", optional = true }
 parking_lot = { version = "0.12", optional = true }
-hashbrown = { version = "0.15", default-features = false }
+hashbrown = { version = ">=0.15,<0.17", default-features = false }
 
 notify = { version = "8.0", optional = true }
 crossbeam-channel = { version = "0.5", optional = true }
