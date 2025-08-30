@@ -35,28 +35,14 @@ enum CacheMessage {
 #[derive(Debug)]
 pub struct Disconnected;
 
-enum Events {
-    Single(OwnedDirEntry),
-    Multiple(Vec<OwnedDirEntry>),
-}
-
-impl Events {
-    fn for_each(self, mut f: impl FnMut(OwnedDirEntry)) {
-        match self {
-            Self::Single(e) => f(e),
-            Self::Multiple(e) => e.into_iter().for_each(f),
-        }
-    }
-}
-
 /// Sends events for hot-reloading.
 #[derive(Debug, Clone)]
-pub struct EventSender(Sender<Events>);
+pub struct EventSender(Sender<Vec<OwnedDirEntry>>);
 
 impl EventSender {
     #[inline]
     pub(crate) fn is_disconnected(&self) -> bool {
-        self.0.send(Events::Multiple(Vec::new())).is_err()
+        self.0.send(Vec::new()).is_err()
     }
 
     /// Sends an event.
@@ -65,7 +51,7 @@ impl EventSender {
     /// that depends on it.
     #[inline]
     pub fn send(&self, event: OwnedDirEntry) -> Result<(), Disconnected> {
-        self.0.send(Events::Single(event)).or(Err(Disconnected))
+        self.0.send(vec![event]).or(Err(Disconnected))
     }
 
     /// Sends multiple events an once.
@@ -75,22 +61,10 @@ impl EventSender {
     where
         I: IntoIterator<Item = OwnedDirEntry>,
     {
-        let mut events = events.into_iter();
-        let event = match events.size_hint().1 {
-            Some(0) => return Ok(0),
-            Some(1) => match events.next() {
-                Some(event) => Events::Single(event),
-                None => return Ok(0),
-            },
-            _ => Events::Multiple(events.collect()),
-        };
+        let events: Vec<_> = events.into_iter().collect();
+        let len = events.len();
 
-        let len = match &event {
-            Events::Single(_) => 1,
-            Events::Multiple(events) => events.len(),
-        };
-
-        match self.0.send(event) {
+        match self.0.send(events) {
             Ok(()) => Ok(len),
             Err(_) => Err(Disconnected),
         }
@@ -150,7 +124,7 @@ impl HotReloader {
     }
 }
 
-fn hot_reloading_thread(events: Receiver<Events>, cache_msg: Receiver<CacheMessage>) {
+fn hot_reloading_thread(events: Receiver<Vec<OwnedDirEntry>>, cache_msg: Receiver<CacheMessage>) {
     log::info!("Starting hot-reloading");
 
     let mut data = HotReloadingData::new();
@@ -224,16 +198,16 @@ impl HotReloadingData {
         }
     }
 
-    fn handle_events(&mut self, events: Events) -> bool {
+    fn handle_events(&mut self, events: Vec<OwnedDirEntry>) -> bool {
         let mut has_events = false;
-        events.for_each(|event| {
+        for event in events {
             let entry = event.into_dependency();
             if self.deps.contains(&entry) {
                 log::trace!("New event: {entry:?}");
                 has_events = true;
                 self.to_reload.insert(entry);
             }
-        });
+        }
         has_events
     }
 
