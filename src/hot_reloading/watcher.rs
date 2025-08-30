@@ -130,20 +130,20 @@ impl notify::EventHandler for NotifyEventHandler {
                 log::trace!("Received filesystem event: {event:?}");
 
                 for path in event.paths {
-                    let paths = match event.kind {
-                        notify::EventKind::Any | notify::EventKind::Modify(_) => vec![&*path],
+                    let paths: &[_] = match event.kind {
+                        notify::EventKind::Any | notify::EventKind::Modify(_) => &[&*path],
                         notify::EventKind::Create(_) => match path.parent() {
-                            Some(parent) => vec![&path, parent],
-                            None => vec![&*path],
+                            Some(parent) => &[&path, parent],
+                            None => &[&*path],
                         },
                         notify::EventKind::Remove(_) => match path.parent() {
-                            Some(parent) => vec![parent],
-                            None => vec![],
+                            Some(parent) => &[parent],
+                            None => &[], // rm -rf / --no-preserve-root
                         },
                         notify::EventKind::Access(_) | notify::EventKind::Other => break,
                     };
                     let ids = paths
-                        .into_iter()
+                        .iter()
                         .flat_map(|p| self.roots.iter().map(move |r| (p, r)))
                         .filter_map(|(path, root)| id_of_path(&mut self.id_builder, root, path));
 
