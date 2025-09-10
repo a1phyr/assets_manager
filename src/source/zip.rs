@@ -273,6 +273,9 @@ impl<R> fmt::Debug for Zip<R> {
 trait ReadSeek: io::Read + io::Seek {}
 impl<R: io::Read + io::Seek> ReadSeek for R {}
 
+trait BufReadSeek: io::BufRead + io::Seek {}
+impl<R: io::BufRead + io::Seek> BufReadSeek for R {}
+
 #[expect(clippy::type_complexity)]
 fn read_archive(
     reader: &mut dyn ReadSeek,
@@ -299,11 +302,16 @@ fn read_file_reader<'a, R: io::Read + io::Seek + Clone>(
     reader: &'a R,
     info: &FileInfo,
 ) -> io::Result<FileContent<'a>> {
-    read_file_bufreader(io::BufReader::new(reader.clone()), info)
+    /// Polymorphisation of `read_file_reader`
+    fn inner(reader: &mut dyn ReadSeek, info: &FileInfo) -> io::Result<FileContent<'static>> {
+        read_file_bufreader(&mut io::BufReader::new(reader), info)
+    }
+
+    inner(&mut reader.clone(), info)
 }
 
-fn read_file_bufreader<R: io::BufRead + io::Seek>(
-    mut reader: R,
+fn read_file_bufreader(
+    reader: &mut dyn BufReadSeek,
     info: &FileInfo,
 ) -> io::Result<FileContent<'static>> {
     use io::Read;
@@ -335,9 +343,13 @@ fn read_file_bytes<'a, T: AsRef<[u8]>>(
     reader: &'a io::Cursor<T>,
     info: &FileInfo,
 ) -> io::Result<FileContent<'a>> {
+    read_file_bytes_impl(reader.get_ref().as_ref(), info)
+}
+
+/// Polymorphisation of `read_file_bytes`
+fn read_file_bytes_impl<'a>(zip: &'a [u8], info: &FileInfo) -> io::Result<FileContent<'a>> {
     if info.compression_method != zip::CompressionMethod::Stored {
-        let reader = io::Cursor::new(reader.get_ref().as_ref());
-        return read_file_bufreader(reader, info);
+        return read_file_bufreader(&mut io::Cursor::new(zip), info);
     }
 
     if info.compressed_size != info.decompressed_size {
@@ -345,7 +357,6 @@ fn read_file_bytes<'a, T: AsRef<[u8]>>(
     }
 
     let start = info.start as usize;
-    let zip = reader.get_ref().as_ref();
     let file = zip
         .get(start..start + info.compressed_size as usize)
         .ok_or(io::ErrorKind::InvalidData)?;
