@@ -268,11 +268,11 @@ impl fmt::Debug for SharedBytes {
 
 #[cfg(feature = "serde")]
 #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
-impl serde::Serialize for SharedBytes {
+impl serde_core::Serialize for SharedBytes {
     #[inline]
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer,
+        S: serde_core::Serializer,
     {
         serializer.serialize_bytes(self)
     }
@@ -280,15 +280,15 @@ impl serde::Serialize for SharedBytes {
 
 #[cfg(feature = "serde")]
 #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
-impl<'de> serde::Deserialize<'de> for SharedBytes {
+impl<'de> serde_core::Deserialize<'de> for SharedBytes {
     #[inline]
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'de>,
+        D: serde_core::Deserializer<'de>,
     {
         struct Visitor;
 
-        impl serde::de::Visitor<'_> for Visitor {
+        impl serde_core::de::Visitor<'_> for Visitor {
             type Value = SharedBytes;
 
             #[inline]
@@ -297,22 +297,25 @@ impl<'de> serde::Deserialize<'de> for SharedBytes {
             }
 
             #[inline]
-            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+            fn visit_str<E: serde_core::de::Error>(self, v: &str) -> Result<Self::Value, E> {
                 Ok(SharedBytes::from_slice(v.as_bytes()))
             }
 
             #[inline]
-            fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
+            fn visit_string<E: serde_core::de::Error>(self, v: String) -> Result<Self::Value, E> {
                 Ok(SharedBytes::from_vec(v.into_bytes()))
             }
 
             #[inline]
-            fn visit_bytes<E: serde::de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            fn visit_bytes<E: serde_core::de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
                 Ok(SharedBytes::from_slice(v))
             }
 
             #[inline]
-            fn visit_byte_buf<E: serde::de::Error>(self, v: Vec<u8>) -> Result<Self::Value, E> {
+            fn visit_byte_buf<E: serde_core::de::Error>(
+                self,
+                v: Vec<u8>,
+            ) -> Result<Self::Value, E> {
                 Ok(SharedBytes::from_vec(v))
             }
         }

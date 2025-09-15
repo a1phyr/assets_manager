@@ -255,7 +255,7 @@ string_assets! {
 /// This function uses the standard bincode format, which is the default in bincode 2.0.
 #[cfg(feature = "bincode")]
 #[cfg_attr(docsrs, doc(cfg(feature = "bincode")))]
-pub fn load_bincode_standard<'de, T: serde::Deserialize<'de>>(
+pub fn load_bincode_standard<'de, T: serde_core::Deserialize<'de>>(
     bytes: &'de [u8],
 ) -> Result<T, BoxedError> {
     let (res, _) = bincode::serde::borrow_decode_from_slice(bytes, bincode::config::standard())?;
@@ -267,7 +267,7 @@ pub fn load_bincode_standard<'de, T: serde::Deserialize<'de>>(
 /// This function uses the legacy bincode format, which was the default in bincode 1.0.
 #[cfg(feature = "bincode")]
 #[cfg_attr(docsrs, doc(cfg(feature = "bincode")))]
-pub fn load_bincode_legacy<'de, T: serde::Deserialize<'de>>(
+pub fn load_bincode_legacy<'de, T: serde_core::Deserialize<'de>>(
     bytes: &'de [u8],
 ) -> Result<T, BoxedError> {
     let (res, _) = bincode::serde::borrow_decode_from_slice(bytes, bincode::config::legacy())?;
@@ -277,35 +277,37 @@ pub fn load_bincode_legacy<'de, T: serde::Deserialize<'de>>(
 /// Deserializes a value from a JSON file.
 #[cfg(feature = "json")]
 #[cfg_attr(docsrs, doc(cfg(feature = "json")))]
-pub fn load_json<'de, T: serde::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
+pub fn load_json<'de, T: serde_core::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
     serde_json::from_slice(bytes).map_err(Box::from)
 }
 
 /// Deserializes a value from a msgpack-encoded file.
 #[cfg(feature = "msgpack")]
 #[cfg_attr(docsrs, doc(cfg(feature = "msgpack")))]
-pub fn load_msgpack<'de, T: serde::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
+pub fn load_msgpack<'de, T: serde_core::Deserialize<'de>>(
+    bytes: &'de [u8],
+) -> Result<T, BoxedError> {
     rmp_serde::from_slice(bytes).map_err(Box::from)
 }
 
 /// Deserializes a value from a RON file.
 #[cfg(feature = "ron")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ron")))]
-pub fn load_ron<'de, T: serde::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
+pub fn load_ron<'de, T: serde_core::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
     ron::de::from_bytes(bytes).map_err(Box::from)
 }
 
 /// Deserializes a value from a TOML file.
 #[cfg(feature = "toml")]
 #[cfg_attr(docsrs, doc(cfg(feature = "toml")))]
-pub fn load_toml<'de, T: serde::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
+pub fn load_toml<'de, T: serde_core::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
     toml::from_slice(bytes).map_err(Box::from)
 }
 
 /// Deserializes a value from a YAML file.
 #[cfg(feature = "yaml")]
 #[cfg_attr(docsrs, doc(cfg(feature = "yaml")))]
-pub fn load_yaml<'de, T: serde::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
+pub fn load_yaml<'de, T: serde_core::Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, BoxedError> {
     serde_yaml::from_slice(bytes).map_err(Box::from)
 }
 
@@ -377,33 +379,33 @@ macro_rules! serde_assets {
             }
 
             #[cfg(feature = $feature)]
-            impl<T> serde::Serialize for $name<T>
+            impl<T> serde_core::Serialize for $name<T>
             where
-                T: serde::Serialize,
+                T: serde_core::Serialize,
             {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
                 where
-                    S: serde::Serializer,
+                    S: serde_core::Serializer,
                 {
                     self.0.serialize(serializer)
                 }
             }
 
             #[cfg(feature = $feature)]
-            impl<'de, T> serde::Deserialize<'de> for $name<T>
+            impl<'de, T> serde_core::Deserialize<'de> for $name<T>
             where
-                T: serde::Deserialize<'de>,
+                T: serde_core::Deserialize<'de>,
             {
                 fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
                 where
-                    D: serde::Deserializer<'de>,
+                    D: serde_core::Deserializer<'de>,
                 {
                     T::deserialize(deserializer).map($name)
                 }
 
                 fn deserialize_in_place<D>(deserializer: D, place: &mut Self) -> Result<(), D::Error>
                 where
-                    D: serde::Deserializer<'de>,
+                    D: serde_core::Deserializer<'de>,
                 {
                     T::deserialize_in_place(deserializer, &mut place.0)
                 }
@@ -413,7 +415,7 @@ macro_rules! serde_assets {
             #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
             impl<T> FileAsset for $name<T>
             where
-                T: for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
+                T: for<'de> serde_core::Deserialize<'de> + Send + Sync + 'static,
             {
                 const EXTENSIONS: &'static [&'static str] = &[$( $ext ),*];
 

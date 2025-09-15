@@ -194,11 +194,11 @@ impl fmt::Display for SharedString {
 
 #[cfg(feature = "serde")]
 #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
-impl serde::Serialize for SharedString {
+impl serde_core::Serialize for SharedString {
     #[inline]
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer,
+        S: serde_core::Serializer,
     {
         serializer.serialize_str(self)
     }
@@ -206,15 +206,15 @@ impl serde::Serialize for SharedString {
 
 #[cfg(feature = "serde")]
 #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
-impl<'de> serde::Deserialize<'de> for SharedString {
+impl<'de> serde_core::Deserialize<'de> for SharedString {
     #[inline]
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'de>,
+        D: serde_core::Deserializer<'de>,
     {
         struct Visitor;
 
-        impl serde::de::Visitor<'_> for Visitor {
+        impl serde_core::de::Visitor<'_> for Visitor {
             type Value = SharedString;
 
             #[inline]
@@ -223,32 +223,35 @@ impl<'de> serde::Deserialize<'de> for SharedString {
             }
 
             #[inline]
-            fn visit_str<E: serde::de::Error>(self, s: &str) -> Result<Self::Value, E> {
+            fn visit_str<E: serde_core::de::Error>(self, s: &str) -> Result<Self::Value, E> {
                 Ok(SharedString::from(s))
             }
 
             #[inline]
-            fn visit_string<E: serde::de::Error>(self, s: String) -> Result<Self::Value, E> {
+            fn visit_string<E: serde_core::de::Error>(self, s: String) -> Result<Self::Value, E> {
                 Ok(SharedString::from(s))
             }
 
             #[inline]
-            fn visit_bytes<E: serde::de::Error>(self, s: &[u8]) -> Result<Self::Value, E> {
+            fn visit_bytes<E: serde_core::de::Error>(self, s: &[u8]) -> Result<Self::Value, E> {
                 match str::from_utf8(s) {
                     Ok(s) => Ok(SharedString::from(s)),
                     Err(_) => {
-                        let unexp = serde::de::Unexpected::Bytes(s);
+                        let unexp = serde_core::de::Unexpected::Bytes(s);
                         Err(E::invalid_value(unexp, &self))
                     }
                 }
             }
 
             #[inline]
-            fn visit_byte_buf<E: serde::de::Error>(self, s: Vec<u8>) -> Result<Self::Value, E> {
+            fn visit_byte_buf<E: serde_core::de::Error>(
+                self,
+                s: Vec<u8>,
+            ) -> Result<Self::Value, E> {
                 match String::from_utf8(s) {
                     Ok(s) => Ok(SharedString::from(s)),
                     Err(e) => {
-                        let unexp = serde::de::Unexpected::Bytes(e.as_bytes());
+                        let unexp = serde_core::de::Unexpected::Bytes(e.as_bytes());
                         Err(E::invalid_value(unexp, &self))
                     }
                 }
