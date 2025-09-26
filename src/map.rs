@@ -6,6 +6,28 @@ use crate::{
 use hashbrown::HashTable;
 use std::{any::TypeId, fmt};
 
+#[derive(Clone, Default)]
+struct Hasher(RandomState);
+
+impl Hasher {
+    #[inline]
+    fn hash_entry(&self, entry: &CacheEntry) -> u64 {
+        let (type_id, id) = entry.as_key();
+        self.hash_key(id, type_id)
+    }
+
+    fn hash_key(&self, id: &str, type_id: TypeId) -> u64 {
+        use std::hash::*;
+
+        // We use a custom implementation because we don't need the prefix-free
+        // hash implementation of `str`, which saves us a hash call.
+        let mut hasher = self.0.build_hasher();
+        type_id.hash(&mut hasher);
+        hasher.write(id.as_bytes());
+        hasher.finish()
+    }
+}
+
 // Make shards go to different cache lines to reduce contention
 #[repr(align(64))]
 struct Shard(RwLock<HashTable<CacheEntry>>);
@@ -18,7 +40,7 @@ struct Shard(RwLock<HashTable<CacheEntry>>);
 ///   inner `HashMap`s.
 /// - Provide an interface with the minimum of generics to reduce compile times.
 pub(crate) struct AssetMap {
-    hash_builder: RandomState,
+    hasher: Hasher,
     shards: Box<[Shard]>,
 }
 
@@ -32,19 +54,12 @@ impl AssetMap {
             }
         };
 
-        let hash_builder = RandomState::default();
+        let hasher = Hasher::default();
         let shards = (0..shards)
             .map(|_| Shard(RwLock::new(HashTable::new())))
             .collect();
 
-        AssetMap {
-            hash_builder,
-            shards,
-        }
-    }
-
-    fn hash_one(&self, key: (TypeId, &str)) -> u64 {
-        std::hash::BuildHasher::hash_one(&self.hash_builder, key)
+        AssetMap { hasher, shards }
     }
 
     fn get_shard(&self, hash: u64) -> &Shard {
@@ -53,7 +68,7 @@ impl AssetMap {
     }
 
     pub fn get(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
-        let hash = self.hash_one((type_id, id));
+        let hash = self.hasher.hash_key(id, type_id);
         let shard = self.get_shard(hash).0.read();
 
         let entry = shard.find(hash, |e| e.as_key() == (type_id, id))?;
@@ -62,12 +77,12 @@ impl AssetMap {
     }
 
     pub fn insert(&self, entry: CacheEntry) -> &UntypedHandle {
-        let hash = self.hash_one(entry.as_key());
+        let hash = self.hasher.hash_entry(&entry);
         let shard = &mut *self.get_shard(hash).0.write();
 
         let key = entry.as_key();
         let entry = shard
-            .entry(hash, |e| e.as_key() == key, |e| self.hash_one(e.as_key()))
+            .entry(hash, |e| e.as_key() == key, |e| self.hasher.hash_entry(e))
             .or_insert(entry)
             .into_mut();
 
