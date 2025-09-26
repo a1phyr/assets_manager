@@ -38,9 +38,6 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: Install toolchain
-        run: rustup toolchain add stable && rustup default stable
-
       - run: cargo clippy --workspace -- -D warnings
       - run: cargo clippy --workspace --all-features -- -D warnings
 
