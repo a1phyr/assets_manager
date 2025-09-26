@@ -5,7 +5,7 @@ use crate::{
     asset::{DirLoadable, Storable},
     entry::{CacheEntry, UntypedHandle},
     key::Type,
-    map::AssetMap,
+    map::{AssetMap, Hasher},
     source::{FileSystem, Source},
 };
 
@@ -85,6 +85,7 @@ struct AssetCacheInner {
     reloader: Option<HotReloader>,
 
     assets: AssetMap,
+    hasher: Hasher,
     kind: CacheKind,
 }
 
@@ -114,6 +115,7 @@ impl AssetCache {
             reloader: HotReloader::start(&*source),
 
             assets: AssetMap::new(),
+            hasher: Hasher::default(),
             kind: CacheKind::Root { source },
         }));
 
@@ -132,6 +134,7 @@ impl AssetCache {
             reloader: None,
 
             assets: AssetMap::new(),
+            hasher: Hasher::default(),
             kind: CacheKind::Root {
                 source: Box::new(source),
             },
@@ -145,6 +148,7 @@ impl AssetCache {
             reloader: self.0.reloader.clone(),
 
             assets: AssetMap::new(),
+            hasher: self.0.hasher.clone(),
             kind: CacheKind::Node {
                 parent: self.clone(),
             },
@@ -320,14 +324,14 @@ impl AssetCache {
                 let key = AssetKey::new(entry.inner().id().clone(), typ.type_id, self.id());
                 reloader.add_asset(key, deps);
 
-                let handle = self.0.assets.insert(entry);
+                let handle = self.0.assets.insert(entry, &self.0.hasher);
                 self.add_record(handle);
                 return Ok(handle);
             }
         }
 
         let entry = (typ.inner.load)(self, id)?;
-        Ok(self.0.assets.insert(entry))
+        Ok(self.0.assets.insert(entry, &self.0.hasher))
     }
 
     /// Gets a value from the cache.
@@ -351,10 +355,13 @@ impl AssetCache {
     ///
     /// This is an equivalent of `get` but with a dynamic type.
     pub fn get_untyped(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
+        let key = &(type_id, id);
+        let hash = self.0.hasher.hash_key(key);
+
         let mut cur = self;
 
         loop {
-            if let Some(handle) = cur.0.assets.get(id, type_id) {
+            if let Some(handle) = cur.0.assets.get(hash, key) {
                 #[cfg(feature = "hot-reloading")]
                 cur.add_record(handle);
 
@@ -386,9 +393,9 @@ impl AssetCache {
     #[cold]
     fn add_any<T: Storable>(&self, id: &str, asset: T) -> &UntypedHandle {
         let id = SharedString::from(id);
-        let handle = CacheEntry::new_any(asset, id, false);
+        let entry = CacheEntry::new_any(asset, id, false);
 
-        self.0.assets.insert(handle)
+        self.0.assets.insert(entry, &self.0.hasher)
     }
 
     /// Returns `true` if the cache contains the specified asset.
@@ -399,10 +406,13 @@ impl AssetCache {
 
     /// Returns `true` if the cache contains the specified asset.
     fn contains_untyped(&self, id: &str, type_id: TypeId) -> bool {
+        let key = &(type_id, id);
+        let hash = self.0.hasher.hash_key(key);
+
         let mut cur = self;
 
         loop {
-            if cur.0.assets.get(id, type_id).is_some() {
+            if cur.0.assets.get(hash, key).is_some() {
                 return true;
             }
 

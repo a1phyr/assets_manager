@@ -7,16 +7,15 @@ use hashbrown::HashTable;
 use std::{any::TypeId, fmt};
 
 #[derive(Clone, Default)]
-struct Hasher(RandomState);
+pub(crate) struct Hasher(RandomState);
 
 impl Hasher {
     #[inline]
-    fn hash_entry(&self, entry: &CacheEntry) -> u64 {
-        let (type_id, id) = entry.as_key();
-        self.hash_key(id, type_id)
+    pub fn hash_entry(&self, entry: &CacheEntry) -> u64 {
+        self.hash_key(&entry.as_key())
     }
 
-    fn hash_key(&self, id: &str, type_id: TypeId) -> u64 {
+    pub fn hash_key(&self, (type_id, id): &(TypeId, &str)) -> u64 {
         use std::hash::*;
 
         // We use a custom implementation because we don't need the prefix-free
@@ -40,7 +39,6 @@ struct Shard(RwLock<HashTable<CacheEntry>>);
 ///   inner `HashMap`s.
 /// - Provide an interface with the minimum of generics to reduce compile times.
 pub(crate) struct AssetMap {
-    hasher: Hasher,
     shards: Box<[Shard]>,
 }
 
@@ -54,12 +52,11 @@ impl AssetMap {
             }
         };
 
-        let hasher = Hasher::default();
         let shards = (0..shards)
             .map(|_| Shard(RwLock::new(HashTable::new())))
             .collect();
 
-        AssetMap { hasher, shards }
+        AssetMap { shards }
     }
 
     fn get_shard(&self, hash: u64) -> &Shard {
@@ -67,22 +64,21 @@ impl AssetMap {
         &self.shards[id]
     }
 
-    pub fn get(&self, id: &str, type_id: TypeId) -> Option<&UntypedHandle> {
-        let hash = self.hasher.hash_key(id, type_id);
+    pub fn get(&self, hash: u64, key: &(TypeId, &str)) -> Option<&UntypedHandle> {
         let shard = self.get_shard(hash).0.read();
 
-        let entry = shard.find(hash, |e| e.as_key() == (type_id, id))?;
+        let entry = shard.find(hash, |e| e.as_key() == *key)?;
 
         unsafe { Some(entry.inner().extend_lifetime()) }
     }
 
-    pub fn insert(&self, entry: CacheEntry) -> &UntypedHandle {
-        let hash = self.hasher.hash_entry(&entry);
+    pub fn insert(&self, entry: CacheEntry, hasher: &Hasher) -> &UntypedHandle {
+        let hash = hasher.hash_entry(&entry);
         let shard = &mut *self.get_shard(hash).0.write();
 
         let key = entry.as_key();
         let entry = shard
-            .entry(hash, |e| e.as_key() == key, |e| self.hasher.hash_entry(e))
+            .entry(hash, |e| e.as_key() == key, |e| hasher.hash_entry(e))
             .or_insert(entry)
             .into_mut();
 
