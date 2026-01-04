@@ -11,9 +11,12 @@ impl Inner {
             }
         }
 
-        &Self {
-            hot_reloaded: T::HOT_RELOADED,
-            load: load::<T>,
+        const {
+            &Self {
+                hot_reloaded: T::HOT_RELOADED,
+                type_id: TypeId::of::<T>(),
+                load: load::<T>,
+            }
         }
     }
 }
@@ -21,14 +24,13 @@ impl Inner {
 #[allow(dead_code)]
 pub(crate) struct Inner {
     pub hot_reloaded: bool,
+    pub type_id: TypeId,
     pub load: fn(&AssetCache, id: SharedString) -> Result<CacheEntry, Error>,
 }
 
 /// A structure to represent the type on an [`Asset`]
 #[derive(Clone, Copy)]
 pub(crate) struct Type {
-    // TODO: move this into `inner` when `TypeId::of` is const-stable
-    pub(crate) type_id: TypeId,
     pub(crate) inner: &'static Inner,
 }
 
@@ -37,7 +39,6 @@ impl Type {
     #[inline]
     pub(crate) fn of_asset<T: Asset>() -> Self {
         Self {
-            type_id: TypeId::of::<T>(),
             inner: Inner::of::<T>(),
         }
     }
@@ -46,14 +47,14 @@ impl Type {
 impl hash::Hash for Type {
     #[inline]
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.type_id.hash(state);
+        self.inner.type_id.hash(state);
     }
 }
 
 impl PartialEq for Type {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.type_id == other.type_id
+        self.inner.type_id == other.inner.type_id
     }
 }
 
@@ -62,7 +63,7 @@ impl Eq for Type {}
 impl fmt::Debug for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("AssetType")
-            .field("type_id", &self.type_id)
+            .field("type_id", &self.inner.type_id)
             .finish()
     }
 }

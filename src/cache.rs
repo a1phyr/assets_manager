@@ -298,7 +298,7 @@ impl AssetCache {
     }
 
     fn load_untyped(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
-        match self.get_untyped(id, typ.type_id) {
+        match self.get_untyped(id, typ.inner.type_id) {
             Some(handle) => Ok(handle),
             None => self.add_asset(id, typ),
         }
@@ -322,7 +322,7 @@ impl AssetCache {
                 crate::hot_reloading::records::record(|| (typ.inner.load)(self, id));
             let entry = result?;
 
-            let key = AssetKey::new(entry.inner().id().clone(), typ.type_id, self.id());
+            let key = AssetKey::new(entry.inner().id().clone(), typ.inner.type_id, self.id());
             reloader.add_asset(key, deps);
 
             let handle = self.0.assets.insert(entry, &self.0.hasher);
