@@ -37,7 +37,7 @@ unsafe fn swap_any(a: &mut dyn Any, b: &mut dyn Any) {
 
 #[allow(dead_code)]
 pub(crate) struct Dynamic {
-    typ: Type,
+    typ: &'static Type,
 
     lock: RwLock<()>,
     reload_global: AtomicBool,
@@ -259,7 +259,7 @@ impl<T: ?Sized> Handle<T> {
 
     #[cfg(feature = "hot-reloading")]
     #[inline]
-    pub(crate) fn typ(&self) -> Option<Type> {
+    pub(crate) fn typ(&self) -> Option<&'static Type> {
         self.either(|| None, |d| Some(d.typ))
     }
 

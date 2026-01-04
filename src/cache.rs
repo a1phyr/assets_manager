@@ -297,15 +297,15 @@ impl AssetCache {
         }
     }
 
-    fn load_untyped(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
-        match self.get_untyped(id, typ.inner.type_id) {
+    fn load_untyped(&self, id: &str, typ: &Type) -> Result<&UntypedHandle, Error> {
+        match self.get_untyped(id, typ.type_id) {
             Some(handle) => Ok(handle),
             None => self.add_asset(id, typ),
         }
     }
 
     #[cold]
-    fn add_asset(&self, id: &str, typ: Type) -> Result<&UntypedHandle, Error> {
+    fn add_asset(&self, id: &str, typ: &Type) -> Result<&UntypedHandle, Error> {
         log::trace!("Loading \"{id}\"");
 
         let id = SharedString::from(id);
@@ -315,14 +315,13 @@ impl AssetCache {
         }
 
         #[cfg(feature = "hot-reloading")]
-        if typ.inner.hot_reloaded
+        if typ.hot_reloaded
             && let Some(reloader) = &self.0.reloader
         {
-            let (result, deps) =
-                crate::hot_reloading::records::record(|| (typ.inner.load)(self, id));
+            let (result, deps) = crate::hot_reloading::records::record(|| (typ.load)(self, id));
             let entry = result?;
 
-            let key = AssetKey::new(entry.inner().id().clone(), typ.inner.type_id, self.id());
+            let key = AssetKey::new(entry.inner().id().clone(), typ.type_id, self.id());
             reloader.add_asset(key, deps);
 
             let handle = self.0.assets.insert(entry, &self.0.hasher);
@@ -330,7 +329,7 @@ impl AssetCache {
             return Ok(handle);
         }
 
-        let entry = (typ.inner.load)(self, id)?;
+        let entry = (typ.load)(self, id)?;
         Ok(self.0.assets.insert(entry, &self.0.hasher))
     }
 
@@ -490,7 +489,7 @@ impl AssetCache {
 
         let (entry, deps) = records::record(|| {
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                (typ.inner.load)(self, id.clone())
+                (typ.load)(self, id.clone())
             }))
         });
 

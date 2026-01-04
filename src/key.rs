@@ -2,8 +2,16 @@ use std::{any::TypeId, fmt, hash};
 
 use crate::{Asset, AssetCache, Error, SharedString, cache::CacheId, entry::CacheEntry};
 
-impl Inner {
-    fn of<T: Asset>() -> &'static Self {
+pub(crate) struct Type {
+    #[cfg(feature = "hot-reloading")]
+    pub hot_reloaded: bool,
+    pub type_id: TypeId,
+    pub load: fn(&AssetCache, id: SharedString) -> Result<CacheEntry, Error>,
+}
+
+/// A structure to represent the type on an [`Asset`]
+impl Type {
+    pub const fn of_asset<T: Asset>() -> &'static Self {
         fn load<T: Asset>(cache: &AssetCache, id: SharedString) -> Result<CacheEntry, Error> {
             match T::load(cache, &id) {
                 Ok(asset) => Ok(CacheEntry::new(asset, id, || cache.is_hot_reloaded())),
@@ -13,6 +21,7 @@ impl Inner {
 
         const {
             &Self {
+                #[cfg(feature = "hot-reloading")]
                 hot_reloaded: T::HOT_RELOADED,
                 type_id: TypeId::of::<T>(),
                 load: load::<T>,
@@ -21,40 +30,17 @@ impl Inner {
     }
 }
 
-#[allow(dead_code)]
-pub(crate) struct Inner {
-    pub hot_reloaded: bool,
-    pub type_id: TypeId,
-    pub load: fn(&AssetCache, id: SharedString) -> Result<CacheEntry, Error>,
-}
-
-/// A structure to represent the type on an [`Asset`]
-#[derive(Clone, Copy)]
-pub(crate) struct Type {
-    pub(crate) inner: &'static Inner,
-}
-
-impl Type {
-    /// Creates an `AssetType` for type `T`.
-    #[inline]
-    pub(crate) fn of_asset<T: Asset>() -> Self {
-        Self {
-            inner: Inner::of::<T>(),
-        }
-    }
-}
-
 impl hash::Hash for Type {
     #[inline]
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.inner.type_id.hash(state);
+        self.type_id.hash(state);
     }
 }
 
 impl PartialEq for Type {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.inner.type_id == other.inner.type_id
+        self.type_id == other.type_id
     }
 }
 
@@ -63,7 +49,7 @@ impl Eq for Type {}
 impl fmt::Debug for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("AssetType")
-            .field("type_id", &self.inner.type_id)
+            .field("type_id", &self.type_id)
             .finish()
     }
 }
