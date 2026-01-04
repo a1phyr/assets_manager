@@ -115,10 +115,10 @@ where
 
             // Select all files with an extension valid for type `T`
             cache.source().read_dir(id, &mut |entry| {
-                if let DirEntry::File(id, ext) = entry {
-                    if extensions.contains(&ext) {
-                        ids.push(id.into());
-                    }
+                if let DirEntry::File(id, ext) = entry
+                    && extensions.contains(&ext)
+                {
+                    ids.push(id.into());
                 }
             })?;
 

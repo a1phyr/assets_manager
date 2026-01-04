@@ -315,19 +315,19 @@ impl AssetCache {
         }
 
         #[cfg(feature = "hot-reloading")]
-        if typ.inner.hot_reloaded {
-            if let Some(reloader) = &self.0.reloader {
-                let (result, deps) =
-                    crate::hot_reloading::records::record(|| (typ.inner.load)(self, id));
-                let entry = result?;
+        if typ.inner.hot_reloaded
+            && let Some(reloader) = &self.0.reloader
+        {
+            let (result, deps) =
+                crate::hot_reloading::records::record(|| (typ.inner.load)(self, id));
+            let entry = result?;
 
-                let key = AssetKey::new(entry.inner().id().clone(), typ.type_id, self.id());
-                reloader.add_asset(key, deps);
+            let key = AssetKey::new(entry.inner().id().clone(), typ.type_id, self.id());
+            reloader.add_asset(key, deps);
 
-                let handle = self.0.assets.insert(entry, &self.0.hasher);
-                self.add_record(handle);
-                return Ok(handle);
-            }
+            let handle = self.0.assets.insert(entry, &self.0.hasher);
+            self.add_record(handle);
+            return Ok(handle);
         }
 
         let entry = (typ.inner.load)(self, id)?;
