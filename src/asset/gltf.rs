@@ -106,7 +106,6 @@ impl<'a> UriContent<'a> {
             let mut id = String::with_capacity(capacity);
 
             id.push_str(base_id);
-            id.push('.');
 
             let mut components = path.components().peekable();
 
@@ -117,6 +116,7 @@ impl<'a> UriContent<'a> {
                             Some(_) => comp.to_str().unwrap(),
                             None => name,
                         };
+                        id.push('.');
                         id.push_str(comp);
                     }
                     path::Component::CurDir => (),
