@@ -225,6 +225,15 @@ impl<'a> FileContent<'a> {
         Self::Owned(Box::new(x))
     }
 
+    /// Converts `self` into an owned `Vec`.
+    pub fn into_bytes(self) -> Vec<u8> {
+        match self {
+            FileContent::Slice(bytes) => bytes.to_vec(),
+            FileContent::Buffer(bytes) => bytes,
+            FileContent::Owned(bytes) => (*bytes).as_ref().to_vec(),
+        }
+    }
+
     #[inline]
     pub(crate) fn with_cow<T>(self, f: impl FnOnce(Cow<[u8]>) -> T) -> T {
         match self {
