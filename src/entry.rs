@@ -129,13 +129,13 @@ impl CacheEntry {
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new<T: Asset>(asset: T, id: SharedString, _mutable: impl FnOnce() -> bool) -> Self {
+    pub fn new<T: Asset>(asset: T, id: SharedString, _mutable: bool) -> Self {
         #[cfg(not(feature = "hot-reloading"))]
         let inner = Handle::new_static(id, asset);
 
         // Even if hot-reloading is enabled, we can avoid the lock in some cases.
         #[cfg(feature = "hot-reloading")]
-        let inner = if T::HOT_RELOADED && _mutable() {
+        let inner = if T::HOT_RELOADED && _mutable {
             Handle::new_dynamic(id, asset)
         } else {
             Handle::new_static(id, asset)

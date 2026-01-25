@@ -14,7 +14,7 @@ impl Type {
     pub const fn of_asset<T: Asset>() -> &'static Self {
         fn load<T: Asset>(cache: &AssetCache, id: SharedString) -> Result<CacheEntry, Error> {
             match T::load(cache, &id) {
-                Ok(asset) => Ok(CacheEntry::new(asset, id, || cache.is_hot_reloaded())),
+                Ok(asset) => Ok(CacheEntry::new(asset, id, cache.is_hot_reloaded())),
                 Err(err) => Err(Error::new(id, err)),
             }
         }
