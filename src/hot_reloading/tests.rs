@@ -204,7 +204,7 @@ fn parent() {
     let root = AssetCache::new("assets").unwrap();
     let child = root.make_child();
 
-    root.load_expect::<X>("test.hot_child.a");
+    let a_root = root.load_expect::<X>("test.hot_child.a");
     let a = child.load_expect::<Y>("test.hot_child.a");
     let b = child.load_expect::<X>("test.hot_child.b");
 
@@ -220,4 +220,10 @@ fn parent() {
     sleep();
 
     assert_eq!(a.read().0, 3);
+
+    drop(child);
+
+    write_i32("assets/test/hot_child/a.x".as_ref(), 5).unwrap();
+    sleep();
+    assert_eq!(a_root.read().0, 5);
 }

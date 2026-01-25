@@ -115,8 +115,8 @@ impl DepsGraph {
 
     pub fn remove_cache(&mut self, id: CacheId) {
         self.0.retain(|key, _| match key {
-            Dependency::Asset(AssetKey { cache, .. }) => id.equivalent(cache),
-            _ => false,
+            Dependency::Asset(AssetKey { cache, .. }) => !id.equivalent(cache),
+            _ => true,
         });
     }
 }
