@@ -1,6 +1,8 @@
 use std::{any::TypeId, fmt, hash};
 
-use crate::{Asset, AssetCache, Error, SharedString, cache::CacheId, entry::CacheEntry};
+#[cfg(feature = "hot-reloading")]
+use crate::cache::WeakAssetCache;
+use crate::{Asset, AssetCache, Error, SharedString, entry::CacheEntry};
 
 pub(crate) struct Type {
     #[cfg(feature = "hot-reloading")]
@@ -55,17 +57,18 @@ impl fmt::Debug for Type {
 }
 
 /// The key used to identify assets
+#[cfg(feature = "hot-reloading")]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct AssetKey {
     pub type_id: TypeId,
     pub id: SharedString,
-    pub cache: CacheId,
+    pub cache: WeakAssetCache,
 }
 
+#[cfg(feature = "hot-reloading")]
 impl AssetKey {
-    #[allow(dead_code)]
     #[inline]
-    pub fn new(id: SharedString, type_id: TypeId, cache: CacheId) -> Self {
+    pub fn new(id: SharedString, type_id: TypeId, cache: WeakAssetCache) -> Self {
         Self { id, type_id, cache }
     }
 }

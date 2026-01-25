@@ -17,6 +17,7 @@ use std::{any::TypeId, fmt, io, path::Path, sync::Arc};
 #[cfg(feature = "hot-reloading")]
 use crate::hot_reloading::{AssetKey, HotReloader, records};
 
+#[cfg(feature = "hot-reloading")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct CacheId(usize);
 
@@ -110,21 +111,14 @@ impl AssetCache {
     }
 
     fn _with_source(source: Box<dyn Source + Send + Sync>) -> Self {
-        let cache = Self(Arc::new(AssetCacheInner {
+        Self(Arc::new(AssetCacheInner {
             #[cfg(feature = "hot-reloading")]
             reloader: HotReloader::start(&*source),
 
             assets: AssetMap::new(),
             hasher: Hasher::default(),
             kind: CacheKind::Root { source },
-        }));
-
-        #[cfg(feature = "hot-reloading")]
-        if let Some(reloader) = &cache.0.reloader {
-            reloader.add_cache(cache.downgrade());
-        }
-
-        cache
+        }))
     }
 
     /// Creates a cache that loads assets from the given source.
@@ -143,7 +137,7 @@ impl AssetCache {
 
     /// Makes a new cache with `self` as parent.
     pub fn make_child(&self) -> Self {
-        let cache = Self(Arc::new(AssetCacheInner {
+        Self(Arc::new(AssetCacheInner {
             #[cfg(feature = "hot-reloading")]
             reloader: self.0.reloader.clone(),
 
@@ -152,14 +146,7 @@ impl AssetCache {
             kind: CacheKind::Node {
                 parent: self.clone(),
             },
-        }));
-
-        #[cfg(feature = "hot-reloading")]
-        if let Some(reloader) = &cache.0.reloader {
-            reloader.add_cache(cache.downgrade());
-        }
-
-        cache
+        }))
     }
 
     /// Returns a reference to the cache's [`Source`].
@@ -186,11 +173,6 @@ impl AssetCache {
                 CacheKind::Root { source } => return &**source,
             }
         }
-    }
-
-    #[cfg(feature = "hot-reloading")]
-    pub(crate) fn id(&self) -> CacheId {
-        CacheId(Arc::as_ptr(&self.0).addr())
     }
 
     /// Returns a reference to the cache's parent, if any.
@@ -260,7 +242,8 @@ impl AssetCache {
     #[cfg(feature = "hot-reloading")]
     fn add_record(&self, handle: &UntypedHandle) {
         if self.0.reloader.is_some() && handle.typ().is_some() {
-            records::add_record(handle.id(), handle.type_id(), self.id());
+            let key = || AssetKey::new(handle.id().clone(), handle.type_id(), self.downgrade());
+            records::add_asset(key);
         }
     }
 
@@ -321,7 +304,7 @@ impl AssetCache {
             let (result, deps) = crate::hot_reloading::records::record(|| (typ.load)(self, id));
             let entry = result?;
 
-            let key = AssetKey::new(entry.inner().id().clone(), typ.type_id, self.id());
+            let key = AssetKey::new(entry.inner().id().clone(), typ.type_id, self.downgrade());
             reloader.add_asset(key, deps);
 
             let handle = self.0.assets.insert(entry, &self.0.hasher);
@@ -606,7 +589,7 @@ impl Source for CacheSource<'_> {
 }
 
 #[cfg(feature = "hot-reloading")]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct WeakAssetCache(std::sync::Weak<AssetCacheInner>);
 
 #[cfg(feature = "hot-reloading")]
@@ -634,12 +617,5 @@ impl Eq for WeakAssetCache {}
 impl std::hash::Hash for WeakAssetCache {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id().hash(state);
-    }
-}
-
-#[cfg(feature = "hot-reloading")]
-impl hashbrown::Equivalent<WeakAssetCache> for CacheId {
-    fn equivalent(&self, cache: &WeakAssetCache) -> bool {
-        *self == cache.id()
     }
 }

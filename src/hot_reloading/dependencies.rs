@@ -4,7 +4,7 @@ use crate::{
     key::AssetKey,
     utils::{HashMap, HashSet},
 };
-use hashbrown::{Equivalent, hash_map::Entry};
+use hashbrown::hash_map::Entry;
 
 struct GraphNode {
     /// Reverse dependencies (backward edges)
@@ -118,7 +118,7 @@ impl DepsGraph {
 
     pub fn remove_cache(&mut self, id: CacheId) {
         self.0.retain(|key, _| match key {
-            Dependency::Asset(AssetKey { cache, .. }) => !id.equivalent(cache),
+            Dependency::Asset(AssetKey { cache, .. }) => cache.id() != id,
             _ => true,
         });
     }

@@ -1,9 +1,8 @@
 use crate::{
-    cache::CacheId,
     key::AssetKey,
     utils::{HashSet, Mutex, SharedString},
 };
-use std::{any::TypeId, cell::Cell, fmt, ptr::NonNull, sync::Arc};
+use std::{cell::Cell, fmt, ptr::NonNull, sync::Arc};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum Dependency {
@@ -75,14 +74,12 @@ pub(crate) fn no_record<F: FnOnce() -> T, T>(f: F) -> T {
     })
 }
 
-pub(crate) fn add_record(id: &SharedString, type_id: TypeId, cache: CacheId) {
+pub(crate) fn add_asset(make_key: impl FnOnce() -> AssetKey) {
     RECORDING.with(|rec| {
         if let Some(mut recorder) = rec.get() {
             let recorder = unsafe { recorder.as_mut() };
 
-            recorder
-                .records
-                .insert(Dependency::Asset(AssetKey::new(id.clone(), type_id, cache)));
+            recorder.records.insert(Dependency::Asset(make_key()));
         }
     });
 }

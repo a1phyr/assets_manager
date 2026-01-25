@@ -14,7 +14,7 @@ use crossbeam_channel::{self as channel, Receiver, Sender};
 use std::{thread, time};
 
 use crate::{
-    cache::{CacheId, WeakAssetCache},
+    cache::CacheId,
     source::{OwnedDirEntry, Source},
     utils::HashSet,
 };
@@ -26,7 +26,6 @@ pub(crate) use crate::key::AssetKey;
 pub(crate) use records::{Dependencies, Dependency};
 
 enum CacheMessage {
-    AddCache(WeakAssetCache),
     RemoveCache(CacheId),
     AddAsset(AssetKey, Dependencies),
 }
@@ -111,10 +110,6 @@ impl HotReloader {
     // without hot-reloading if it stopped, and an error should have already
     // been logged.
 
-    pub(crate) fn add_cache(&self, cache: WeakAssetCache) {
-        let _ = self.sender.send(CacheMessage::AddCache(cache));
-    }
-
     pub(crate) fn remove_cache(&self, cache: CacheId) {
         let _ = self.sender.send(CacheMessage::RemoveCache(cache));
     }
@@ -151,7 +146,6 @@ fn hot_reloading_thread(events: Receiver<Vec<OwnedDirEntry>>, cache_msg: Receive
 
         match ready.index() {
             0 => match ready.recv(&cache_msg) {
-                Ok(CacheMessage::AddCache(weak_cache)) => data.add_cache(weak_cache),
                 Ok(CacheMessage::AddAsset(key, deps)) => data.add_asset(key, deps),
                 Ok(CacheMessage::RemoveCache(id)) => data.remove_cache(id),
                 // There is no more cache to update
@@ -181,10 +175,6 @@ fn hot_reloading_thread(events: Receiver<Vec<OwnedDirEntry>>, cache_msg: Receive
 }
 
 struct HotReloadingData {
-    // It is important to keep a weak reference here, because we rely on the
-    // fact that dropping the `HotReloader` drop the channel and therefore stop
-    // the hot-reloading thread
-    caches: HashSet<WeakAssetCache>,
     to_reload: HashSet<Dependency>,
     deps: dependencies::DepsGraph,
 }
@@ -193,7 +183,6 @@ impl HotReloadingData {
     fn new() -> Self {
         HotReloadingData {
             to_reload: HashSet::new(),
-            caches: HashSet::new(),
             deps: dependencies::DepsGraph::new(),
         }
     }
@@ -216,11 +205,7 @@ impl HotReloadingData {
         self.to_reload.clear();
 
         for key in to_update.into_iter() {
-            let Some(weak) = self.caches.get(&key.cache) else {
-                continue;
-            };
-
-            let Some(asset_cache) = weak.upgrade() else {
+            let Some(asset_cache) = key.cache.upgrade() else {
                 continue;
             };
 
@@ -232,12 +217,7 @@ impl HotReloadingData {
         }
     }
 
-    fn add_cache(&mut self, cache: WeakAssetCache) {
-        self.caches.insert(cache);
-    }
-
     fn remove_cache(&mut self, id: CacheId) {
-        self.caches.remove(&id);
         self.deps.remove_cache(id);
     }
 
