@@ -27,7 +27,6 @@ macro_rules! test_scenario {
         name: $name:ident,
         type: $load:ty,
         id: $id:literal,
-        start_value: $n:literal,
         $(not_loaded: $not_loaded:ty,)?
     ) => {
         #[test]
@@ -39,27 +38,29 @@ macro_rules! test_scenario {
             let id = concat!("test.hot_asset.", $id);
             let cache = AssetCache::new("assets")?;
 
+            let old = 42;
+            let new = -1;
+
             let source = cache.downcast_raw_source::<FileSystem>().unwrap();
             let path = source.path_of(DirEntry::File(id, "x"));
-            write_i32(&path, $n)?;
+            write_i32(&path, old)?;
             sleep();
 
             let asset = cache.load::<$load>(id)?;
             let mut watcher = asset.reload_watcher();
-            assert_eq!(asset.read().0, $n);
+            assert_eq!(asset.read().0, old);
             assert!(!watcher.reloaded());
 
-            let n = rand::random();
-            write_i32(&path, n)?;
+            write_i32(&path, new)?;
             sleep();
-            assert_eq!(asset.read().0, n);
+            assert_eq!(asset.read().0, new);
             assert!(watcher.reloaded());
             assert!(!watcher.reloaded());
             $( assert!(!cache.contains::<$not_loaded>(id)); )?
 
-            write_i32(&path, $n)?;
+            write_i32(&path, old)?;
             sleep();
-            assert_eq!(asset.read().0, $n);
+            assert_eq!(asset.read().0, old);
             assert!(watcher.reloaded());
             assert!(!watcher.reloaded());
             $( assert!(!cache.contains::<$not_loaded>(id)); )?
@@ -73,28 +74,24 @@ test_scenario! {
     name: reload_asset,
     type: X,
     id: "a",
-    start_value: 42,
 }
 
 test_scenario! {
     name: reload_compound,
     type: Y,
     id: "c",
-    start_value: -7,
 }
 
 test_scenario! {
     name: reload_compound_compound,
     type: Z,
     id: "e",
-    start_value: 0,
 }
 
 test_scenario! {
     name: reload_arc_compound,
     type: Arc<Y>,
     id: "f",
-    start_value: -5,
     not_loaded: Y,
 }
 
@@ -102,7 +99,6 @@ test_scenario! {
     name: reload_arc_asset,
     type: Arc<X>,
     id: "g",
-    start_value: 57,
     not_loaded: X,
 }
 

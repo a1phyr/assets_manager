@@ -88,7 +88,6 @@ base64 = { version = "0.22", optional = true }
 
 [dev-dependencies]
 cfg-if = "1.0"
-rand = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 env_logger = "0.11"
 
