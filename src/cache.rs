@@ -375,7 +375,7 @@ impl AssetCache {
     #[cold]
     fn add_any<T: Storable>(&self, id: &str, asset: T) -> &UntypedHandle {
         let id = SharedString::from(id);
-        let entry = CacheEntry::new_any(asset, id, false);
+        let entry = CacheEntry::new_any(asset, id);
 
         self.0.assets.insert(entry, &self.0.hasher)
     }

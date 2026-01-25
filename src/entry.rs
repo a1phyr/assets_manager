@@ -148,7 +148,7 @@ impl CacheEntry {
     ///
     /// The returned structure can safely use its methods with type parameter `T`.
     #[inline]
-    pub fn new_any<T: Storable>(value: T, id: SharedString, _mutable: bool) -> Self {
+    pub fn new_any<T: Storable>(value: T, id: SharedString) -> Self {
         CacheEntry(Arc::new(Handle::new_static(id, value)))
     }
 
