@@ -349,6 +349,7 @@ impl<T: ?Sized> Handle<T> {
     /// was called.
     ///
     /// [`reload_watcher`]: Self::reload_watcher
+    #[deprecated = "store and compare the result of `self.last_reload_id()` instead"]
     #[inline]
     pub fn reloaded_global(&self) -> bool {
         self.either(
