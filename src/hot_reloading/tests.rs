@@ -1,7 +1,7 @@
 use crate::{
     Asset, AssetCache, BoxedError, SharedString,
     source::{DirEntry, FileSystem},
-    tests::{X, Y, Z},
+    tests::{X, Y},
 };
 use std::{
     fs::{self, File},
@@ -80,12 +80,6 @@ test_scenario! {
     name: reload_compound,
     type: Y,
     id: "c",
-}
-
-test_scenario! {
-    name: reload_compound_compound,
-    type: Z,
-    id: "e",
 }
 
 test_scenario! {

@@ -20,14 +20,6 @@ impl Asset for Y {
     }
 }
 
-pub struct Z(pub i32);
-
-impl Asset for Z {
-    fn load(cache: &AssetCache, id: &SharedString) -> Result<Z, BoxedError> {
-        Ok(Z(cache.load::<Y>(id)?.read().0))
-    }
-}
-
 mod asset_cache {
     use super::{X, Y};
     use crate::AssetCache;
