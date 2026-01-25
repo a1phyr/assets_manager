@@ -117,9 +117,18 @@ impl DepsGraph {
     }
 
     pub fn remove_cache(&mut self, id: CacheId) {
-        self.0.retain(|key, _| match key {
+        let not_from_cache = |key: &Dependency| match key {
             Dependency::Asset(AssetKey { cache, .. }) => cache.id() != id,
             _ => true,
+        };
+
+        self.0.retain(|key, node| {
+            let keep = not_from_cache(key);
+            if keep {
+                node.deps.retain(not_from_cache);
+                node.rdeps.retain(not_from_cache);
+            }
+            keep
         });
     }
 }
