@@ -55,10 +55,13 @@ impl DepsGraph {
             }
             Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
-                let removed: Vec<_> = entry.deps.difference(&deps).cloned().collect();
-                entry.deps = deps;
+                let mut old_deps = std::mem::replace(&mut entry.deps, deps);
 
-                for key in removed {
+                // Get removed keys
+                old_deps.retain(|dep| !entry.deps.contains(dep));
+
+                // Cleanup their reverse dependencies
+                for key in old_deps {
                     let removed = match self.0.get_mut(&key) {
                         Some(entry) => entry.rdeps.remove(&asset_key),
                         None => false,
