@@ -30,6 +30,8 @@
 //! - Image formats (using [`image`]): `bmp`, `jpeg`, `png` `webp`.
 //! - GlTF format (using [`gltf`]): `gltf`.
 //!
+//! [`serde`]: https://docs.rs/serde
+//!
 //! ## External crates support
 //!
 //! Support of some other crates is done in external crates:
