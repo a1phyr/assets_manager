@@ -16,7 +16,6 @@ use std::{thread, time};
 use crate::{
     cache::CacheId,
     source::{OwnedDirEntry, Source},
-    utils::HashSet,
 };
 
 pub use records::{Recorder, no_record};
@@ -175,14 +174,14 @@ fn hot_reloading_thread(events: Receiver<Vec<OwnedDirEntry>>, cache_msg: Receive
 }
 
 struct HotReloadingData {
-    to_reload: HashSet<Dependency>,
+    updated: Vec<Dependency>,
     deps: dependencies::DepsGraph,
 }
 
 impl HotReloadingData {
     fn new() -> Self {
         HotReloadingData {
-            to_reload: HashSet::new(),
+            updated: Vec::new(),
             deps: dependencies::DepsGraph::new(),
         }
     }
@@ -194,15 +193,15 @@ impl HotReloadingData {
             if self.deps.contains(&entry) {
                 log::trace!("New event: {entry:?}");
                 has_events = true;
-                self.to_reload.insert(entry);
+                self.updated.push(entry);
             }
         }
         has_events
     }
 
     fn run_update(&mut self) {
-        let to_update = self.deps.topological_sort_from(self.to_reload.iter());
-        self.to_reload.clear();
+        let to_update = self.deps.topological_sort_from(self.updated.iter());
+        self.updated.clear();
 
         for key in to_update.into_iter() {
             let Some(asset_cache) = key.cache.upgrade() else {
