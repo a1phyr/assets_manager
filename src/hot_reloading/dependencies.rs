@@ -4,7 +4,7 @@ use crate::{
     key::AssetKey,
     utils::{HashMap, HashSet},
 };
-use hashbrown::hash_map::Entry;
+use hashbrown::hash_map::EntryRef;
 
 struct GraphNode {
     /// Reverse dependencies (backward edges)
@@ -45,15 +45,15 @@ impl DepsGraph {
 
     pub fn insert(&mut self, asset_key: Dependency, deps: Dependencies) {
         for key in deps.iter() {
-            let entry = self.0.entry(key.clone()).or_default();
+            let entry = self.0.entry_ref(key).or_default();
             entry.rdeps.insert(asset_key.clone());
         }
 
-        match self.0.entry(asset_key.clone()) {
-            Entry::Vacant(entry) => {
+        match self.0.entry_ref(&asset_key) {
+            EntryRef::Vacant(entry) => {
                 entry.insert(GraphNode::new(deps));
             }
-            Entry::Occupied(entry) => {
+            EntryRef::Occupied(entry) => {
                 let entry = entry.into_mut();
                 let mut old_deps = std::mem::replace(&mut entry.deps, deps);
 

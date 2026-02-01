@@ -11,6 +11,12 @@ pub(crate) enum Dependency {
     Asset(AssetKey),
 }
 
+impl From<&Dependency> for Dependency {
+    fn from(dep: &Dependency) -> Self {
+        dep.clone()
+    }
+}
+
 pub(crate) type Dependencies = HashSet<Dependency>;
 
 struct Record {
