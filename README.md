@@ -2,7 +2,6 @@
 
 [![Crates.io](https://img.shields.io/crates/v/assets_manager.svg)](https://crates.io/crates/assets_manager)
 [![Docs.rs](https://docs.rs/assets_manager/badge.svg)](https://docs.rs/assets_manager/)
-![Minimum rustc version](https://img.shields.io/badge/rustc-1.85+-lightgray.svg)
 
 
 This crate aims at providing a filesystem abstraction to easily load external resources.
