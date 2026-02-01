@@ -4,6 +4,7 @@ use crate::{
     Asset, Error, Handle, SharedString,
     asset::{DirLoadable, Storable},
     entry::{CacheEntry, UntypedHandle},
+    hot_reloading,
     key::Type,
     map::{AssetMap, Hasher},
     source::{FileSystem, Source},
@@ -218,25 +219,10 @@ impl AssetCache {
 
     /// Temporarily prevent `Asset` dependencies to be recorded.
     ///
-    /// This function disables dependencies recording in [`Asset::load`].
-    /// Assets loaded during the given closure will not be recorded as
-    /// dependencies and the currently loading asset will not be reloaded when
-    /// they are.
-    ///
-    /// When hot-reloading is disabled or if the cache's [`Source`] does not
-    /// support hot-reloading, this function only returns the result of the
-    /// closure given as parameter.
+    /// This directly calls [`hot_reloading::no_record`].
     #[inline]
     pub fn no_record<T, F: FnOnce() -> T>(&self, f: F) -> T {
-        #[cfg(feature = "hot-reloading")]
-        {
-            records::no_record(f)
-        }
-
-        #[cfg(not(feature = "hot-reloading"))]
-        {
-            f()
-        }
+        hot_reloading::no_record(f)
     }
 
     #[cfg(feature = "hot-reloading")]
@@ -301,7 +287,7 @@ impl AssetCache {
         if typ.hot_reloaded
             && let Some(reloader) = &self.0.reloader
         {
-            let (result, deps) = crate::hot_reloading::records::record(|| (typ.load)(self, id));
+            let (result, deps) = records::record(|| (typ.load)(self, id));
             let entry = result?;
 
             let key = AssetKey::new(entry.inner().id().clone(), typ.type_id, self.downgrade());

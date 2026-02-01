@@ -44,6 +44,11 @@ impl FsWatcherBuilder {
     }
 }
 
+#[inline]
+pub fn no_record<T>(f: impl FnOnce() -> T) -> T {
+    f()
+}
+
 #[derive(Clone, Debug)]
 pub struct Recorder(());
 

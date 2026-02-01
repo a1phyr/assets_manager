@@ -19,7 +19,7 @@ use crate::{
     utils::HashSet,
 };
 
-pub use records::Recorder;
+pub use records::{Recorder, no_record};
 pub use watcher::FsWatcherBuilder;
 
 pub(crate) use crate::key::AssetKey;

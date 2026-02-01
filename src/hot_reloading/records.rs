@@ -67,7 +67,17 @@ pub(crate) fn record<F: FnOnce() -> T, T>(f: F) -> (T, Dependencies) {
     (res, record.collect())
 }
 
-pub(crate) fn no_record<F: FnOnce() -> T, T>(f: F) -> T {
+/// Temporarily prevent `Asset` dependencies to be recorded.
+///
+/// This function disables dependencies recording in [`Asset::load`]. Assets and
+/// files loaded within the closure will not be recorded as dependencies.
+/// Therefore, change of one of these dependencies will not trigger a reload of
+/// the asset.
+///
+/// When hot-reloading is disabled, this function simply returns the result of
+/// the closure given as parameter.
+#[inline]
+pub fn no_record<T>(f: impl FnOnce() -> T) -> T {
     RECORDING.with(|rec| {
         let _guard = CellGuard::replace(rec, None);
         f()
