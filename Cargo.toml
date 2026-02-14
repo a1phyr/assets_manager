@@ -1,6 +1,6 @@
 [package]
 name = "assets_manager"
-version = "0.13.7"
+version = "0.13.8"
 authors = ["Benoît du Garreau"]
 edition = "2024"
 rust-version = "1.91"
