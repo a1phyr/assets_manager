@@ -5,9 +5,9 @@ use crate::{
     SharedString,
     utils::{HashMap, IdBuilder, split_file_name},
 };
+use eazip::read::{Metadata, RawArchive};
 use std::{fmt, io, path};
 use sync_file::SyncFile;
-use zip::{ZipArchive, read::ZipFile};
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 struct FileDesc(SharedString, SharedString);
@@ -42,31 +42,18 @@ impl OwnedEntry {
     }
 }
 
-struct FileInfo {
-    start: u64,
-    compressed_size: u64,
-    decompressed_size: u64,
-    compression_method: zip::CompressionMethod,
-    crc: u32,
-}
-
 /// Register a file of an archive in maps.
 fn register_file(
-    file: ZipFile<'_, &mut dyn ReadSeek>,
-    files: &mut HashMap<FileDesc, FileInfo>,
+    index: usize,
+    file: &Metadata,
+    files: &mut HashMap<FileDesc, usize>,
     dirs: &mut HashMap<SharedString, Vec<OwnedEntry>>,
     id_builder: &mut IdBuilder,
 ) {
     id_builder.reset();
 
     // Check the path.
-    let path = match file.enclosed_name() {
-        Some(path) => path,
-        None => {
-            log::warn!("Suspicious path in zip archive: {:?}", file.name());
-            return;
-        }
-    };
+    let path = path::Path::new(file.name());
 
     // Parse the path and register it.
     // The closure is used as a cheap `try` block.
@@ -81,7 +68,7 @@ fn register_file(
             }
         }
 
-        let (name, ext) = split_file_name(&path)?;
+        let (name, ext) = split_file_name(path)?;
 
         // Build the ids of the file and its parent.
         let parent_id = id_builder.join();
@@ -89,26 +76,25 @@ fn register_file(
         let id = id_builder.join();
 
         // Register the file in the maps.
-        let entry = if file.is_file() {
-            if file.encrypted() {
-                log::warn!("Skipping encrypted file: {}", path.display());
+        let entry = match file.file_type {
+            eazip::FileType::File => {
+                if file.is_encrypted() {
+                    log::warn!("Skipping encrypted file: {}", file.name());
+                    return None;
+                }
+
+                let desc = FileDesc(id, ext.into());
+                files.insert(desc.clone(), index);
+                OwnedEntry::File(desc)
+            }
+            eazip::FileType::Directory => {
+                dirs.entry(id.clone()).or_default();
+                OwnedEntry::Dir(id)
+            }
+            eazip::FileType::Symlink => {
+                log::warn!("Symlink are not supported: {}", file.name());
                 return None;
             }
-
-            let desc = FileDesc(id, ext.into());
-            let info = FileInfo {
-                start: file.data_start(),
-                compressed_size: file.compressed_size(),
-                decompressed_size: file.size(),
-                compression_method: file.compression(),
-                crc: file.crc32(),
-            };
-
-            files.insert(desc.clone(), info);
-            OwnedEntry::File(desc)
-        } else {
-            dirs.entry(id.clone()).or_default();
-            OwnedEntry::Dir(id)
         };
         dirs.entry(parent_id).or_default().push(entry);
 
@@ -121,7 +107,7 @@ fn register_file(
     }
 }
 
-type FileReader<R> = for<'a> fn(&'a R, &FileInfo) -> io::Result<FileContent<'a>>;
+type FileReader<R> = for<'a> fn(&'a R, &Metadata) -> io::Result<FileContent<'a>>;
 
 /// A [`Source`] to load assets from a zip archive.
 ///
@@ -133,7 +119,8 @@ pub struct Zip<R = SyncFile> {
     reader: R,
     read_file: FileReader<R>,
 
-    files: HashMap<FileDesc, FileInfo>,
+    archive: RawArchive,
+    files: HashMap<FileDesc, usize>,
     dirs: HashMap<SharedString, Vec<OwnedEntry>>,
     label: Option<String>,
 }
@@ -217,12 +204,13 @@ impl<R: io::Read + io::Seek> Zip<R> {
         read_file: FileReader<R>,
         label: Option<String>,
     ) -> io::Result<Zip<R>> {
-        let (files, dirs) = read_archive(&mut reader)?;
+        let (archive, files, dirs) = read_archive(&mut reader)?;
 
         Ok(Zip {
             reader,
             read_file,
 
+            archive,
             files,
             dirs,
             label,
@@ -236,12 +224,18 @@ where
     R: io::Read + io::Seek,
 {
     fn read(&self, id: &str, ext: &str) -> io::Result<FileContent<'_>> {
-        let info = self
+        let index = *self
             .files
             .get(&(id, ext))
             .ok_or_else(|| error::find_file(id, &self.label))?;
 
-        (self.read_file)(&self.reader, info).map_err(|err| error::read_file(err, id, &self.label))
+        let meta = self
+            .archive
+            .entries()
+            .get(index)
+            .ok_or_else(|| error::find_file(id, &self.label))?;
+
+        (self.read_file)(&self.reader, meta).map_err(|err| error::read_file(err, id, &self.label))
     }
 
     fn read_dir(&self, id: &str, f: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
@@ -278,90 +272,78 @@ impl<R: io::BufRead + io::Seek> BufReadSeek for R {}
 
 #[expect(clippy::type_complexity)]
 fn read_archive(
-    reader: &mut dyn ReadSeek,
+    mut reader: &mut dyn ReadSeek,
 ) -> io::Result<(
-    HashMap<FileDesc, FileInfo>,
+    RawArchive,
+    HashMap<FileDesc, usize>,
     HashMap<SharedString, Vec<OwnedEntry>>,
 )> {
-    let mut archive = ZipArchive::new(reader)?;
+    let archive = RawArchive::new(&mut reader)?;
 
-    let len = archive.len();
+    let len = archive.entries().len();
     let mut files = HashMap::with_capacity(len);
     let mut dirs = HashMap::new();
     let mut id_builder = IdBuilder::default();
 
-    for index in 0..len {
-        let file = archive.by_index_raw(index)?;
-        register_file(file, &mut files, &mut dirs, &mut id_builder);
+    for (index, file) in archive.entries().iter().enumerate() {
+        register_file(index, file, &mut files, &mut dirs, &mut id_builder);
     }
 
-    Ok((files, dirs))
+    Ok((archive, files, dirs))
 }
 
 fn read_file_reader<'a, R: io::Read + io::Seek + Clone>(
     reader: &'a R,
-    info: &FileInfo,
+    meta: &Metadata,
 ) -> io::Result<FileContent<'a>> {
     /// Polymorphisation of `read_file_reader`
-    fn inner(reader: &mut dyn ReadSeek, info: &FileInfo) -> io::Result<FileContent<'static>> {
-        read_file_bufreader(&mut io::BufReader::new(reader), info)
+    fn inner(reader: &mut dyn ReadSeek, meta: &Metadata) -> io::Result<FileContent<'static>> {
+        read_file_bufreader(&mut io::BufReader::new(reader), meta)
     }
 
-    inner(&mut reader.clone(), info)
+    inner(&mut reader.clone(), meta)
 }
 
 fn read_file_bufreader(
     reader: &mut dyn BufReadSeek,
-    info: &FileInfo,
+    file: &Metadata,
 ) -> io::Result<FileContent<'static>> {
     use io::Read;
 
-    reader.seek(io::SeekFrom::Start(info.start))?;
-    let mut reader = reader.take(info.compressed_size);
-
-    let mut buf = Vec::with_capacity(info.decompressed_size as usize);
-
-    match info.compression_method {
-        zip::CompressionMethod::Stored => reader.read_to_end(&mut buf)?,
-        #[cfg(feature = "zip-deflate")]
-        zip::CompressionMethod::Deflated => {
-            flate2::bufread::DeflateDecoder::new(reader).read_to_end(&mut buf)?
-        }
-        #[cfg(feature = "zip-zstd")]
-        zip::CompressionMethod::Zstd => zstd::Decoder::new(reader)?.read_to_end(&mut buf)?,
-        m => return Err(error::compression_method(m)),
-    };
-
-    if crc32fast::hash(&buf) != info.crc {
-        return Err(error::invalid_crc());
-    }
+    let mut file = file.read(reader)?;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf)?;
 
     Ok(FileContent::Buffer(buf))
 }
 
 fn read_file_bytes<'a, T: AsRef<[u8]>>(
     reader: &'a io::Cursor<T>,
-    info: &FileInfo,
+    meta: &Metadata,
 ) -> io::Result<FileContent<'a>> {
-    read_file_bytes_impl(reader.get_ref().as_ref(), info)
+    read_file_bytes_impl(reader.get_ref().as_ref(), meta)
 }
 
 /// Polymorphisation of `read_file_bytes`
-fn read_file_bytes_impl<'a>(zip: &'a [u8], info: &FileInfo) -> io::Result<FileContent<'a>> {
-    if info.compression_method != zip::CompressionMethod::Stored {
-        return read_file_bufreader(&mut io::Cursor::new(zip), info);
+fn read_file_bytes_impl<'a>(zip: &'a [u8], meta: &Metadata) -> io::Result<FileContent<'a>> {
+    if meta.compression_method != eazip::CompressionMethod::STORE {
+        return read_file_bufreader(&mut io::Cursor::new(zip), meta);
     }
 
-    if info.compressed_size != info.decompressed_size {
+    if meta.compressed_size != meta.uncompressed_size {
         return Err(io::ErrorKind::InvalidData.into());
     }
 
-    let start = info.start as usize;
+    let start = {
+        let file_reader = meta.read_raw(io::Cursor::new(zip))?;
+        file_reader.get_ref().position() as usize
+    };
+
     let file = zip
-        .get(start..start + info.compressed_size as usize)
+        .get(start..start + meta.compressed_size as usize)
         .ok_or(io::ErrorKind::InvalidData)?;
 
-    if crc32fast::hash(file) != info.crc {
+    if crc32fast::hash(file) != meta.crc32 {
         return Err(error::invalid_crc());
     }
 
@@ -370,14 +352,6 @@ fn read_file_bytes_impl<'a>(zip: &'a [u8], info: &FileInfo) -> io::Result<FileCo
 
 mod error {
     use std::{fmt, io};
-
-    #[cold]
-    pub fn compression_method(m: zip::CompressionMethod) -> io::Error {
-        io::Error::new(
-            io::ErrorKind::Unsupported,
-            format!("unsupported compression method: {m}"),
-        )
-    }
 
     #[cold]
     pub fn invalid_crc() -> io::Error {
