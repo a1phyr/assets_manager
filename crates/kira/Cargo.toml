@@ -16,16 +16,16 @@ keywords = ["assets", "audio", "cache", "hot-reloading", "kira"]
 [features]
 flac = ["kira/flac"]
 mp3 = ["kira/mp3"]
-ogg = ["kira/ogg"]
-wav = ["kira/wav"]
+ogg = ["kira/ogg", "kira/vorbis"]
+wav = ["kira/wav", "kira/pcm"]
 
 
 [dependencies]
 assets_manager = { version = "0.13", default-features = false, path = "../.." }
-kira = { version = "0.11", default-features = false, features = ["symphonia"] }
+kira = { version = "0.12", default-features = false, features = ["symphonia"] }
 
 [dev-dependencies]
-kira = { version = "0.11", default-features = false, features = ["cpal"] }
+kira = { version = "0.12", default-features = false, features = ["cpal"] }
 
 
 [package.metadata.docs.rs]
