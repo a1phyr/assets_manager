@@ -26,4 +26,4 @@ lewton = ["rodio/lewton"]
 
 [dependencies]
 assets_manager = { version = "0.13", default-features = false, path = "../.." }
-rodio = { version = "0.21", default-features = false }
+rodio = { version = "0.22", default-features = false }
