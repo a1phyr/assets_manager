@@ -330,15 +330,7 @@ fn read_file_bytes_impl<'a>(zip: &'a [u8], meta: &Metadata) -> io::Result<FileCo
         return read_file_bufreader(&mut io::Cursor::new(zip), meta);
     }
 
-    if meta.compressed_size != meta.uncompressed_size {
-        return Err(io::ErrorKind::InvalidData.into());
-    }
-
-    let start = {
-        let file_reader = meta.read_raw(io::Cursor::new(zip))?;
-        file_reader.get_ref().position() as usize
-    };
-
+    let start = meta.data_offset as usize;
     let file = zip
         .get(start..start + meta.compressed_size as usize)
         .ok_or(io::ErrorKind::InvalidData)?;
