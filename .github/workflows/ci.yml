@@ -18,7 +18,7 @@ jobs:
       - name: Install development libraries
         run: sudo apt update && sudo apt install libasound2-dev -y
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install toolchain
         run: rustup toolchain add ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
@@ -36,7 +36,7 @@ jobs:
       - name: Install development libraries
         run: sudo apt update && sudo apt install libasound2-dev -y
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - run: cargo clippy --workspace -- -D warnings
       - run: cargo clippy --workspace --all-features -- -D warnings
@@ -45,6 +45,6 @@ jobs:
     name: Check formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - run: cargo fmt -- --check
