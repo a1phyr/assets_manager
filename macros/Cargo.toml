@@ -1,6 +1,6 @@
 [package]
 name = "assets_manager_macros"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Benoît du Garreau"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
