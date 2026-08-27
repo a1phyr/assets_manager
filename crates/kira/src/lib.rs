@@ -65,7 +65,7 @@ mod static_sound {
         const EXTENSIONS: &'static [&'static str] = crate::AVAILABLE_EXTENSIONS;
 
         fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Result<Self, assets_manager::BoxedError> {
-            let sound = StaticSoundData::from_cursor(Cursor::new(bytes.into_owned()))?;
+            let sound = StaticSoundData::from_cursor(Cursor::new(&*bytes))?;
             Ok(StaticSound(sound))
         }
     }
